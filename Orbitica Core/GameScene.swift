@@ -196,11 +196,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.position = CGPoint(x: size.width / 2 + 300, y: size.height / 2)
         player.zPosition = 10
         
-        // FISICA: Aggiungi corpo fisico con inerzia MIGLIORATA
-        player.physicsBody = SKPhysicsBody(circleOfRadius: 8)  // Era 15, ora 8
+        // FISICA: Aggiungi corpo fisico con inerzia RIDOTTA per più controllo
+        player.physicsBody = SKPhysicsBody(circleOfRadius: 8)
         player.physicsBody?.isDynamic = true
-        player.physicsBody?.mass = 0.5  // Ridotto da 1.0 per essere più reattivo
-        player.physicsBody?.linearDamping = 0.1  // Ridotto da 0.3 per più inerzia
+        player.physicsBody?.mass = 0.5
+        player.physicsBody?.linearDamping = 0.3  // Aumentato da 0.1 per meno inerzia
         player.physicsBody?.angularDamping = 0.5
         player.physicsBody?.allowsRotation = false
         
@@ -614,6 +614,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             print("💥 Asteroid hit planet - destroyed")
         }
         
+        // Player + Asteroid
+        else if collision == (PhysicsCategory.player | PhysicsCategory.asteroid) {
+            // Identifica l'asteroide
+            let asteroid = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA.node as? SKShapeNode : contact.bodyB.node as? SKShapeNode
+            
+            if let asteroid = asteroid {
+                // L'astronave danneggia l'asteroide (meno di un proiettile)
+                damageAsteroid(asteroid)
+                flashPlayerShield()
+                print("💥 Player hit asteroid - damage")
+            }
+        }
+        
         // Projectile + Asteroid
         else if collision == (PhysicsCategory.projectile | PhysicsCategory.asteroid) {
             // Identifica proiettile e asteroide
@@ -748,12 +761,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 // Spawna il frammento
                 spawnAsteroid(size: nextSize, at: fragmentPosition)
                 
-                // Applica velocità ereditata + esplosione
+                // Applica velocità ereditata + esplosione RIDOTTA
                 if let fragment = asteroids.last {
-                    let explosionForce: CGFloat = 120
+                    let explosionForce: CGFloat = 60  // Ridotto da 120 a 60
                     fragment.physicsBody?.velocity = CGVector(
-                        dx: velocity.dx + cos(angle) * explosionForce,
-                        dy: velocity.dy + sin(angle) * explosionForce
+                        dx: velocity.dx * 0.7 + cos(angle) * explosionForce,  // Eredita 70% velocità
+                        dy: velocity.dy * 0.7 + sin(angle) * explosionForce
                     )
                 }
             }
@@ -761,6 +774,58 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             print("💥 Asteroid fragmented into \(fragmentCount) x \(nextSize)")
         } else {
             print("💥 Small asteroid destroyed")
+        }
+    }
+    
+    private func damageAsteroid(_ asteroid: SKShapeNode) {
+        guard let sizeString = asteroid.name?.split(separator: "_").last,
+              let sizeRaw = Int(String(sizeString)),
+              let size = AsteroidSize(rawValue: sizeRaw) else { return }
+        
+        // L'astronave danneggia ma non distrugge completamente
+        // Large diventa medium, medium diventa small, small viene distrutto
+        if size == .small {
+            // Small viene distrutto dall'impatto
+            asteroid.removeFromParent()
+            asteroids.removeAll { $0 == asteroid }
+            print("💥 Small asteroid destroyed by player")
+        } else {
+            // Large e medium si frammentano (ma con meno energia)
+            let position = asteroid.position
+            let velocity = asteroid.physicsBody?.velocity ?? .zero
+            
+            asteroid.removeFromParent()
+            asteroids.removeAll { $0 == asteroid }
+            
+            let nextSize: AsteroidSize = size == .large ? .medium : .small
+            let fragmentCount = 2  // Sempre 2 frammenti per l'impatto del player
+            
+            for i in 0..<fragmentCount {
+                let angle = (CGFloat(i) / CGFloat(fragmentCount)) * 2 * .pi + CGFloat.random(in: -0.5...0.5)
+                
+                let offset = CGPoint(
+                    x: cos(angle) * size.radius * 0.4,
+                    y: sin(angle) * size.radius * 0.4
+                )
+                
+                let fragmentPosition = CGPoint(
+                    x: position.x + offset.x,
+                    y: position.y + offset.y
+                )
+                
+                spawnAsteroid(size: nextSize, at: fragmentPosition)
+                
+                // Velocità più bassa rispetto all'esplosione del proiettile
+                if let fragment = asteroids.last {
+                    let pushForce: CGFloat = 40  // Molto più basso di 60 (proiettile)
+                    fragment.physicsBody?.velocity = CGVector(
+                        dx: velocity.dx * 0.5 + cos(angle) * pushForce,
+                        dy: velocity.dy * 0.5 + sin(angle) * pushForce
+                    )
+                }
+            }
+            
+            print("💥 Asteroid damaged by player - fragmented into \(fragmentCount) x \(nextSize)")
         }
     }
     
