@@ -1,46 +1,64 @@
 # Istruzioni per Aggiungere il Font Zerovelo
 
-## Passi da seguire in Xcode:
+## Il progetto NON ha Info.plist separato - usa configurazione moderna
 
-### 1. Aggiungi il file font al progetto
-1. In Xcode, nel Project Navigator, fai click destro sulla cartella "Orbitica Core"
-2. Seleziona "Add Files to 'Orbitica Core'..."
-3. Naviga a `/Users/a.grassi/app-projects/Orbitica Core/zerovelo.ttf`
-4. Assicurati che sia spuntato "Copy items if needed"
-5. Assicurati che sia spuntato il target "Orbitica Core"
-6. Click su "Add"
+### Opzione 1: Tramite Xcode UI (Più Semplice) ✅
 
-### 2. Verifica che il font sia nel Bundle
-1. Nel Project Navigator, seleziona il progetto "Orbitica Core" (icona blu in alto)
-2. Seleziona il target "Orbitica Core"
-3. Vai al tab "Build Phases"
-4. Espandi "Copy Bundle Resources"
-5. Verifica che `zerovelo.ttf` sia nella lista
-6. Se non c'è, usa il bottone "+" per aggiungerlo
+1. **Aggiungi il file font al progetto**
+   - In Xcode, nel Project Navigator, trascina il file `zerovelo 2.ttf` dentro la cartella "Orbitica Core"
+   - Oppure: click destro sulla cartella "Orbitica Core" → "Add Files to 'Orbitica Core'..."
+   - ✅ Spunta "Copy items if needed"
+   - ✅ Spunta il target "Orbitica Core"
+   - Click su "Add"
 
-### 3. Registra il font nell'Info.plist
-1. Nel Project Navigator, trova il file `Info.plist` (potrebbe essere in Orbitica Core/Supporting Files)
-2. Se non esiste, crealo facendo click destro > New File > Property List
-3. Aggiungi una nuova riga:
-   - Key: `Fonts provided by application` (o `UIAppFonts`)
-   - Type: Array
-4. Aggiungi un Item all'array:
-   - Type: String
-   - Value: `zerovelo.ttf`
+2. **Verifica che il font sia nel Copy Bundle Resources**
+   - Nel Project Navigator, seleziona il progetto "Orbitica Core" (icona blu in alto)
+   - Seleziona il target "Orbitica Core"
+   - Vai al tab "Build Phases"
+   - Espandi "Copy Bundle Resources"
+   - ✅ Verifica che `zerovelo 2.ttf` sia nella lista
+   - Se non c'è, usa il bottone "+" per aggiungerlo
 
-**Oppure in modalità Source Code** (click destro su Info.plist > Open As > Source Code):
-```xml
-<key>UIAppFonts</key>
-<array>
-    <string>zerovelo.ttf</string>
-</array>
-```
+3. **Aggiungi il font alle Info.plist Keys**
+   - Seleziona il target "Orbitica Core"
+   - Vai al tab "Info"
+   - Cerca la sezione "Custom iOS Target Properties"
+   - Click sul "+" in basso per aggiungere una nuova proprietà
+   - Nella dropdown, cerca e seleziona: **"Fonts provided by application"** 
+   - Questo creerà una proprietà di tipo Array
+   - Click sulla freccia per espandere l'array
+   - Click sul "+" per aggiungere un item
+   - Inserisci come valore: `zerovelo 2.ttf` (nome ESATTO del file)
 
-### 4. Verifica il nome del font
-Per verificare che il font sia registrato correttamente, puoi temporaneamente aggiungere questo codice in `viewDidLoad` di `GameViewController.swift`:
+4. **Clean Build e Ricompila**
+   - Product → Clean Build Folder (Shift + Cmd + K)
+   - Product → Build (Cmd + B)
+
+---
+
+### Opzione 2: Manualmente nel project.pbxproj (Avanzato)
+
+Se preferisci editare manualmente:
+
+1. Apri il file `Orbitica Core.xcodeproj/project.pbxproj` in un editor di testo
+2. Cerca la sezione con `INFOPLIST_KEY` per il target principale
+3. Aggiungi questa riga:
+   ```
+   INFOPLIST_KEY_UIAppFonts = "zerovelo 2.ttf";
+   ```
+
+---
+
+## Verifica il nome corretto del font
+
+Il **nome del file** è `zerovelo 2.ttf` (con spazio)  
+Ma il **nome del font** potrebbe essere diverso!
+
+Aggiungi temporaneamente questo codice in `GameViewController.swift` nella funzione `viewDidLoad()`:
 
 ```swift
 // Debug: stampa tutti i font disponibili
+print("=== AVAILABLE FONTS ===")
 for family in UIFont.familyNames.sorted() {
     print("Family: \(family)")
     for name in UIFont.fontNames(forFamilyName: family) {
@@ -49,21 +67,29 @@ for family in UIFont.familyNames.sorted() {
 }
 ```
 
-Cerca "Zerovelo" nell'output della console. Il nome esatto potrebbe essere diverso (es. "Zerovelo-Regular").
+Compila ed esegui, poi cerca "Zerovelo" nella console di Xcode. Il nome potrebbe essere:
+- `Zerovelo`
+- `Zerovelo-Regular`
+- `zerovelo`
+- Altro...
 
-### 5. Clean Build
-1. In Xcode, vai su Product > Clean Build Folder (Shift + Cmd + K)
-2. Ricompila il progetto (Cmd + B)
+Usa il nome ESATTO che appare nella console nei tuoi SKLabelNode.
+
+---
 
 ## Troubleshooting
 
-Se il font non viene caricato:
-1. Verifica che il nome del font sia esatto (potrebbe essere "Zerovelo-Regular" invece di "Zerovelo")
-2. Assicurati che il file .ttf sia effettivamente nel bundle
-3. Controlla la console per eventuali errori di caricamento font
-4. Prova a usare un font di sistema come fallback: `"Helvetica-Bold"`
+### Il font non appare?
+1. ✅ Verifica che il file sia in "Copy Bundle Resources"
+2. ✅ Verifica che il nome in "Fonts provided by application" sia esatto: `zerovelo 2.ttf`
+3. ✅ Fai Clean Build Folder
+4. ✅ Controlla la console per errori tipo "Could not load font"
+5. ✅ Verifica il nome del font con il codice debug sopra
 
-## Fallback temporaneo
-Se hai problemi, puoi temporaneamente usare un font di sistema modificando in tutti i file:
+### Fallback temporaneo
+Se hai problemi urgenti, puoi usare un font di sistema modificando nei file:
 - Da: `fontNamed: "Zerovelo"`
-- A: `fontNamed: "Helvetica-Bold"`
+- A: `fontNamed: "Helvetica-Bold"` o `"AvenirNext-Bold"`
+
+Questi font sono sempre disponibili su iOS.
+
