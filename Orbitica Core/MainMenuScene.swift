@@ -17,9 +17,18 @@ class MainMenuScene: SKScene {
     override func didMove(to view: SKView) {
         backgroundColor = .black
         
+        setupBackground()
+        setupOverlay()  // Overlay opaco sopra lo sfondo
         setupTitle()
         setupPlayButton()
-        setupBackground()
+    }
+    
+    private func setupOverlay() {
+        // Background semi-trasparente per far risaltare i testi
+        let overlay = SKSpriteNode(color: UIColor.black.withAlphaComponent(0.7), size: size)
+        overlay.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        overlay.zPosition = 5  // Sopra lo sfondo ma sotto i testi
+        addChild(overlay)
     }
     
     private func setupBackground() {
@@ -49,7 +58,7 @@ class MainMenuScene: SKScene {
         planet.fillColor = .white
         planet.strokeColor = .white
         planet.lineWidth = 2
-        planet.position = CGPoint(x: size.width / 2, y: size.height / 2 + 100)
+        planet.position = CGPoint(x: size.width / 2, y: size.height / 2 + 150)  // Alzato leggermente
         planet.zPosition = -0.5
         addChild(planet)
         
@@ -71,8 +80,14 @@ class MainMenuScene: SKScene {
     }
     
     private func setupTitle() {
-        // Prova diversi nomi possibili per il font
-        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+        // Prova diversi nomi possibili per il font Orbitron (Variable Font)
+        let possibleFontNames = [
+            "Orbitron",           // Nome base
+            "Orbitron-Bold",      // Variante Bold
+            "Orbitron-Regular",   // Variante Regular
+            "OrbitronVariable",   // Possibile nome per variable font
+            "AvenirNext-Bold"     // Fallback
+        ]
         var fontName = "AvenirNext-Bold" // Fallback di default
         
         for name in possibleFontNames {
@@ -84,7 +99,8 @@ class MainMenuScene: SKScene {
         }
         
         if fontName == "AvenirNext-Bold" {
-            print("⚠️ Zerovelo font not found, using fallback: \(fontName)")
+            print("⚠️ Orbitron font not found, using fallback: \(fontName)")
+            print("📝 Checking font registration...")
         }
         
         // Titolo principale - ORBITICA CORE
@@ -92,7 +108,9 @@ class MainMenuScene: SKScene {
         titleLabel.text = "ORBITICA"
         titleLabel.fontSize = 72
         titleLabel.fontColor = .white
-        titleLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 200)
+        titleLabel.horizontalAlignmentMode = .center
+        titleLabel.verticalAlignmentMode = .center
+        titleLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 120)  // Abbassato da 200
         titleLabel.zPosition = 10
         addChild(titleLabel)
         
@@ -101,7 +119,9 @@ class MainMenuScene: SKScene {
         subtitleLabel.text = "CORE"
         subtitleLabel.fontSize = 48
         subtitleLabel.fontColor = UIColor.cyan.withAlphaComponent(0.8)
-        subtitleLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 140)
+        subtitleLabel.horizontalAlignmentMode = .center
+        subtitleLabel.verticalAlignmentMode = .center
+        subtitleLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 60)  // Abbassato da 140
         subtitleLabel.zPosition = 10
         addChild(subtitleLabel)
         
@@ -117,14 +137,16 @@ class MainMenuScene: SKScene {
         tagline.text = "GRAVITY SHIELD"
         tagline.fontSize = 20
         tagline.fontColor = UIColor.white.withAlphaComponent(0.6)
-        tagline.position = CGPoint(x: size.width / 2, y: size.height / 2 + 100)
+        tagline.horizontalAlignmentMode = .center
+        tagline.verticalAlignmentMode = .center
+        tagline.position = CGPoint(x: size.width / 2, y: size.height / 2 + 20)  // Abbassato da 100
         tagline.zPosition = 10
         addChild(tagline)
     }
     
     private func setupPlayButton() {
         // Usa lo stesso font del titolo
-        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+        let possibleFontNames = ["Orbitron", "Orbitron-Bold", "Orbitron-Regular", "OrbitronVariable", "AvenirNext-Bold"]
         var fontName = "AvenirNext-Bold"
         
         for name in possibleFontNames {

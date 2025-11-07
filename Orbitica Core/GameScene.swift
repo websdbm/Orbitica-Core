@@ -56,6 +56,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let maxAtmosphereRadius: CGFloat = 80
     private let minAtmosphereRadius: CGFloat = 40
     
+    // Planet health system
+    private var planetHealth: Int = 3
+    private let maxPlanetHealth: Int = 3
+    private var planetHealthLabel: SKLabelNode!
+    
     // Physics constants
     private let planetRadius: CGFloat = 40
     private let planetMass: CGFloat = 10000
@@ -72,7 +77,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var joystickDirection = CGVector.zero
     private var isFiring = false
     private var lastFireTime: TimeInterval = 0
-    private let fireRate: TimeInterval = 0.15
+    private let fireRate: TimeInterval = 0.45  // Triplicato da 0.15 a 0.45 (1/3 della frequenza)
     
     // Projectiles
     private var projectiles: [SKShapeNode] = []
@@ -95,6 +100,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Score
     private var score: Int = 0
     private var scoreLabel: SKLabelNode!
+    
+    // Pause system
+    private var isGamePaused: Bool = false
+    private var pauseButton: SKShapeNode!
+    private var pauseOverlay: SKNode?
     
     // Particle texture cache
     private var particleTexture: SKTexture?
@@ -121,6 +131,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupPlayer()
         setupControls()
         setupScore()
+        setupPauseButton()
         
         // Avvia Wave 1
         startWave(1)
@@ -179,6 +190,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         planet.physicsBody = planetBody
         
         worldLayer.addChild(planet)
+        
+        // Label della salute del pianeta al centro
+        planetHealthLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        planetHealthLabel.text = "\(planetHealth)/\(maxPlanetHealth)"
+        planetHealthLabel.fontSize = 20
+        planetHealthLabel.fontColor = .black
+        planetHealthLabel.horizontalAlignmentMode = .center
+        planetHealthLabel.verticalAlignmentMode = .center
+        planetHealthLabel.position = CGPoint.zero  // Centro del pianeta
+        planetHealthLabel.zPosition = 2
+        planet.addChild(planetHealthLabel)
         
         print("✅ Planet created at: \(planet.position)")
     }
@@ -302,8 +324,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupScore() {
-        // Score label in alto a destra - prova Zerovelo con fallback
-        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+        // Score label in alto a destra - prova Orbitron con fallback
+        let possibleFontNames = ["Orbitron", "Orbitron-Bold", "Orbitron-Regular", "OrbitronVariable", "AvenirNext-Bold"]
         var fontName = "AvenirNext-Bold"
         
         for name in possibleFontNames {
@@ -327,21 +349,88 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         print("✅ Score label created with font: \(fontName)")
     }
     
+    private func setupPauseButton() {
+        // Pulsante pause in alto a sinistra
+        let buttonSize: CGFloat = 50
+        
+        pauseButton = SKShapeNode(rectOf: CGSize(width: buttonSize, height: buttonSize), cornerRadius: 8)
+        pauseButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+        pauseButton.strokeColor = .white
+        pauseButton.lineWidth = 2
+        pauseButton.position = CGPoint(x: 80, y: size.height - 30)  // Spostato più a destra
+        pauseButton.zPosition = 1000
+        pauseButton.name = "pauseButton"
+        
+        // Icona pause (due barre verticali)
+        let barWidth: CGFloat = 6
+        let barHeight: CGFloat = 20
+        let barSpacing: CGFloat = 8
+        
+        let leftBar = SKShapeNode(rectOf: CGSize(width: barWidth, height: barHeight))
+        leftBar.fillColor = .white
+        leftBar.strokeColor = .clear
+        leftBar.position = CGPoint(x: -barSpacing/2, y: 0)
+        
+        let rightBar = SKShapeNode(rectOf: CGSize(width: barWidth, height: barHeight))
+        rightBar.fillColor = .white
+        rightBar.strokeColor = .clear
+        rightBar.position = CGPoint(x: barSpacing/2, y: 0)
+        
+        pauseButton.addChild(leftBar)
+        pauseButton.addChild(rightBar)
+        
+        hudLayer.addChild(pauseButton)
+        
+        print("✅ Pause button created")
+    }
+    
     // MARK: - Touch Handling
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            joystick.touchBegan(touch, in: self)
-            fireButton.touchBegan(touch, in: self)
+            let location = touch.location(in: self)
+            let nodesAtPoint = nodes(at: location)
+            
+            // Check se è stato toccato il pulsante pause o i bottoni del menu pause/game over
+            for node in nodesAtPoint {
+                if node.name == "pauseButton" {
+                    togglePause()
+                    return
+                }
+                if node.name == "resumeButton" {
+                    resumeGame()
+                    return
+                }
+                if node.name == "quitButton" {
+                    quitToMenu()
+                    return
+                }
+                if node.name == "retryButton" {
+                    retryGame()
+                    return
+                }
+                if node.name == "menuButton" {
+                    quitToMenu()
+                    return
+                }
+            }
+            
+            // Se non siamo in pausa, gestisci i controlli normali
+            if !isGamePaused {
+                joystick.touchBegan(touch, in: self)
+                fireButton.touchBegan(touch, in: self)
+            }
         }
     }
     
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if isGamePaused { return }
         for touch in touches {
             joystick.touchMoved(touch, in: self)
         }
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if isGamePaused { return }
         for touch in touches {
             joystick.touchEnded(touch)
             fireButton.touchEnded(touch)
@@ -349,6 +438,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if isGamePaused { return }
         for touch in touches {
             joystick.touchEnded(touch)
             fireButton.touchEnded(touch)
@@ -357,6 +447,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Update Loop
     override func update(_ currentTime: TimeInterval) {
+        if isGamePaused { return }
+        
         applyGravity()
         limitAsteroidSpeed()  // Limita velocità asteroidi
         updatePlayerMovement()
@@ -539,7 +631,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func limitAsteroidSpeed() {
-        let maxSpeed: CGFloat = 200  // Velocità massima per gli asteroidi
+        let maxSpeed: CGFloat = 150  // Velocità massima per gli asteroidi (ridotta da 200)
         
         for asteroid in asteroids {
             guard let body = asteroid.physicsBody else { continue }
@@ -568,8 +660,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroidsToSpawnInWave = Int(CGFloat(baseAsteroids) * pow(1.2, CGFloat(wave - 1)))
         asteroidsSpawnedInWave = 0
         
-        // Mostra messaggio WAVE
-        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+                // Mostra messaggio WAVE
+        let possibleFontNames = ["Orbitron", "Orbitron-Bold", "Orbitron-Regular", "OrbitronVariable", "AvenirNext-Bold"]
         var fontName = "AvenirNext-Bold"
         
         for name in possibleFontNames {
@@ -578,6 +670,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 break
             }
         }
+        
+        // Background opaco dietro il messaggio
+        let waveBackground = SKSpriteNode(color: UIColor.black.withAlphaComponent(0.6), size: size)
+        waveBackground.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        waveBackground.zPosition = 1999
+        waveBackground.alpha = 0
+        
+        hudLayer.addChild(waveBackground)
         
         let waveMessage = SKLabelNode(fontNamed: fontName)
         waveMessage.fontSize = 64
@@ -601,6 +701,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         let sequence = SKAction.sequence([fadeIn, wait, fadeOut, remove, activateWave])
         waveMessage.run(sequence)
+        waveBackground.run(sequence)  // Stesso effetto anche per il background
         
         print("🌊 Wave \(wave) message displayed")
     }
@@ -749,7 +850,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             lastCollisionTime = currentTime
             
             handleAtmosphereBounce(contact: contact, isPlayer: true)
-            rechargeAtmosphere(amount: 3)
+            rechargeAtmosphere(amount: 1.5)  // Ridotto da 3 a 1.5
             flashAtmosphere()
             flashPlayerShield()
             
@@ -763,7 +864,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Projectile + Atmosphere
         else if collision == (PhysicsCategory.projectile | PhysicsCategory.atmosphere) {
             handleAtmosphereBounce(contact: contact, isPlayer: false)
-            rechargeAtmosphere(amount: 3)
+            rechargeAtmosphere(amount: 1.5)  // Ridotto da 3 a 1.5
             flashAtmosphere()
             
             // Rimuovi il proiettile
@@ -789,13 +890,54 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Asteroid + Planet
         else if collision == (PhysicsCategory.asteroid | PhysicsCategory.planet) {
-            // Rimuovi l'asteroide
-            if contact.bodyA.categoryBitMask == PhysicsCategory.asteroid {
-                contact.bodyA.node?.removeFromParent()
-            } else {
-                contact.bodyB.node?.removeFromParent()
+            // Identifica l'asteroide
+            let asteroid = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? 
+                          contact.bodyA.node as? SKShapeNode : 
+                          contact.bodyB.node as? SKShapeNode
+            
+            // Danno al pianeta SOLO se l'atmosfera è al minimo (raggio = raggio pianeta)
+            if atmosphereRadius <= planetRadius {
+                // Riduci salute del pianeta
+                planetHealth -= 1
+                updatePlanetHealthLabel()
+                
+                // Effetto visivo rosso sul pianeta
+                flashPlanet()
+                
+                if planetHealth <= 0 {
+                    // Game Over
+                    gameOver()
+                    return
+                } else {
+                    print("💔 Planet damaged! Health: \(planetHealth)/\(maxPlanetHealth)")
+                }
             }
-            print("💥 Asteroid hit planet - destroyed")
+            
+            // Rimbalza l'asteroide e danneggialo (invece di distruggerlo)
+            if let asteroid = asteroid {
+                // Effetto rimbalzo (stesso codice dell'atmosfera ma con il pianeta)
+                handlePlanetBounce(contact: contact, asteroid: asteroid)
+                
+                // Flash rosso sull'asteroide
+                flashAsteroid(asteroid)
+                
+                // Danneggia l'asteroide (frammenta se non è small)
+                if let sizeValue = asteroid.userData?["size"] as? Int,
+                   let size = AsteroidSize(rawValue: sizeValue) {
+                    if size == .small {
+                        // Small viene distrutto
+                        let position = asteroid.position
+                        createExplosionParticles(at: position, color: randomExplosionColor())
+                        asteroid.removeFromParent()
+                        asteroids.removeAll { $0 == asteroid }
+                        print("💥 Small asteroid destroyed by planet impact")
+                    } else {
+                        // Large e medium si frammentano
+                        fragmentAsteroid(asteroid)
+                        print("💥 Asteroid fragmented by planet impact")
+                    }
+                }
+            }
         }
         
         // Player + Asteroid
@@ -831,8 +973,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Frammenta l'asteroide
             if let asteroid = asteroid {
-                // Effetto particellare
-                createExplosionParticles(at: asteroid.position, color: .white)
+                // Effetto particellare con colore random
+                createExplosionParticles(at: asteroid.position, color: randomExplosionColor())
                 fragmentAsteroid(asteroid)
             }
             
@@ -922,6 +1064,58 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.position.y += normalY * pushDistance
     }
     
+    private func handlePlanetBounce(contact: SKPhysicsContact, asteroid: SKShapeNode) {
+        // Calcola direzione dal centro del pianeta all'asteroide
+        let dx = asteroid.position.x - planet.position.x
+        let dy = asteroid.position.y - planet.position.y
+        let distance = sqrt(dx * dx + dy * dy)
+        
+        guard distance > 0, let asteroidBody = asteroid.physicsBody else { return }
+        
+        // Direzione normalizzata (allontana dal centro)
+        let normalX = dx / distance
+        let normalY = dy / distance
+        
+        // Rifletti la velocità rispetto alla normale
+        let velocity = asteroidBody.velocity
+        let dotProduct = velocity.dx * normalX + velocity.dy * normalY
+        
+        // Se l'asteroide sta già andando via, non fare nulla
+        guard dotProduct < 0 else { return }
+        
+        let reflectedVelocityX = velocity.dx - 2 * dotProduct * normalX
+        let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
+        
+        // Applica la velocità riflessa con boost per il rimbalzo
+        let bounceFactor: CGFloat = 1.5  // 50% più veloce dopo il rimbalzo dal pianeta
+        asteroidBody.velocity = CGVector(
+            dx: reflectedVelocityX * bounceFactor,
+            dy: reflectedVelocityY * bounceFactor
+        )
+        
+        // Sposta l'asteroide FUORI dal pianeta per evitare collisioni multiple
+        let pushDistance: CGFloat = 15
+        asteroid.position.x += normalX * pushDistance
+        asteroid.position.y += normalY * pushDistance
+        
+        // Effetto particellare al punto di contatto
+        createCollisionParticles(at: contact.contactPoint, color: .red)
+        
+        print("💥 Asteroid bounced off planet")
+    }
+    
+    private func flashAsteroid(_ asteroid: SKShapeNode) {
+        // Effetto flash rosso sull'asteroide
+        let originalColor = asteroid.fillColor
+        asteroid.fillColor = .red
+        
+        let wait = SKAction.wait(forDuration: 0.1)
+        let restore = SKAction.run {
+            asteroid.fillColor = originalColor
+        }
+        asteroid.run(SKAction.sequence([wait, restore]))
+    }
+    
     private func fragmentAsteroid(_ asteroid: SKShapeNode) {
         guard let sizeString = asteroid.name?.split(separator: "_").last,
               let sizeRaw = Int(String(sizeString)),
@@ -940,8 +1134,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let position = asteroid.position
         let velocity = asteroid.physicsBody?.velocity ?? .zero
         
-        // Effetto particellare per la frammentazione
-        createExplosionParticles(at: position, color: .white)
+        // Effetto particellare per la frammentazione con colore random
+        createExplosionParticles(at: position, color: randomExplosionColor())
         
         // Rimuovi l'asteroide originale
         asteroid.removeFromParent()
@@ -1005,7 +1199,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if size == .small {
             // Small viene distrutto dall'impatto
             let position = asteroid.position
-            createExplosionParticles(at: position, color: .white)
+            createExplosionParticles(at: position, color: randomExplosionColor())
             asteroid.removeFromParent()
             asteroids.removeAll { $0 == asteroid }
             print("💥 Small asteroid destroyed by player")
@@ -1053,6 +1247,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func rechargeAtmosphere(amount: CGFloat) {
+        // Non ricaricare se l'atmosfera è al minimo (raggio = raggio pianeta)
+        if atmosphereRadius <= planetRadius {
+            print("🚫 Atmosphere at critical level - cannot recharge!")
+            return
+        }
+        
         // Aumenta il raggio dell'atmosfera (max 80)
         atmosphereRadius = min(atmosphereRadius + amount, maxAtmosphereRadius)
         
@@ -1061,8 +1261,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func damageAtmosphere(amount: CGFloat) {
-        // Riduci il raggio dell'atmosfera (min 40)
-        atmosphereRadius = max(atmosphereRadius - amount, minAtmosphereRadius)
+        // Riduci il raggio dell'atmosfera (min = raggio pianeta)
+        atmosphereRadius = max(atmosphereRadius - amount, planetRadius)
+        
+        // Se raggiunge il raggio del pianeta, nascondi l'atmosfera
+        if atmosphereRadius <= planetRadius {
+            atmosphere.alpha = 0  // Invisibile
+            print("💀 Atmosphere DESTROYED - planet vulnerable!")
+        }
         
         updateAtmosphereVisuals()
         print("⚠️ Atmosphere damaged: \(atmosphereRadius)")
@@ -1233,6 +1439,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.run(SKAction.sequence([waitAction, removeAction]))
     }
     
+    private func randomExplosionColor() -> UIColor {
+        // Sceglie casualmente tra verde acido, rosso e bianco
+        let colors: [UIColor] = [
+            UIColor(red: 0.5, green: 1.0, blue: 0.0, alpha: 1.0),  // Verde acido
+            UIColor.red,                                            // Rosso
+            UIColor.white                                           // Bianco
+        ]
+        return colors.randomElement() ?? .white
+    }
+    
     private func createExplosionParticles(at position: CGPoint, color: UIColor) {
         let emitter = SKEmitterNode()
         emitter.position = position
@@ -1263,5 +1479,223 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let waitAction = SKAction.wait(forDuration: 1.0)
         let removeAction = SKAction.removeFromParent()
         emitter.run(SKAction.sequence([waitAction, removeAction]))
+    }
+    
+    // MARK: - Pause System
+    private func togglePause() {
+        if isGamePaused {
+            resumeGame()
+        } else {
+            pauseGame()
+        }
+    }
+    
+    private func pauseGame() {
+        isGamePaused = true
+        
+        // Pausa la fisica
+        physicsWorld.speed = 0
+        
+        // Crea overlay scuro
+        let overlay = SKNode()
+        overlay.name = "pauseOverlay"
+        overlay.zPosition = 2000
+        
+        // Background semi-trasparente
+        let background = SKSpriteNode(color: UIColor.black.withAlphaComponent(0.7), size: size)
+        background.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        overlay.addChild(background)
+        
+        // Titolo PAUSED
+        let fontName = "AvenirNext-Bold"
+        let titleLabel = SKLabelNode(fontNamed: fontName)
+        titleLabel.text = "PAUSED"
+        titleLabel.fontSize = 64
+        titleLabel.fontColor = .white
+        titleLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 100)
+        overlay.addChild(titleLabel)
+        
+        // Pulsante RESUME
+        let resumeButton = SKShapeNode(rectOf: CGSize(width: 250, height: 70), cornerRadius: 10)
+        resumeButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+        resumeButton.strokeColor = .white
+        resumeButton.lineWidth = 3
+        resumeButton.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        resumeButton.name = "resumeButton"
+        
+        let resumeLabel = SKLabelNode(fontNamed: fontName)
+        resumeLabel.text = "RESUME"
+        resumeLabel.fontSize = 28
+        resumeLabel.fontColor = .white
+        resumeLabel.verticalAlignmentMode = .center
+        resumeButton.addChild(resumeLabel)
+        
+        overlay.addChild(resumeButton)
+        
+        // Pulsante QUIT
+        let quitButton = SKShapeNode(rectOf: CGSize(width: 250, height: 70), cornerRadius: 10)
+        quitButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+        quitButton.strokeColor = UIColor.red.withAlphaComponent(0.8)
+        quitButton.lineWidth = 3
+        quitButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 100)
+        quitButton.name = "quitButton"
+        
+        let quitLabel = SKLabelNode(fontNamed: fontName)
+        quitLabel.text = "QUIT"
+        quitLabel.fontSize = 28
+        quitLabel.fontColor = UIColor.red.withAlphaComponent(0.8)
+        quitLabel.verticalAlignmentMode = .center
+        quitButton.addChild(quitLabel)
+        
+        overlay.addChild(quitButton)
+        
+        // Animazione fade in
+        overlay.alpha = 0
+        hudLayer.addChild(overlay)
+        overlay.run(SKAction.fadeIn(withDuration: 0.2))
+        
+        pauseOverlay = overlay
+        
+        print("⏸️ Game paused")
+    }
+    
+    private func resumeGame() {
+        isGamePaused = false
+        
+        // Ripristina la fisica
+        physicsWorld.speed = 1
+        
+        // Rimuovi overlay con animazione
+        if let overlay = pauseOverlay {
+            overlay.run(SKAction.sequence([
+                SKAction.fadeOut(withDuration: 0.2),
+                SKAction.removeFromParent()
+            ]))
+            pauseOverlay = nil
+        }
+        
+        print("▶️ Game resumed")
+    }
+    
+    private func quitToMenu() {
+        // Transizione al menu principale
+        let transition = SKTransition.fade(withDuration: 0.5)
+        let menuScene = MainMenuScene(size: size)
+        menuScene.scaleMode = scaleMode
+        view?.presentScene(menuScene, transition: transition)
+        
+        print("🏠 Returning to main menu")
+    }
+    
+    private func retryGame() {
+        // Riavvia il gioco
+        let newGame = GameScene(size: size)
+        newGame.scaleMode = scaleMode
+        let transition = SKTransition.fade(withDuration: 0.5)
+        view?.presentScene(newGame, transition: transition)
+        
+        print("🔄 Restarting game")
+    }
+    
+    // MARK: - Planet Health System
+    private func updatePlanetHealthLabel() {
+        planetHealthLabel.text = "\(planetHealth)/\(maxPlanetHealth)"
+    }
+    
+    private func flashPlanet() {
+        // Effetto flash rosso sul pianeta quando viene colpito
+        let originalColor = planet.fillColor
+        planet.fillColor = .red
+        
+        let wait = SKAction.wait(forDuration: 0.1)
+        let restore = SKAction.run { [weak self] in
+            self?.planet.fillColor = originalColor
+        }
+        planet.run(SKAction.sequence([wait, restore]))
+    }
+    
+    private func gameOver() {
+        isGamePaused = true
+        physicsWorld.speed = 0
+        
+        // Esplosione finale del pianeta
+        createExplosionParticles(at: planet.position, color: .red)
+        planet.alpha = 0
+        
+        // Overlay scuro
+        let overlay = SKNode()
+        overlay.name = "gameOverOverlay"
+        overlay.zPosition = 3000
+        
+        let background = SKSpriteNode(color: UIColor.black.withAlphaComponent(0.8), size: size)
+        background.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        overlay.addChild(background)
+        
+        // Testo GAME OVER
+        let fontName = "AvenirNext-Bold"
+        let gameOverLabel = SKLabelNode(fontNamed: fontName)
+        gameOverLabel.text = "GAME OVER"
+        gameOverLabel.fontSize = 72
+        gameOverLabel.fontColor = .red
+        gameOverLabel.horizontalAlignmentMode = .center
+        gameOverLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 50)
+        overlay.addChild(gameOverLabel)
+        
+        // Score finale
+        let finalScoreLabel = SKLabelNode(fontNamed: fontName)
+        finalScoreLabel.text = "FINAL SCORE: \(score)"
+        finalScoreLabel.fontSize = 32
+        finalScoreLabel.fontColor = .white
+        finalScoreLabel.horizontalAlignmentMode = .center
+        finalScoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 30)
+        overlay.addChild(finalScoreLabel)
+        
+        // Wave raggiunta
+        let waveLabel = SKLabelNode(fontNamed: fontName)
+        waveLabel.text = "WAVE \(currentWave)"
+        waveLabel.fontSize = 24
+        waveLabel.fontColor = UIColor.white.withAlphaComponent(0.7)
+        waveLabel.horizontalAlignmentMode = .center
+        waveLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 70)
+        overlay.addChild(waveLabel)
+        
+        // Pulsante RETRY
+        let retryButton = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 10)
+        retryButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+        retryButton.strokeColor = .white
+        retryButton.lineWidth = 3
+        retryButton.position = CGPoint(x: size.width / 2 - 110, y: size.height / 2 - 140)
+        retryButton.name = "retryButton"
+        
+        let retryLabel = SKLabelNode(fontNamed: fontName)
+        retryLabel.text = "RETRY"
+        retryLabel.fontSize = 24
+        retryLabel.fontColor = .white
+        retryLabel.verticalAlignmentMode = .center
+        retryButton.addChild(retryLabel)
+        overlay.addChild(retryButton)
+        
+        // Pulsante MENU
+        let menuButton = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 10)
+        menuButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+        menuButton.strokeColor = .white
+        menuButton.lineWidth = 3
+        menuButton.position = CGPoint(x: size.width / 2 + 110, y: size.height / 2 - 140)
+        menuButton.name = "menuButton"
+        
+        let menuLabel = SKLabelNode(fontNamed: fontName)
+        menuLabel.text = "MENU"
+        menuLabel.fontSize = 24
+        menuLabel.fontColor = .white
+        menuLabel.verticalAlignmentMode = .center
+        menuButton.addChild(menuLabel)
+        overlay.addChild(menuButton)
+        
+        // Fade in dell'overlay
+        overlay.alpha = 0
+        hudLayer.addChild(overlay)
+        overlay.run(SKAction.fadeIn(withDuration: 0.5))
+        
+        print("💀 GAME OVER - Final Score: \(score), Wave: \(currentWave)")
     }
 }
