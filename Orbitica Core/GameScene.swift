@@ -86,6 +86,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastCollisionTime: TimeInterval = 0
     private let collisionCooldown: TimeInterval = 0.5  // 500ms tra collisioni
     
+    // Score
+    private var score: Int = 0
+    private var scoreLabel: SKLabelNode!
+    
     // MARK: - Setup
     override func didMove(to view: SKView) {
         backgroundColor = .black
@@ -104,6 +108,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAtmosphere()
         setupPlayer()
         setupControls()
+        setupScore()
     }
     
     private func setupLayers() {
@@ -267,6 +272,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         print("✅ Controls in HUD layer (unaffected by camera zoom)")
         print("=== CONTROLS SETUP END ===")
+    }
+    
+    private func setupScore() {
+        // Score label in alto a destra - stile vettoriale
+        scoreLabel = SKLabelNode(fontNamed: "Courier-Bold")
+        scoreLabel.fontSize = 24
+        scoreLabel.fontColor = .white
+        scoreLabel.text = "SCORE: 0"
+        scoreLabel.horizontalAlignmentMode = .right
+        scoreLabel.verticalAlignmentMode = .top
+        scoreLabel.position = CGPoint(x: size.width - 20, y: size.height - 20)
+        scoreLabel.zPosition = 1000
+        
+        hudLayer.addChild(scoreLabel)
+        
+        print("✅ Score label created")
     }
     
     // MARK: - Touch Handling
@@ -512,6 +533,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             asteroid.physicsBody?.velocity = randomVelocity
         }
         
+        // Rotazione lenta casuale
+        let rotationSpeed = CGFloat.random(in: -0.3...0.3)  // Radianti per secondo
+        asteroid.physicsBody?.angularVelocity = rotationSpeed
+        
         worldLayer.addChild(asteroid)
         asteroids.append(asteroid)
         
@@ -577,7 +602,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             rechargeAtmosphere(amount: 3)
             flashAtmosphere()
             flashPlayerShield()
-            print("🌀 Player hit atmosphere - bounce + recharge")
+            
+            // Bonus per rimbalzo
+            score += 5
+            scoreLabel.text = "SCORE: \(score)"
+            
+            print("🌀 Player hit atmosphere - bounce + recharge + 5 points")
         }
         
         // Projectile + Atmosphere
@@ -732,6 +762,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               let sizeRaw = Int(String(sizeString)),
               let size = AsteroidSize(rawValue: sizeRaw) else { return }
         
+        // Aggiungi punti in base alla dimensione
+        let points: Int
+        switch size {
+        case .large: points = 20
+        case .medium: points = 15
+        case .small: points = 10
+        }
+        score += points
+        scoreLabel.text = "SCORE: \(score)"
+        
         let position = asteroid.position
         let velocity = asteroid.physicsBody?.velocity ?? .zero
         
@@ -781,6 +821,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let sizeString = asteroid.name?.split(separator: "_").last,
               let sizeRaw = Int(String(sizeString)),
               let size = AsteroidSize(rawValue: sizeRaw) else { return }
+        
+        // Aggiungi punti (metà rispetto al proiettile)
+        let points: Int
+        switch size {
+        case .large: points = 10  // Metà di 20
+        case .medium: points = 7   // Circa metà di 15
+        case .small: points = 5    // Metà di 10
+        }
+        score += points
+        scoreLabel.text = "SCORE: \(score)"
         
         // L'astronave danneggia ma non distrugge completamente
         // Large diventa medium, medium diventa small, small viene distrutto
