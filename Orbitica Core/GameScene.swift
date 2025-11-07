@@ -82,6 +82,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastAsteroidSpawnTime: TimeInterval = 0
     private let asteroidSpawnInterval: TimeInterval = 3.0  // Ogni 3 secondi
     
+    // Wave system
+    private var currentWave: Int = 0
+    private var isWaveActive: Bool = false
+    private var asteroidsToSpawnInWave: Int = 0
+    private var asteroidsSpawnedInWave: Int = 0
+    
     // Collision tracking
     private var lastCollisionTime: TimeInterval = 0
     private let collisionCooldown: TimeInterval = 0.5  // 500ms tra collisioni
@@ -109,6 +115,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupPlayer()
         setupControls()
         setupScore()
+        
+        // Avvia Wave 1
+        startWave(1)
     }
     
     private func setupLayers() {
@@ -323,11 +332,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         applyGravity()
         updatePlayerMovement()
         updatePlayerShooting(currentTime)
-        spawnAsteroids(currentTime)
+        spawnAsteroidsForWave(currentTime)
         wrapPlayerAroundScreen()
         wrapAsteroidsAroundScreen()
         cleanupProjectiles()
         cleanupAsteroids()
+        checkWaveComplete()
     }
     
     private func wrapPlayerAroundScreen() {
@@ -476,15 +486,73 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         body.applyForce(CGVector(dx: forceX, dy: forceY))
     }
     
-    // MARK: - Asteroid Management
-    private func spawnAsteroids(_ currentTime: TimeInterval) {
+    // MARK: - Wave System
+    private func startWave(_ wave: Int) {
+        currentWave = wave
+        isWaveActive = false  // Disattiva il gioco durante il messaggio
+        
+        // Calcola numero di asteroidi per questa wave (aumenta del 20% ogni wave)
+        let baseAsteroids = 5
+        asteroidsToSpawnInWave = Int(CGFloat(baseAsteroids) * pow(1.2, CGFloat(wave - 1)))
+        asteroidsSpawnedInWave = 0
+        
+        // Mostra messaggio WAVE
+        let waveMessage = SKLabelNode(fontNamed: "Courier-Bold")
+        waveMessage.fontSize = 60
+        waveMessage.fontColor = .white
+        waveMessage.text = "WAVE \(wave)"
+        waveMessage.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        waveMessage.zPosition = 2000
+        waveMessage.alpha = 0
+        
+        hudLayer.addChild(waveMessage)
+        
+        // Animazione: Fade in, attendi, fade out, poi avvia wave
+        let fadeIn = SKAction.fadeIn(withDuration: 0.5)
+        let wait = SKAction.wait(forDuration: 1.5)
+        let fadeOut = SKAction.fadeOut(withDuration: 0.5)
+        let remove = SKAction.removeFromParent()
+        let activateWave = SKAction.run { [weak self] in
+            self?.isWaveActive = true
+            print("🌊 Wave \(wave) started - Asteroids to spawn: \(self?.asteroidsToSpawnInWave ?? 0)")
+        }
+        
+        let sequence = SKAction.sequence([fadeIn, wait, fadeOut, remove, activateWave])
+        waveMessage.run(sequence)
+        
+        print("🌊 Wave \(wave) message displayed")
+    }
+    
+    private func spawnAsteroidsForWave(_ currentTime: TimeInterval) {
+        // Non spawnare se la wave non è attiva
+        guard isWaveActive else { return }
+        
+        // Non spawnare se abbiamo già spawnato tutti gli asteroidi della wave
+        guard asteroidsSpawnedInWave < asteroidsToSpawnInWave else { return }
+        
         // Spawna asteroidi periodicamente
         guard currentTime - lastAsteroidSpawnTime > asteroidSpawnInterval else { return }
         lastAsteroidSpawnTime = currentTime
         
         // Spawna asteroide grande
         spawnAsteroid(size: .large, at: nil)
+        asteroidsSpawnedInWave += 1
+        
+        print("☄️ Spawned asteroid \(asteroidsSpawnedInWave)/\(asteroidsToSpawnInWave)")
     }
+    
+    private func checkWaveComplete() {
+        // Controlla se la wave è completa
+        guard isWaveActive else { return }
+        guard asteroidsSpawnedInWave >= asteroidsToSpawnInWave else { return }
+        guard asteroids.isEmpty else { return }
+        
+        // Wave completata! Avvia la prossima
+        print("🎉 Wave \(currentWave) completed!")
+        startWave(currentWave + 1)
+    }
+    
+    // MARK: - Asteroid Management
     
     private func spawnAsteroid(size asteroidSize: AsteroidSize, at position: CGPoint?) {
         // Crea forma a linee spezzate (stile Asteroids)
