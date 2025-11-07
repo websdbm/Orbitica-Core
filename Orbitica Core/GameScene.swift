@@ -1244,23 +1244,4 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let removeAction = SKAction.removeFromParent()
         emitter.run(SKAction.sequence([waitAction, removeAction]))
     }
-        emitter.emissionAngle = 0
-        emitter.emissionAngleRange = CGFloat.pi * 2
-        emitter.particleSpeed = 150
-        emitter.particleSpeedRange = 80
-        emitter.particleScale = 0.08
-        emitter.particleScaleRange = 0.04
-        emitter.particleScaleSpeed = -0.08
-        emitter.particleAlpha = 1.0
-        emitter.particleAlphaSpeed = -1.2
-        emitter.particleColor = color
-        emitter.particleBlendMode = .add
-        
-        worldLayer.addChild(emitter)
-        
-        // Rimuovi dopo il completamento
-        let waitAction = SKAction.wait(forDuration: 1.0)
-        let removeAction = SKAction.removeFromParent()
-        emitter.run(SKAction.sequence([waitAction, removeAction]))
-    }
 }
