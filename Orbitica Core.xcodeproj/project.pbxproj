@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		930531FE2EBE14500074365A /* zerovelo 2.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 930531FD2EBE14500074365A /* zerovelo 2.ttf */; };
+		930531FE2EBE14500074365A /* zerovelo.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 930531FD2EBE14500074365A /* zerovelo.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,7 +31,7 @@
 		930531C32EBDE0B70074365A /* Orbitica Core.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Orbitica Core.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		930531DC2EBDE0B80074365A /* Orbitica CoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Orbitica CoreTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		930531E62EBDE0B80074365A /* Orbitica CoreUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Orbitica CoreUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		930531FD2EBE14500074365A /* zerovelo 2.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "zerovelo 2.ttf"; sourceTree = "<group>"; };
+		930531FD2EBE14500074365A /* zerovelo.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = zerovelo.ttf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,7 +80,7 @@
 		930531BA2EBDE0B70074365A = {
 			isa = PBXGroup;
 			children = (
-				930531FD2EBE14500074365A /* zerovelo 2.ttf */,
+				930531FD2EBE14500074365A /* zerovelo.ttf */,
 				930531C52EBDE0B70074365A /* Orbitica Core */,
 				930531DF2EBDE0B80074365A /* Orbitica CoreTests */,
 				930531E92EBDE0B80074365A /* Orbitica CoreUITests */,
@@ -218,7 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				930531FE2EBE14500074365A /* zerovelo 2.ttf in Resources */,
+				930531FE2EBE14500074365A /* zerovelo.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -408,6 +408,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Orbital core";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.arcade-games";
+				INFOPLIST_KEY_UIAppFonts = zerovelo.ttf;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -419,7 +420,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				INFOPLIST_KEY_UIAppFonts = "zerovelo 2.ttf";
 				PRODUCT_BUNDLE_IDENTIFIER = "Alessandro.Orbitica-Core";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -439,6 +439,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Orbital core";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.arcade-games";
+				INFOPLIST_KEY_UIAppFonts = zerovelo.ttf;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -450,7 +451,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				INFOPLIST_KEY_UIAppFonts = "zerovelo 2.ttf";
 				PRODUCT_BUNDLE_IDENTIFIER = "Alessandro.Orbitica-Core";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
