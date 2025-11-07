@@ -71,8 +71,24 @@ class MainMenuScene: SKScene {
     }
     
     private func setupTitle() {
+        // Prova diversi nomi possibili per il font
+        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+        var fontName = "AvenirNext-Bold" // Fallback di default
+        
+        for name in possibleFontNames {
+            if UIFont(name: name, size: 12) != nil {
+                fontName = name
+                print("✅ Font found: \(name)")
+                break
+            }
+        }
+        
+        if fontName == "AvenirNext-Bold" {
+            print("⚠️ Zerovelo font not found, using fallback: \(fontName)")
+        }
+        
         // Titolo principale - ORBITICA CORE
-        titleLabel = SKLabelNode(fontNamed: "Zerovelo")
+        titleLabel = SKLabelNode(fontNamed: fontName)
         titleLabel.text = "ORBITICA"
         titleLabel.fontSize = 72
         titleLabel.fontColor = .white
@@ -81,7 +97,7 @@ class MainMenuScene: SKScene {
         addChild(titleLabel)
         
         // Sottotitolo - CORE
-        subtitleLabel = SKLabelNode(fontNamed: "Zerovelo")
+        subtitleLabel = SKLabelNode(fontNamed: fontName)
         subtitleLabel.text = "CORE"
         subtitleLabel.fontSize = 48
         subtitleLabel.fontColor = UIColor.cyan.withAlphaComponent(0.8)
@@ -107,6 +123,17 @@ class MainMenuScene: SKScene {
     }
     
     private func setupPlayButton() {
+        // Usa lo stesso font del titolo
+        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+        var fontName = "AvenirNext-Bold"
+        
+        for name in possibleFontNames {
+            if UIFont(name: name, size: 12) != nil {
+                fontName = name
+                break
+            }
+        }
+        
         // Bottone rettangolare con bordo
         let buttonWidth: CGFloat = 250
         let buttonHeight: CGFloat = 70
@@ -121,7 +148,7 @@ class MainMenuScene: SKScene {
         addChild(playButton)
         
         // Label del bottone
-        playButtonLabel = SKLabelNode(fontNamed: "Zerovelo")
+        playButtonLabel = SKLabelNode(fontNamed: fontName)
         playButtonLabel.text = "PLAY NOW"
         playButtonLabel.fontSize = 32
         playButtonLabel.fontColor = .white

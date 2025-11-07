@@ -14,6 +14,19 @@ class GameViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        // DEBUG: Stampa tutti i font disponibili
+        print("=== AVAILABLE FONTS ===")
+        for family in UIFont.familyNames.sorted() {
+            let fonts = UIFont.fontNames(forFamilyName: family)
+            if !fonts.isEmpty {
+                print("Family: \(family)")
+                for name in fonts {
+                    print("  - \(name)")
+                }
+            }
+        }
+        print("======================")
+        
         if let view = self.view as! SKView? {
             // Forza dimensioni LANDSCAPE (inverti se necessario)
             let viewSize = view.bounds.size

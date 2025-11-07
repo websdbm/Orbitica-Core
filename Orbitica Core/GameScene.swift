@@ -302,8 +302,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupScore() {
-        // Score label in alto a destra - usa font Zerovelo per coerenza
-        scoreLabel = SKLabelNode(fontNamed: "Zerovelo")
+        // Score label in alto a destra - prova Zerovelo con fallback
+        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+        var fontName = "AvenirNext-Bold"
+        
+        for name in possibleFontNames {
+            if UIFont(name: name, size: 12) != nil {
+                fontName = name
+                break
+            }
+        }
+        
+        scoreLabel = SKLabelNode(fontNamed: fontName)
         scoreLabel.fontSize = 32
         scoreLabel.fontColor = .white
         scoreLabel.text = "0"
@@ -314,7 +324,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         hudLayer.addChild(scoreLabel)
         
-        print("✅ Score label created with Zerovelo font")
+        print("✅ Score label created with font: \(fontName)")
     }
     
     // MARK: - Touch Handling
@@ -559,7 +569,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroidsSpawnedInWave = 0
         
         // Mostra messaggio WAVE
-        let waveMessage = SKLabelNode(fontNamed: "Zerovelo")
+        let possibleFontNames = ["Zerovelo", "zerovelo", "Zerovelo-Regular", "zerovelo-Regular", "AvenirNext-Bold"]
+        var fontName = "AvenirNext-Bold"
+        
+        for name in possibleFontNames {
+            if UIFont(name: name, size: 12) != nil {
+                fontName = name
+                break
+            }
+        }
+        
+        let waveMessage = SKLabelNode(fontNamed: fontName)
         waveMessage.fontSize = 64
         waveMessage.fontColor = .white
         waveMessage.text = "WAVE \(wave)"
