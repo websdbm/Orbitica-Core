@@ -42,19 +42,19 @@ class JoystickNode: SKNode {
     }
     
     private func setupNodes() {
-        // Base
+        // Base - più opaca e minimal
         baseNode = SKShapeNode(circleOfRadius: baseRadius)
-        baseNode.fillColor = SKColor.white.withAlphaComponent(0.3)
-        baseNode.strokeColor = SKColor.white.withAlphaComponent(0.8)
-        baseNode.lineWidth = 4
+        baseNode.fillColor = SKColor.white.withAlphaComponent(0.15)
+        baseNode.strokeColor = SKColor.white.withAlphaComponent(0.4)
+        baseNode.lineWidth = 2
         baseNode.zPosition = 0
         addChild(baseNode)
         
-        // Thumb
+        // Thumb - più opaco
         thumbNode = SKShapeNode(circleOfRadius: thumbRadius)
-        thumbNode.fillColor = SKColor.white.withAlphaComponent(0.8)
-        thumbNode.strokeColor = .white
-        thumbNode.lineWidth = 3
+        thumbNode.fillColor = SKColor.white.withAlphaComponent(0.4)
+        thumbNode.strokeColor = SKColor.white.withAlphaComponent(0.6)
+        thumbNode.lineWidth = 2
         thumbNode.zPosition = 1
         addChild(thumbNode)
     }
@@ -139,37 +139,15 @@ class FireButtonNode: SKNode {
     }
     
     private func setupNodes() {
-        // Button
+        // Button - solo sagoma minimal, più opaco
         buttonNode = SKShapeNode(circleOfRadius: radius)
-        buttonNode.fillColor = SKColor.red.withAlphaComponent(0.3)
-        buttonNode.strokeColor = SKColor.red.withAlphaComponent(0.8)
-        buttonNode.lineWidth = 4
+        buttonNode.fillColor = SKColor.red.withAlphaComponent(0.15)
+        buttonNode.strokeColor = SKColor.red.withAlphaComponent(0.4)
+        buttonNode.lineWidth = 2
         buttonNode.zPosition = 0
         addChild(buttonNode)
         
-        // Icon
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: 0, y: 15))
-        path.addLine(to: CGPoint(x: -10, y: -10))
-        path.addLine(to: CGPoint(x: 0, y: -5))
-        path.addLine(to: CGPoint(x: 10, y: -10))
-        path.closeSubpath()
-        
-        iconNode = SKShapeNode(path: path)
-        iconNode.fillColor = SKColor.red.withAlphaComponent(0.5)
-        iconNode.strokeColor = .red
-        iconNode.lineWidth = 3
-        iconNode.zPosition = 1
-        addChild(iconNode)
-        
-        // Label
-        let label = SKLabelNode(fontNamed: "Courier-Bold")
-        label.fontSize = 16
-        label.fontColor = .red
-        label.text = "FIRE"
-        label.position = CGPoint(x: 0, y: -30)
-        label.zPosition = 1
-        addChild(label)
+        // Nessuna icona o testo - solo la sagoma
     }
     
     func touchBegan(_ touch: UITouch, in node: SKNode) {
@@ -179,7 +157,7 @@ class FireButtonNode: SKNode {
         if distance <= radius {
             isPressed = true
             trackingTouch = touch
-            buttonNode.fillColor = SKColor.red.withAlphaComponent(0.6)
+            buttonNode.fillColor = SKColor.red.withAlphaComponent(0.3)
             onPress?()
         }
     }
@@ -189,7 +167,7 @@ class FireButtonNode: SKNode {
         
         isPressed = false
         trackingTouch = nil
-        buttonNode.fillColor = SKColor.red.withAlphaComponent(0.3)
+        buttonNode.fillColor = SKColor.red.withAlphaComponent(0.15)
         onRelease?()
     }
 }

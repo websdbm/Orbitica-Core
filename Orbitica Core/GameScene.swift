@@ -26,9 +26,9 @@ enum AsteroidSize: Int {
     
     var radius: CGFloat {
         switch self {
-        case .large: return 35
-        case .medium: return 22
-        case .small: return 12
+        case .large: return 28   // Era 35
+        case .medium: return 18  // Era 22
+        case .small: return 10   // Era 12
         }
     }
     
@@ -96,6 +96,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var score: Int = 0
     private var scoreLabel: SKLabelNode!
     
+    // Particle texture cache
+    private var particleTexture: SKTexture?
+    
     // MARK: - Setup
     override func didMove(to view: SKView) {
         backgroundColor = .black
@@ -108,6 +111,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         print("Scene size: \(size)")
         print("======================")
         
+        // Crea texture per particelle
+        createParticleTexture()
+        
         setupLayers()
         setupCamera()
         setupPlanet()
@@ -118,6 +124,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Avvia Wave 1
         startWave(1)
+    }
+    
+    private func createParticleTexture() {
+        // Crea una texture bianca circolare 8x8 pixels
+        let size = CGSize(width: 8, height: 8)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            UIColor.white.setFill()
+            context.cgContext.fillEllipse(in: CGRect(origin: .zero, size: size))
+        }
+        particleTexture = SKTexture(image: image)
+        print("✅ Particle texture created")
     }
     
     private func setupLayers() {
@@ -284,11 +302,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupScore() {
-        // Score label in alto a destra - stile vettoriale
+        // Score label in alto a destra - stile vettoriale (solo numero)
         scoreLabel = SKLabelNode(fontNamed: "Courier-Bold")
-        scoreLabel.fontSize = 24
+        scoreLabel.fontSize = 28
         scoreLabel.fontColor = .white
-        scoreLabel.text = "SCORE: 0"
+        scoreLabel.text = "0"
         scoreLabel.horizontalAlignmentMode = .right
         scoreLabel.verticalAlignmentMode = .top
         scoreLabel.position = CGPoint(x: size.width - 20, y: size.height - 20)
@@ -330,6 +348,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Update Loop
     override func update(_ currentTime: TimeInterval) {
         applyGravity()
+        limitAsteroidSpeed()  // Limita velocità asteroidi
         updatePlayerMovement()
         updatePlayerShooting(currentTime)
         spawnAsteroidsForWave(currentTime)
@@ -427,6 +446,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Ruota il proiettile nella direzione di sparo
         projectile.zRotation = player.zRotation
         
+        // EFFETTO SCIA: Particelle che seguono il proiettile
+        let trail = SKEmitterNode()
+        trail.particleTexture = particleTexture
+        trail.particleBirthRate = 80
+        trail.numParticlesToEmit = 0  // Continua finché esiste
+        trail.particleLifetime = 0.4
+        trail.emissionAngle = angle - .pi  // Direzione opposta al movimento
+        trail.emissionAngleRange = 0.2
+        trail.particleSpeed = 30
+        trail.particleSpeedRange = 15
+        trail.particleScale = 0.2
+        trail.particleScaleRange = 0.1
+        trail.particleScaleSpeed = -0.5
+        trail.particleAlpha = 0.8
+        trail.particleAlphaSpeed = -2.0
+        trail.particleColor = .white
+        trail.particleBlendMode = .add
+        trail.particleZPosition = -1
+        trail.targetNode = worldLayer  // Le particelle rimangono nel world
+        projectile.addChild(trail)
+        
+        print("☄️ Projectile fired with trail")
+        
         // Imposta velocità iniziale invece di usare SKAction
         let speed: CGFloat = 500
         let velocityX = cos(angle) * speed
@@ -484,6 +526,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Applica la forza
         body.applyForce(CGVector(dx: forceX, dy: forceY))
+    }
+    
+    private func limitAsteroidSpeed() {
+        let maxSpeed: CGFloat = 200  // Velocità massima per gli asteroidi
+        
+        for asteroid in asteroids {
+            guard let body = asteroid.physicsBody else { continue }
+            
+            let velocity = body.velocity
+            let speed = sqrt(velocity.dx * velocity.dx + velocity.dy * velocity.dy)
+            
+            if speed > maxSpeed {
+                // Normalizza e limita alla velocità massima
+                let factor = maxSpeed / speed
+                body.velocity = CGVector(
+                    dx: velocity.dx * factor,
+                    dy: velocity.dy * factor
+                )
+            }
+        }
     }
     
     // MARK: - Wave System
@@ -592,11 +654,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.planet | PhysicsCategory.projectile
         asteroid.physicsBody?.collisionBitMask = 0
         
-        // Velocità iniziale casuale (se non ha posizione specificata)
+        // Velocità iniziale casuale (se non ha posizione specificata) - RIDOTTA
         if position == nil {
             let randomVelocity = CGVector(
-                dx: CGFloat.random(in: -80...80),
-                dy: CGFloat.random(in: -80...80)
+                dx: CGFloat.random(in: -50...50),  // Era -80...80
+                dy: CGFloat.random(in: -50...50)   // Era -80...80
             )
             asteroid.physicsBody?.velocity = randomVelocity
         }
@@ -673,7 +735,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Bonus per rimbalzo
             score += 5
-            scoreLabel.text = "SCORE: \(score)"
+            scoreLabel.text = "\(score)"
             
             print("🌀 Player hit atmosphere - bounce + recharge + 5 points")
         }
@@ -698,6 +760,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             handleAsteroidAtmosphereBounce(contact: contact)
             damageAtmosphere(amount: 2)
             flashAtmosphere()
+            
+            // Effetto particellare al punto di contatto
+            createCollisionParticles(at: contact.contactPoint, color: .cyan)
+            
             print("☄️ Asteroid hit atmosphere - bounce + damage")
         }
         
@@ -714,14 +780,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Player + Asteroid
         else if collision == (PhysicsCategory.player | PhysicsCategory.asteroid) {
-            // Identifica l'asteroide
-            let asteroid = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA.node as? SKShapeNode : contact.bodyB.node as? SKShapeNode
+            // Identifica player e asteroide
+            let playerBody = contact.bodyA.categoryBitMask == PhysicsCategory.player ? contact.bodyA : contact.bodyB
+            let asteroidBody = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA : contact.bodyB
+            let asteroid = asteroidBody.node as? SKShapeNode
             
-            if let asteroid = asteroid {
+            if let asteroid = asteroid, let asteroidPhysics = asteroid.physicsBody {
+                // Calcola rimbalzo reciproco basato su massa e velocità
+                handlePlayerAsteroidCollision(playerBody: playerBody, asteroidBody: asteroidBody, asteroid: asteroid)
+                
                 // L'astronave danneggia l'asteroide (meno di un proiettile)
                 damageAsteroid(asteroid)
                 flashPlayerShield()
-                print("💥 Player hit asteroid - damage")
+                
+                // Effetto particellare
+                createCollisionParticles(at: contact.contactPoint, color: .white)
+                
+                print("💥 Player hit asteroid - bounce + damage")
             }
         }
         
@@ -736,6 +811,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Frammenta l'asteroide
             if let asteroid = asteroid {
+                // Effetto particellare
+                createExplosionParticles(at: asteroid.position, color: .white)
                 fragmentAsteroid(asteroid)
             }
             
@@ -838,10 +915,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         case .small: points = 10
         }
         score += points
-        scoreLabel.text = "SCORE: \(score)"
+        scoreLabel.text = "\(score)"
         
         let position = asteroid.position
         let velocity = asteroid.physicsBody?.velocity ?? .zero
+        
+        // Effetto particellare per la frammentazione
+        createExplosionParticles(at: position, color: .white)
         
         // Rimuovi l'asteroide originale
         asteroid.removeFromParent()
@@ -898,12 +978,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         case .small: points = 5    // Metà di 10
         }
         score += points
-        scoreLabel.text = "SCORE: \(score)"
+        scoreLabel.text = "\(score)"
         
         // L'astronave danneggia ma non distrugge completamente
         // Large diventa medium, medium diventa small, small viene distrutto
         if size == .small {
             // Small viene distrutto dall'impatto
+            let position = asteroid.position
+            createExplosionParticles(at: position, color: .white)
             asteroid.removeFromParent()
             asteroids.removeAll { $0 == asteroid }
             print("💥 Small asteroid destroyed by player")
@@ -911,6 +993,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Large e medium si frammentano (ma con meno energia)
             let position = asteroid.position
             let velocity = asteroid.physicsBody?.velocity ?? .zero
+            
+            // Effetto particellare per il danneggiamento
+            createCollisionParticles(at: position, color: .white)
             
             asteroid.removeFromParent()
             asteroids.removeAll { $0 == asteroid }
@@ -1021,5 +1106,161 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ])
         
         playerShield.run(flashAction)
+    }
+    
+    // MARK: - Collision Physics
+    
+    private func handlePlayerAsteroidCollision(playerBody: SKPhysicsBody, asteroidBody: SKPhysicsBody, asteroid: SKShapeNode) {
+        // Calcola il vettore normale della collisione (dall'asteroide al player)
+        guard let playerPos = playerBody.node?.position,
+              let asteroidPos = asteroidBody.node?.position else { return }
+        
+        let dx = playerPos.x - asteroidPos.x
+        let dy = playerPos.y - asteroidPos.y
+        let distance = sqrt(dx * dx + dy * dy)
+        
+        // Evita divisione per zero
+        guard distance > 0 else { return }
+        
+        let normalX = dx / distance
+        let normalY = dy / distance
+        
+        // Velocità relative
+        let playerVel = playerBody.velocity
+        let asteroidVel = asteroidBody.velocity
+        let relVelX = playerVel.dx - asteroidVel.dx
+        let relVelY = playerVel.dy - asteroidVel.dy
+        
+        // Velocità lungo la normale
+        let velAlongNormal = relVelX * normalX + relVelY * normalY
+        
+        // Non risolvere se gli oggetti si stanno già separando
+        guard velAlongNormal < 0 else { return }
+        
+        // Coefficiente di restituzione (bounciness) - dipende dalla dimensione dell'asteroide
+        var restitution: CGFloat = 0.7
+        
+        // Asteroidi più grandi hanno un rimbalzo più forte
+        if let asteroidName = asteroid.name {
+            if asteroidName.contains("large") {
+                restitution = 0.8
+            } else if asteroidName.contains("medium") {
+                restitution = 0.7
+            } else if asteroidName.contains("small") {
+                restitution = 0.6
+            }
+        }
+        
+        // Masse
+        let playerMass = playerBody.mass
+        let asteroidMass = asteroidBody.mass
+        
+        // Calcola l'impulso scalare
+        let j = -(1 + restitution) * velAlongNormal / (1/playerMass + 1/asteroidMass)
+        
+        // Applica l'impulso
+        let impulseX = j * normalX
+        let impulseY = j * normalY
+        
+        // Applica l'impulso a entrambi i corpi
+        let playerImpulse = CGVector(dx: impulseX / playerMass, dy: impulseY / playerMass)
+        let asteroidImpulse = CGVector(dx: -impulseX / asteroidMass, dy: -impulseY / asteroidMass)
+        
+        playerBody.velocity = CGVector(
+            dx: playerVel.dx + playerImpulse.dx,
+            dy: playerVel.dy + playerImpulse.dy
+        )
+        
+        asteroidBody.velocity = CGVector(
+            dx: asteroidVel.dx + asteroidImpulse.dx,
+            dy: asteroidVel.dy + asteroidImpulse.dy
+        )
+        
+        print("⚡ Player-Asteroid bounce: restitution=\(restitution), impulse=\(j)")
+    }
+    
+    // MARK: - Particle Effects
+    
+    private func createCollisionParticles(at position: CGPoint, color: UIColor) {
+        let emitter = SKEmitterNode()
+        emitter.position = position
+        
+        // Configurazione particelle di collisione
+        emitter.particleTexture = particleTexture
+        emitter.particleBirthRate = 200
+        emitter.numParticlesToEmit = 20
+        emitter.particleLifetime = 0.5
+        emitter.emissionAngle = 0
+        emitter.emissionAngleRange = CGFloat.pi * 2
+        emitter.particleSpeed = 150
+        emitter.particleSpeedRange = 80
+        emitter.particleScale = 0.3
+        emitter.particleScaleRange = 0.15
+        emitter.particleScaleSpeed = -0.5
+        emitter.particleAlpha = 1.0
+        emitter.particleAlphaSpeed = -2.0
+        emitter.particleColor = color
+        emitter.particleBlendMode = .add
+        emitter.zPosition = 100
+        
+        worldLayer.addChild(emitter)
+        
+        print("✨ Collision particles created at \(position)")
+        
+        // Rimuovi dopo il completamento
+        let waitAction = SKAction.wait(forDuration: 0.6)
+        let removeAction = SKAction.removeFromParent()
+        emitter.run(SKAction.sequence([waitAction, removeAction]))
+    }
+    
+    private func createExplosionParticles(at position: CGPoint, color: UIColor) {
+        let emitter = SKEmitterNode()
+        emitter.position = position
+        
+        // Configurazione particelle di esplosione (più grandi e durature)
+        emitter.particleTexture = particleTexture
+        emitter.particleBirthRate = 300
+        emitter.numParticlesToEmit = 40
+        emitter.particleLifetime = 0.8
+        emitter.emissionAngle = 0
+        emitter.emissionAngleRange = CGFloat.pi * 2
+        emitter.particleSpeed = 200
+        emitter.particleSpeedRange = 100
+        emitter.particleScale = 0.4
+        emitter.particleScaleRange = 0.2
+        emitter.particleScaleSpeed = -0.4
+        emitter.particleAlpha = 1.0
+        emitter.particleAlphaSpeed = -1.2
+        emitter.particleColor = color
+        emitter.particleBlendMode = .add
+        emitter.zPosition = 100
+        
+        worldLayer.addChild(emitter)
+        
+        print("💥 Explosion particles created at \(position)")
+        
+        // Rimuovi dopo il completamento
+        let waitAction = SKAction.wait(forDuration: 1.0)
+        let removeAction = SKAction.removeFromParent()
+        emitter.run(SKAction.sequence([waitAction, removeAction]))
+    }
+        emitter.emissionAngle = 0
+        emitter.emissionAngleRange = CGFloat.pi * 2
+        emitter.particleSpeed = 150
+        emitter.particleSpeedRange = 80
+        emitter.particleScale = 0.08
+        emitter.particleScaleRange = 0.04
+        emitter.particleScaleSpeed = -0.08
+        emitter.particleAlpha = 1.0
+        emitter.particleAlphaSpeed = -1.2
+        emitter.particleColor = color
+        emitter.particleBlendMode = .add
+        
+        worldLayer.addChild(emitter)
+        
+        // Rimuovi dopo il completamento
+        let waitAction = SKAction.wait(forDuration: 1.0)
+        let removeAction = SKAction.removeFromParent()
+        emitter.run(SKAction.sequence([waitAction, removeAction]))
     }
 }
