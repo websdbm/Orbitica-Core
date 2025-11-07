@@ -16,6 +16,7 @@ struct PhysicsCategory {
     static let player: UInt32 = 0b100      // 4
     static let asteroid: UInt32 = 0b1000   // 8
     static let projectile: UInt32 = 0b10000 // 16
+    static let powerup: UInt32 = 0b100000 // 32
 }
 
 // MARK: - Asteroid Size
@@ -78,9 +79,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var isFiring = false
     private var lastFireTime: TimeInterval = 0
     private let fireRate: TimeInterval = 0.45  // Triplicato da 0.15 a 0.45 (1/3 della frequenza)
+    // Runtime-adjustable fire rate (used for power-ups)
+    private var currentFireRate: TimeInterval = 0.45
+    private var baseFireRate: TimeInterval { return fireRate }
     
     // Projectiles
     private var projectiles: [SKShapeNode] = []
+    // Projectile base sizes (can be modified by BigAmmo power-up)
+    private var projectileBaseSize = CGSize(width: 3, height: 12)
+    private var projectileWidthMultiplier: CGFloat = 1.0 // BigAmmo sets to 4x width
+    private var projectileHeightMultiplier: CGFloat = 1.0 // BigAmmo sets to 2x height
+    private var projectileDamageMultiplier: CGFloat = 1.0 // BigAmmo sets to 4x damage
     
     // Asteroids
     private var asteroids: [SKShapeNode] = []
@@ -96,10 +105,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Collision tracking
     private var lastCollisionTime: TimeInterval = 0
     private let collisionCooldown: TimeInterval = 0.5  // 500ms tra collisioni
+    private var lastUpdateTime: TimeInterval = 0  // Traccia l'ultimo currentTime da update
     
     // Score
     private var score: Int = 0
     private var scoreLabel: SKLabelNode!
+    // Power-up HUD label (sotto il punteggio in alto a destra)
+    private var powerupLabel: SKLabelNode!
+
+    // Power-up state
+    private var vulcanActive: Bool = false
+    private var bigAmmoActive: Bool = false
+    private var atmosphereActive: Bool = false
+    private var activePowerupEndTime: TimeInterval = 0
     
     // Pause system
     private var isGamePaused: Bool = false
@@ -174,20 +192,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupPlanet() {
-        planet = SKShapeNode(circleOfRadius: planetRadius)
+        // Crea un path irregolare simile agli asteroidi ma più circolare
+        let planetPath = createIrregularPlanetPath(radius: planetRadius)
+        planet = SKShapeNode(path: planetPath)
         planet.fillColor = .white
         planet.strokeColor = .clear
         planet.name = "planet"
         planet.zPosition = 1
         planet.position = CGPoint(x: size.width / 2, y: size.height / 2)  // Centro dello schermo
         
-        // Physics body per il pianeta
+        // Physics body per il pianeta (mantiene collisione circolare perfetta)
         let planetBody = SKPhysicsBody(circleOfRadius: planetRadius)
         planetBody.isDynamic = false
         planetBody.categoryBitMask = PhysicsCategory.planet
         planetBody.contactTestBitMask = PhysicsCategory.asteroid
         planetBody.collisionBitMask = 0
         planet.physicsBody = planetBody
+        
+        // Rotazione lenta antioraria del pianeta
+        let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: 60.0) // Un giro completo in 60 secondi
+        planet.run(SKAction.repeatForever(rotateAction))
         
         worldLayer.addChild(planet)
         
@@ -345,6 +369,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreLabel.zPosition = 1000
         
         hudLayer.addChild(scoreLabel)
+
+    // Power-up label sotto il punteggio (vuoto finché non c'è un power-up)
+    powerupLabel = SKLabelNode(fontNamed: fontName)
+    powerupLabel.fontSize = 18
+    powerupLabel.fontColor = .yellow
+    powerupLabel.text = ""
+    powerupLabel.horizontalAlignmentMode = .right
+    powerupLabel.verticalAlignmentMode = .top
+    powerupLabel.position = CGPoint(x: size.width - 20, y: size.height - 60)
+    powerupLabel.zPosition = 1000
+    hudLayer.addChild(powerupLabel)
         
         print("✅ Score label created with font: \(fontName)")
     }
@@ -412,6 +447,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     quitToMenu()
                     return
                 }
+                if node.name == "saveScoreButton" {
+                    showInitialEntryScene()
+                    return
+                }
             }
             
             // Se non siamo in pausa, gestisci i controlli normali
@@ -449,10 +488,31 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     override func update(_ currentTime: TimeInterval) {
         if isGamePaused { return }
         
+        lastUpdateTime = currentTime  // Salva per usarlo in didBegin
+        
         applyGravity()
         limitAsteroidSpeed()  // Limita velocità asteroidi
         updatePlayerMovement()
         updatePlayerShooting(currentTime)
+        // Gestione timer power-up
+        if activePowerupEndTime > 0 {
+            let remaining = max(0, activePowerupEndTime - currentTime)
+            let remainingFormatted = String(format: "%.2f", remaining)
+            
+            if vulcanActive {
+                powerupLabel.text = "Vulcan \(remainingFormatted)s"
+            } else if bigAmmoActive {
+                powerupLabel.text = "BigAmmo \(remainingFormatted)s"
+            } else if atmosphereActive {
+                // Per Atmosphere: solo nome, NO timer (timer solo per tracking interno)
+                powerupLabel.text = "Atmosphere"
+            }
+
+            if currentTime >= activePowerupEndTime {
+                // Expire all temporary effects
+                deactivatePowerups()
+            }
+        }
         spawnAsteroidsForWave(currentTime)
         wrapPlayerAroundScreen()
         wrapAsteroidsAroundScreen()
@@ -513,7 +573,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func updatePlayerShooting(_ currentTime: TimeInterval) {
         guard isFiring else { return }
         
-        if currentTime - lastFireTime >= fireRate {
+        if currentTime - lastFireTime >= currentFireRate {
             fireProjectile()
             lastFireTime = currentTime
         }
@@ -521,13 +581,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func fireProjectile() {
         // Proiettile a forma di linea spessa (rettangolo)
-        let projectile = SKShapeNode(rectOf: CGSize(width: 3, height: 12), cornerRadius: 1)
-        projectile.fillColor = .white
-        projectile.strokeColor = .white
+        let usedSize = CGSize(width: projectileBaseSize.width * projectileWidthMultiplier,
+                              height: projectileBaseSize.height * projectileHeightMultiplier)
+        let projectile = SKShapeNode(rectOf: usedSize, cornerRadius: 1)
+        
+        // Colora le munizioni in base al power-up attivo
+        if vulcanActive {
+            projectile.fillColor = .red
+            projectile.strokeColor = .red
+        } else if bigAmmoActive {
+            projectile.fillColor = .green
+            projectile.strokeColor = .green
+        } else {
+            projectile.fillColor = .white
+            projectile.strokeColor = .white
+        }
         projectile.lineWidth = 0
         
         // Physics body per il proiettile
-        projectile.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: 3, height: 12))
+        projectile.physicsBody = SKPhysicsBody(rectangleOf: usedSize)
         projectile.physicsBody?.isDynamic = true
         projectile.physicsBody?.categoryBitMask = PhysicsCategory.projectile
         projectile.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.asteroid
@@ -548,22 +620,47 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Ruota il proiettile nella direzione di sparo
         projectile.zRotation = player.zRotation
         
+        // Salva il moltiplicatore di danno nel userData
+        projectile.userData = NSMutableDictionary()
+        projectile.userData?["damageMultiplier"] = projectileDamageMultiplier
+        
         // EFFETTO SCIA: Particelle che seguono il proiettile
         let trail = SKEmitterNode()
         trail.particleTexture = particleTexture
-        trail.particleBirthRate = 80
+        
+        // Configura scia in base al power-up attivo
+        if bigAmmoActive {
+            trail.particleBirthRate = 250          // 3x più densa (era 80)
+            trail.particleLifetime = 0.8           // 2x più lunga (era 0.4)
+            trail.particleSpeed = 50               // Più veloce
+            trail.particleSpeedRange = 25
+            trail.particleScale = 1.2              // 4x più grande (era 0.4) - proporzionato al proiettile 4x
+            trail.particleScaleRange = 0.6
+            trail.particleColor = .green           // Verde per BigAmmo
+        } else if vulcanActive {
+            trail.particleBirthRate = 120          // Scia più densa per Vulcan
+            trail.particleLifetime = 0.5
+            trail.particleSpeed = 40
+            trail.particleSpeedRange = 20
+            trail.particleScale = 0.25
+            trail.particleScaleRange = 0.12
+            trail.particleColor = .red             // Rosso per Vulcan
+        } else {
+            trail.particleBirthRate = 80
+            trail.particleLifetime = 0.4
+            trail.particleSpeed = 30
+            trail.particleSpeedRange = 15
+            trail.particleScale = 0.2
+            trail.particleScaleRange = 0.1
+            trail.particleColor = .white
+        }
+        
         trail.numParticlesToEmit = 0  // Continua finché esiste
-        trail.particleLifetime = 0.4
         trail.emissionAngle = angle - .pi  // Direzione opposta al movimento
         trail.emissionAngleRange = 0.2
-        trail.particleSpeed = 30
-        trail.particleSpeedRange = 15
-        trail.particleScale = 0.2
-        trail.particleScaleRange = 0.1
         trail.particleScaleSpeed = -0.5
         trail.particleAlpha = 0.8
         trail.particleAlphaSpeed = -2.0
-        trail.particleColor = .white
         trail.particleBlendMode = .add
         trail.particleZPosition = -1
         trail.targetNode = worldLayer  // Le particelle rimangono nel world
@@ -605,6 +702,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         for asteroid in asteroids {
             if let asteroidBody = asteroid.physicsBody {
                 applyGravityToNode(node: asteroid, body: asteroidBody)
+            }
+        }
+        
+        // Applica gravità ai power-up
+        worldLayer.enumerateChildNodes(withName: "powerup_*") { node, _ in
+            if let powerupBody = node.physicsBody {
+                self.applyGravityToNode(node: node, body: powerupBody)
             }
         }
     }
@@ -730,8 +834,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard asteroidsSpawnedInWave >= asteroidsToSpawnInWave else { return }
         guard asteroids.isEmpty else { return }
         
-        // Wave completata! Avvia la prossima
+        // Wave completata! Ripristina la salute del pianeta
         print("🎉 Wave \(currentWave) completed!")
+        
+        // Ripristina la salute del pianeta al massimo
+        planetHealth = maxPlanetHealth
+        updatePlanetHealthLabel()
+        print("💚 Planet health restored to \(maxPlanetHealth)")
+        
         startWave(currentWave + 1)
     }
     
@@ -816,6 +926,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return path
     }
     
+    private func createIrregularPlanetPath(radius: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        // Più lati per una forma più circolare ma comunque irregolare
+        let sides = 24  // Più lati = più circolare
+        let angleStep = (2 * .pi) / CGFloat(sides)
+        
+        for i in 0..<sides {
+            let angle = angleStep * CGFloat(i)
+            // Variazione molto ridotta per mantenere forma quasi circolare
+            let variation = CGFloat.random(in: 0.92...1.08)
+            let r = radius * variation
+            let x = cos(angle) * r
+            let y = sin(angle) * r
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+    
     private func wrapAsteroidsAroundScreen() {
         for asteroid in asteroids {
             // Wrap orizzontale
@@ -832,6 +966,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 asteroid.position.y = -50
             }
         }
+        
+        // Wrap anche per i power-up
+        worldLayer.enumerateChildNodes(withName: "powerup_*") { node, _ in
+            // Wrap orizzontale
+            if node.position.x < -50 {
+                node.position.x = self.size.width + 50
+            } else if node.position.x > self.size.width + 50 {
+                node.position.x = -50
+            }
+            
+            // Wrap verticale
+            if node.position.y < -50 {
+                node.position.y = self.size.height + 50
+            } else if node.position.y > self.size.height + 50 {
+                node.position.y = -50
+            }
+        }
     }
     
     private func cleanupAsteroids() {
@@ -841,7 +992,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Collision Handling
     func didBegin(_ contact: SKPhysicsContact) {
         let collision = contact.bodyA.categoryBitMask | contact.bodyB.categoryBitMask
-        let currentTime = Date().timeIntervalSince1970
+        let currentTime = lastUpdateTime  // Usa il currentTime da update loop
         
         // Player + Atmosphere
         if collision == (PhysicsCategory.player | PhysicsCategory.atmosphere) {
@@ -882,8 +1033,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             damageAtmosphere(amount: 2)
             flashAtmosphere()
             
-            // Effetto particellare al punto di contatto
-            createCollisionParticles(at: contact.contactPoint, color: .cyan)
+            // Effetto particellare al punto di contatto con colore random
+            createCollisionParticles(at: contact.contactPoint, color: randomExplosionColor())
             
             print("☄️ Asteroid hit atmosphere - bounce + damage")
         }
@@ -955,11 +1106,67 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 damageAsteroid(asteroid)
                 flashPlayerShield()
                 
-                // Effetto particellare
-                createCollisionParticles(at: contact.contactPoint, color: .white)
+                // Effetto particellare con colore random
+                createCollisionParticles(at: contact.contactPoint, color: randomExplosionColor())
                 
                 print("💥 Player hit asteroid - bounce + damage")
             }
+        }
+
+        // Player + Power-up
+        else if collision == (PhysicsCategory.player | PhysicsCategory.powerup) {
+            // Identifica il power-up
+            let powerupBody = contact.bodyA.categoryBitMask == PhysicsCategory.powerup ? contact.bodyA : contact.bodyB
+            if let powerupNode = powerupBody.node {
+                // Determina il tipo dalla name (powerup_V, powerup_B, powerup_A)
+                if let name = powerupNode.name, name.contains("powerup_") {
+                    let parts = name.split(separator: "_")
+                    if parts.count > 1 {
+                        let type = String(parts[1])
+                        
+                        // Animazione di pickup: fade out + scale up (NON esplosione)
+                        let fadeOut = SKAction.fadeOut(withDuration: 0.3)
+                        let scaleUp = SKAction.scale(to: 2.0, duration: 0.3)
+                        let group = SKAction.group([fadeOut, scaleUp])
+                        let remove = SKAction.removeFromParent()
+                        powerupNode.run(SKAction.sequence([group, remove]))
+                        
+                        // Attiva effetto power-up
+                        activatePowerup(type: type, currentTime: currentTime)
+                        
+                        print("✨ Power-up \(type) collected")
+                    }
+                } else {
+                    powerupNode.removeFromParent()
+                }
+            }
+        }
+        
+        // Power-up + Atmosphere (rimbalzo senza danni)
+        else if collision == (PhysicsCategory.powerup | PhysicsCategory.atmosphere) {
+            let powerupBody = contact.bodyA.categoryBitMask == PhysicsCategory.powerup ? contact.bodyA : contact.bodyB
+            if let powerupNode = powerupBody.node {
+                // Flash leggero dell'atmosfera
+                let originalAlpha = atmosphere.strokeColor.withAlphaComponent(0.6)
+                atmosphere.strokeColor = .cyan
+                let wait = SKAction.wait(forDuration: 0.05)
+                let restore = SKAction.run { [weak self] in
+                    self?.atmosphere.strokeColor = originalAlpha
+                }
+                atmosphere.run(SKAction.sequence([wait, restore]))
+            }
+        }
+        
+        // Power-up + Planet (rimbalzo senza danni)
+        else if collision == (PhysicsCategory.powerup | PhysicsCategory.planet) {
+            // Solo effetto visivo leggero, nessun danno
+            print("✨ Power-up bounced off planet")
+        }
+        
+        // Power-up + Asteroid (rimbalzo senza danni)
+        else if collision == (PhysicsCategory.powerup | PhysicsCategory.asteroid) {
+            // Solo rimbalzo fisico, nessun danno
+            print("✨ Power-up bounced off asteroid")
         }
         
         // Projectile + Asteroid
@@ -968,17 +1175,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let projectile = contact.bodyA.categoryBitMask == PhysicsCategory.projectile ? contact.bodyA.node : contact.bodyB.node
             let asteroid = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA.node as? SKShapeNode : contact.bodyB.node as? SKShapeNode
             
+            // Leggi il damage multiplier dal proiettile
+            let damageMultiplier = (projectile?.userData?["damageMultiplier"] as? CGFloat) ?? 1.0
+            
             // Rimuovi il proiettile
             projectile?.removeFromParent()
             
-            // Frammenta l'asteroide
+            // Frammenta l'asteroide con il damage multiplier
             if let asteroid = asteroid {
                 // Effetto particellare con colore random
                 createExplosionParticles(at: asteroid.position, color: randomExplosionColor())
-                fragmentAsteroid(asteroid)
+                fragmentAsteroid(asteroid, damageMultiplier: damageMultiplier)
             }
             
-            print("💥 Projectile destroyed asteroid")
+            print("💥 Projectile destroyed asteroid (damage: \(damageMultiplier)x)")
         }
     }
     
@@ -1098,8 +1308,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.position.x += normalX * pushDistance
         asteroid.position.y += normalY * pushDistance
         
-        // Effetto particellare al punto di contatto
-        createCollisionParticles(at: contact.contactPoint, color: .red)
+        // Effetto particellare al punto di contatto con colore random
+        createCollisionParticles(at: contact.contactPoint, color: randomExplosionColor())
         
         print("💥 Asteroid bounced off planet")
     }
@@ -1116,18 +1326,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.run(SKAction.sequence([wait, restore]))
     }
     
-    private func fragmentAsteroid(_ asteroid: SKShapeNode) {
+    private func fragmentAsteroid(_ asteroid: SKShapeNode, damageMultiplier: CGFloat = 1.0) {
         guard let sizeString = asteroid.name?.split(separator: "_").last,
               let sizeRaw = Int(String(sizeString)),
               let size = AsteroidSize(rawValue: sizeRaw) else { return }
         
-        // Aggiungi punti in base alla dimensione
-        let points: Int
+        // Aggiungi punti in base alla dimensione (moltiplicati per danno)
+        let basePoints: Int
         switch size {
-        case .large: points = 20
-        case .medium: points = 15
-        case .small: points = 10
+        case .large: basePoints = 20
+        case .medium: basePoints = 15
+        case .small: basePoints = 10
         }
+        let points = Int(CGFloat(basePoints) * damageMultiplier)
         score += points
         scoreLabel.text = "\(score)"
         
@@ -1141,9 +1352,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.removeFromParent()
         asteroids.removeAll { $0 == asteroid }
         
+        // Possibilità di rilascio power-up
+        spawnPowerUp(at: position)
+        
+        // Con BigAmmo (4x damage), gli asteroidi si frammentano più violentemente
+        // Large -> salta direttamente a Small se damage >= 4x
+        let shouldSkipMedium = (size == .large && damageMultiplier >= 4.0)
+        
         // Crea frammenti se non è small
         if size != .small {
-            let nextSize: AsteroidSize = size == .large ? .medium : .small
+            let nextSize: AsteroidSize
+            if shouldSkipMedium {
+                nextSize = .small  // Salta direttamente a small
+            } else {
+                nextSize = size == .large ? .medium : .small
+            }
+            
             let fragmentCount = Int.random(in: 2...3)
             
             for i in 0..<fragmentCount {
@@ -1163,9 +1387,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 // Spawna il frammento
                 spawnAsteroid(size: nextSize, at: fragmentPosition)
                 
-                // Applica velocità ereditata + esplosione RIDOTTA
+                // Applica velocità ereditata + esplosione (più forte con BigAmmo)
                 if let fragment = asteroids.last {
-                    let explosionForce: CGFloat = 60  // Ridotto da 120 a 60
+                    let explosionForce: CGFloat = 60 * damageMultiplier  // Più forte con BigAmmo
                     fragment.physicsBody?.velocity = CGVector(
                         dx: velocity.dx * 0.7 + cos(angle) * explosionForce,  // Eredita 70% velocità
                         dy: velocity.dy * 0.7 + sin(angle) * explosionForce
@@ -1173,9 +1397,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             }
             
-            print("💥 Asteroid fragmented into \(fragmentCount) x \(nextSize)")
+            print("💥 Asteroid fragmented into \(fragmentCount) x \(nextSize) (damage: \(damageMultiplier)x)")
         } else {
-            print("💥 Small asteroid destroyed")
+            print("💥 Small asteroid destroyed (damage: \(damageMultiplier)x)")
         }
     }
     
@@ -1202,14 +1426,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             createExplosionParticles(at: position, color: randomExplosionColor())
             asteroid.removeFromParent()
             asteroids.removeAll { $0 == asteroid }
+            // Possibilità di rilascio power-up
+            spawnPowerUp(at: position)
             print("💥 Small asteroid destroyed by player")
         } else {
             // Large e medium si frammentano (ma con meno energia)
             let position = asteroid.position
             let velocity = asteroid.physicsBody?.velocity ?? .zero
             
-            // Effetto particellare per il danneggiamento
-            createCollisionParticles(at: position, color: .white)
+            // Effetto particellare per il danneggiamento con colore random
+            createCollisionParticles(at: position, color: randomExplosionColor())
             
             asteroid.removeFromParent()
             asteroids.removeAll { $0 == asteroid }
@@ -1468,6 +1694,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.particleAlpha = 1.0
         emitter.particleAlphaSpeed = -1.2
         emitter.particleColor = color
+        emitter.particleColorBlendFactor = 1.0  // Forza il colore al 100%
         emitter.particleBlendMode = .add
         emitter.zPosition = 100
         
@@ -1479,6 +1706,131 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let waitAction = SKAction.wait(forDuration: 1.0)
         let removeAction = SKAction.removeFromParent()
         emitter.run(SKAction.sequence([waitAction, removeAction]))
+    }
+
+    // MARK: - Power-ups
+    private func spawnPowerUp(at position: CGPoint) {
+        // Probabilità di spawn: 25%
+        let roll = Int.random(in: 0..<100)
+        guard roll < 25 else { return }
+
+        // Scegli tipo: V (rosso), B (verde), A (blu)
+        let types: [(String, UIColor)] = [("V", .red), ("B", UIColor.green), ("A", UIColor.cyan)]
+        let choice = types.randomElement()!
+
+        let radius: CGFloat = 14
+        let powerup = SKShapeNode(circleOfRadius: radius)
+        powerup.fillColor = choice.1
+        powerup.strokeColor = .white
+        powerup.lineWidth = 2
+        powerup.position = position
+        powerup.zPosition = 50
+        powerup.name = "powerup_\(choice.0)"
+
+        // Lettera al centro
+        let letter = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        letter.text = choice.0
+        letter.fontSize = 18
+        letter.verticalAlignmentMode = .center
+        letter.horizontalAlignmentMode = .center
+        letter.fontColor = .white
+        powerup.addChild(letter)
+
+        // Physics body DINAMICO per gravità (come asteroide)
+        powerup.physicsBody = SKPhysicsBody(circleOfRadius: radius)
+        powerup.physicsBody?.isDynamic = true
+        powerup.physicsBody?.mass = 0.3
+        powerup.physicsBody?.linearDamping = 0
+        powerup.physicsBody?.angularDamping = 1.0  // Impedisce rotazione
+        powerup.physicsBody?.allowsRotation = false  // Nessuna rotazione
+        powerup.physicsBody?.restitution = 0.8 // Rimbalzo elastico
+        powerup.physicsBody?.categoryBitMask = PhysicsCategory.powerup
+        powerup.physicsBody?.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.atmosphere | PhysicsCategory.planet | PhysicsCategory.asteroid
+        powerup.physicsBody?.collisionBitMask = PhysicsCategory.planet | PhysicsCategory.atmosphere | PhysicsCategory.asteroid // Rimbalza fisicamente
+
+        // Velocità iniziale casuale (come frammento di asteroide)
+        let angle = CGFloat.random(in: 0...(2 * .pi))
+        let speed: CGFloat = CGFloat.random(in: 40...80)
+        powerup.physicsBody?.velocity = CGVector(
+            dx: cos(angle) * speed,
+            dy: sin(angle) * speed
+        )
+
+        worldLayer.addChild(powerup)
+        
+        // Animazione pulsazione per renderlo visibile
+        let pulseUp = SKAction.scale(to: 1.15, duration: 0.6)
+        let pulseDown = SKAction.scale(to: 1.0, duration: 0.6)
+        let pulse = SKAction.sequence([pulseUp, pulseDown])
+        powerup.run(SKAction.repeatForever(pulse))
+        
+        // Decadimento dopo 15 secondi: fade out progressivo e poi rimozione
+        let waitBeforeFade = SKAction.wait(forDuration: 10.0)  // Visibile per 10s
+        let fadeOut = SKAction.fadeOut(withDuration: 5.0)      // Diventa trasparente in 5s
+        let remove = SKAction.removeFromParent()
+        let decaySequence = SKAction.sequence([waitBeforeFade, fadeOut, remove])
+        powerup.run(decaySequence, withKey: "powerupDecay")
+    }
+
+    private func activatePowerup(type: String, currentTime: TimeInterval) {
+        // Se c'è già un power-up attivo (V o B), disattiva il precedente e attiva il nuovo
+        // A (Atmosphere) può essere raccolto anche con altri power-up attivi
+        if type != "A" && (vulcanActive || bigAmmoActive) {
+            print("⚠️ Replacing active power-up with \(type)")
+            // Disattiva il power-up precedente (ma mantieni activePowerupEndTime per resettarlo)
+            deactivatePowerups()
+        }
+        
+        // Attiva l'effetto e imposta timer a 10s
+        activePowerupEndTime = currentTime + 10.0
+        
+        if type == "V" {
+            vulcanActive = true
+            // Velocità di fuoco ancora più alta: 5x invece di 3x
+            currentFireRate = baseFireRate / 5.0
+            powerupLabel.fontColor = .orange
+            powerupLabel.text = "Vulcan 10.00s"
+        } else if type == "B" {
+            bigAmmoActive = true
+            // Rendi i colpi 4x più spessi e 2x più lunghi
+            projectileWidthMultiplier = 4.0
+            projectileHeightMultiplier = 2.0
+            // Danno 4x più forte
+            projectileDamageMultiplier = 4.0
+            powerupLabel.fontColor = UIColor.green
+            powerupLabel.text = "BigAmmo 10.00s"
+        } else if type == "A" {
+            atmosphereActive = true
+            // Ripristina metà dell'atmosfera (o riattivala se esaurita)
+            let halfAtmosphere = (minAtmosphereRadius + maxAtmosphereRadius) / 2.0
+            atmosphereRadius = max(atmosphereRadius, halfAtmosphere)
+            
+            // Se era esaurita (al minimo = raggio pianeta), la riattiva
+            if atmosphereRadius <= planetRadius {
+                atmosphereRadius = halfAtmosphere
+            }
+            
+            // Rendi l'atmosfera visibile e aggiorna
+            atmosphere.alpha = 1.0
+            updateAtmosphereVisuals()
+            
+            powerupLabel.fontColor = UIColor.cyan
+            powerupLabel.text = "Atmosphere"  // NO timer nel testo
+            print("🌀 Atmosphere restored to \(atmosphereRadius)")
+        }
+    }
+
+    private func deactivatePowerups() {
+        // Resetta gli stati
+        vulcanActive = false
+        bigAmmoActive = false
+        atmosphereActive = false
+        projectileWidthMultiplier = 1.0
+        projectileHeightMultiplier = 1.0
+        projectileDamageMultiplier = 1.0
+        currentFireRate = baseFireRate
+        activePowerupEndTime = 0
+        powerupLabel.text = ""
     }
     
     // MARK: - Pause System
@@ -1622,6 +1974,74 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         createExplosionParticles(at: planet.position, color: .red)
         planet.alpha = 0
         
+        // Controlla se il punteggio è top-10
+        checkIfTopTen()
+    }
+    
+    private func checkIfTopTen() {
+        guard let url = URL(string: "https://formazioneweb.org/orbitica/score.php?action=list") else {
+            showGameOverScreen(isTopTen: false)
+            return
+        }
+        
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("❌ Error checking top-10: \(error.localizedDescription)")
+                    self.showGameOverScreen(isTopTen: false)
+                    return
+                }
+                
+                guard let data = data else {
+                    self.showGameOverScreen(isTopTen: false)
+                    return
+                }
+                
+                do {
+                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let scoresArray = json["scores"] as? [[String: Any]] {
+                        
+                        // Controlla se il punteggio qualifica per top-10
+                        let isTopTen: Bool
+                        if scoresArray.count < 10 {
+                            // Meno di 10 score salvati = automaticamente top-10
+                            isTopTen = true
+                        } else if let lowestScore = scoresArray.last?["score"] as? Int {
+                            // Confronta con il 10° posto
+                            isTopTen = self.score > lowestScore
+                        } else {
+                            isTopTen = false
+                        }
+                        
+                        if isTopTen {
+                            self.showInitialEntryScene()
+                        } else {
+                            self.showGameOverScreen(isTopTen: false)
+                        }
+                    } else {
+                        self.showGameOverScreen(isTopTen: false)
+                    }
+                } catch {
+                    print("❌ Parse error: \(error.localizedDescription)")
+                    self.showGameOverScreen(isTopTen: false)
+                }
+            }
+        }
+        
+        task.resume()
+    }
+    
+    private func showInitialEntryScene() {
+        // Vai alla schermata inserimento iniziali
+        let transition = SKTransition.fade(withDuration: 0.5)
+        let initialEntryScene = InitialEntryScene(size: size, score: score, wave: currentWave)
+        initialEntryScene.scaleMode = scaleMode
+        view?.presentScene(initialEntryScene, transition: transition)
+    }
+    
+    private func showGameOverScreen(isTopTen: Bool) {
         // Overlay scuro
         let overlay = SKNode()
         overlay.name = "gameOverOverlay"
@@ -1659,12 +2079,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         waveLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 70)
         overlay.addChild(waveLabel)
         
+        // Pulsante SAVE SCORE (giallo, in alto)
+        let saveScoreButton = SKShapeNode(rectOf: CGSize(width: 250, height: 60), cornerRadius: 10)
+        saveScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.2)
+        saveScoreButton.strokeColor = .yellow
+        saveScoreButton.lineWidth = 3
+        saveScoreButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 130)
+        saveScoreButton.name = "saveScoreButton"
+        
+        let saveScoreLabel = SKLabelNode(fontNamed: fontName)
+        saveScoreLabel.text = "SAVE SCORE"
+        saveScoreLabel.fontSize = 24
+        saveScoreLabel.fontColor = .yellow
+        saveScoreLabel.verticalAlignmentMode = .center
+        saveScoreButton.addChild(saveScoreLabel)
+        overlay.addChild(saveScoreButton)
+        
         // Pulsante RETRY
         let retryButton = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 10)
         retryButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         retryButton.strokeColor = .white
         retryButton.lineWidth = 3
-        retryButton.position = CGPoint(x: size.width / 2 - 110, y: size.height / 2 - 140)
+        retryButton.position = CGPoint(x: size.width / 2 - 110, y: size.height / 2 - 210)
         retryButton.name = "retryButton"
         
         let retryLabel = SKLabelNode(fontNamed: fontName)
@@ -1680,7 +2116,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         menuButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         menuButton.strokeColor = .white
         menuButton.lineWidth = 3
-        menuButton.position = CGPoint(x: size.width / 2 + 110, y: size.height / 2 - 140)
+        menuButton.position = CGPoint(x: size.width / 2 + 110, y: size.height / 2 - 210)
         menuButton.name = "menuButton"
         
         let menuLabel = SKLabelNode(fontNamed: fontName)

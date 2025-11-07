@@ -13,6 +13,8 @@ class MainMenuScene: SKScene {
     private var subtitleLabel: SKLabelNode!
     private var playButton: SKShapeNode!
     private var playButtonLabel: SKLabelNode!
+    private var hiScoreButton: SKShapeNode!
+    private var hiScoreButtonLabel: SKLabelNode!
     
     override func didMove(to view: SKView) {
         backgroundColor = .black
@@ -21,6 +23,7 @@ class MainMenuScene: SKScene {
         setupOverlay()  // Overlay opaco sopra lo sfondo
         setupTitle()
         setupPlayButton()
+        setupHiScoreButton()
     }
     
     private func setupOverlay() {
@@ -156,23 +159,23 @@ class MainMenuScene: SKScene {
             }
         }
         
-        // Bottone rettangolare con bordo
-        let buttonWidth: CGFloat = 250
-        let buttonHeight: CGFloat = 70
+        // Bottone rettangolare con bordo - ridotto del 20%
+        let buttonWidth: CGFloat = 200  // Era 250, ora 200 (20% in meno)
+        let buttonHeight: CGFloat = 56   // Era 70, ora 56 (20% in meno)
         
         playButton = SKShapeNode(rectOf: CGSize(width: buttonWidth, height: buttonHeight), cornerRadius: 10)
         playButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         playButton.strokeColor = .white
         playButton.lineWidth = 3
-        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 50)
+        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20)  // Alzato per fare spazio
         playButton.zPosition = 10
         playButton.name = "playButton"
         addChild(playButton)
         
-        // Label del bottone
+        // Label del bottone - ridotta del 20%
         playButtonLabel = SKLabelNode(fontNamed: fontName)
         playButtonLabel.text = "PLAY NOW"
-        playButtonLabel.fontSize = 32
+        playButtonLabel.fontSize = 26  // Era 32, ora 26 (circa 20% in meno)
         playButtonLabel.fontColor = .white
         playButtonLabel.verticalAlignmentMode = .center
         playButtonLabel.position = .zero
@@ -196,6 +199,49 @@ class MainMenuScene: SKScene {
         addChild(instructions)
     }
     
+    private func setupHiScoreButton() {
+        // Usa lo stesso font del titolo
+        let possibleFontNames = ["Orbitron", "Orbitron-Bold", "Orbitron-Regular", "OrbitronVariable", "AvenirNext-Bold"]
+        var fontName = "AvenirNext-Bold"
+        
+        for name in possibleFontNames {
+            if UIFont(name: name, size: 12) != nil {
+                fontName = name
+                break
+            }
+        }
+        
+        // Bottone HI-SCORE sotto PLAY - ridotto del 20%
+        let buttonWidth: CGFloat = 200  // Era 250, ora 200 (20% in meno)
+        let buttonHeight: CGFloat = 56   // Era 70, ora 56 (20% in meno)
+        
+        hiScoreButton = SKShapeNode(rectOf: CGSize(width: buttonWidth, height: buttonHeight), cornerRadius: 10)
+        hiScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.1)
+        hiScoreButton.strokeColor = .yellow
+        hiScoreButton.lineWidth = 3
+        hiScoreButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 100)  // Sotto il PLAY, leggermente più vicino
+        hiScoreButton.zPosition = 10
+        hiScoreButton.name = "hiScoreButton"
+        addChild(hiScoreButton)
+        
+        // Label del bottone - ridotta del 20%
+        hiScoreButtonLabel = SKLabelNode(fontNamed: fontName)
+        hiScoreButtonLabel.text = "HI-SCORE"
+        hiScoreButtonLabel.fontSize = 26  // Era 32, ora 26 (circa 20% in meno)
+        hiScoreButtonLabel.fontColor = .yellow
+        hiScoreButtonLabel.verticalAlignmentMode = .center
+        hiScoreButtonLabel.position = .zero
+        hiScoreButtonLabel.zPosition = 11
+        hiScoreButton.addChild(hiScoreButtonLabel)
+        
+        // Animazione hover/pulse del bottone
+        let buttonPulse = SKAction.sequence([
+            SKAction.scale(to: 1.05, duration: 0.8),
+            SKAction.scale(to: 1.0, duration: 0.8)
+        ])
+        hiScoreButton.run(SKAction.repeatForever(buttonPulse))
+    }
+    
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
@@ -204,6 +250,9 @@ class MainMenuScene: SKScene {
         for node in touchedNodes {
             if node.name == "playButton" || node.parent?.name == "playButton" {
                 startGame()
+                return
+            } else if node.name == "hiScoreButton" || node.parent?.name == "hiScoreButton" {
+                showHiScore()
                 return
             }
         }
@@ -221,6 +270,21 @@ class MainMenuScene: SKScene {
         
         run(SKAction.wait(forDuration: 0.2)) {
             self.view?.presentScene(gameScene, transition: transition)
+        }
+    }
+    
+    private func showHiScore() {
+        // Effetto flash
+        hiScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.5)
+        hiScoreButtonLabel.fontColor = .black
+        
+        // Transizione alla HiScoreScene
+        let transition = SKTransition.fade(withDuration: 0.5)
+        let hiScoreScene = HiScoreScene(size: size)
+        hiScoreScene.scaleMode = scaleMode
+        
+        run(SKAction.wait(forDuration: 0.2)) {
+            self.view?.presentScene(hiScoreScene, transition: transition)
         }
     }
 }

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		93635B292EBE4ADE0020DD5C /* NSExceptionDomains.txt in Resources */ = {isa = PBXBuildFile; fileRef = 93635B282EBE4ADE0020DD5C /* NSExceptionDomains.txt */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		930531DD2EBDE0B80074365A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		930531C32EBDE0B70074365A /* Orbitica Core.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Orbitica Core.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		930531DC2EBDE0B80074365A /* Orbitica CoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Orbitica CoreTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		930531E62EBDE0B80074365A /* Orbitica CoreUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Orbitica CoreUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		93635B282EBE4ADE0020DD5C /* NSExceptionDomains.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = NSExceptionDomains.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +80,7 @@
 		930531BA2EBDE0B70074365A = {
 			isa = PBXGroup;
 			children = (
+				93635B282EBE4ADE0020DD5C /* NSExceptionDomains.txt */,
 				930531C52EBDE0B70074365A /* Orbitica Core */,
 				930531DF2EBDE0B80074365A /* Orbitica CoreTests */,
 				930531E92EBDE0B80074365A /* Orbitica CoreUITests */,
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				93635B292EBE4ADE0020DD5C /* NSExceptionDomains.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -397,12 +404,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-			DEVELOPMENT_TEAM = 76X78MBPR3;
-			GENERATE_INFOPLIST_FILE = YES;
-			INFOPLIST_KEY_CFBundleDisplayName = "Orbital core";
-			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.arcade-games";
-			INFOPLIST_KEY_UIAppFonts = "Orbitron-Bold.ttf";
-			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				DEVELOPMENT_TEAM = 76X78MBPR3;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Orbitica-Core-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Orbital core";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.arcade-games";
+				INFOPLIST_KEY_UIAppFonts = "Orbitron-Bold.ttf";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
@@ -428,13 +436,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-			DEVELOPMENT_TEAM = 76X78MBPR3;
-			GENERATE_INFOPLIST_FILE = YES;
-			INFOPLIST_KEY_CFBundleDisplayName = "Orbital core";
-			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.arcade-games";
-			INFOPLIST_KEY_UIAppFonts = "Orbitron-Bold.ttf";
-			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-			INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				DEVELOPMENT_TEAM = 76X78MBPR3;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Orbitica-Core-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Orbital core";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.arcade-games";
+				INFOPLIST_KEY_UIAppFonts = "Orbitron-Bold.ttf";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
