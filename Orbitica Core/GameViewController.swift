@@ -25,7 +25,8 @@ class GameViewController: UIViewController {
                 sceneSize = viewSize
             }
             
-            let scene = GameScene(size: sceneSize)
+            // Mostra prima il MainMenu invece di GameScene
+            let scene = MainMenuScene(size: sceneSize)
             scene.scaleMode = .aspectFill
             
             // Present the scene

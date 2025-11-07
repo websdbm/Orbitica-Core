@@ -302,9 +302,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupScore() {
-        // Score label in alto a destra - stile vettoriale (solo numero)
-        scoreLabel = SKLabelNode(fontNamed: "Courier-Bold")
-        scoreLabel.fontSize = 28
+        // Score label in alto a destra - usa font Zerovelo per coerenza
+        scoreLabel = SKLabelNode(fontNamed: "Zerovelo")
+        scoreLabel.fontSize = 32
         scoreLabel.fontColor = .white
         scoreLabel.text = "0"
         scoreLabel.horizontalAlignmentMode = .right
@@ -314,7 +314,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         hudLayer.addChild(scoreLabel)
         
-        print("✅ Score label created")
+        print("✅ Score label created with Zerovelo font")
     }
     
     // MARK: - Touch Handling
@@ -559,8 +559,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroidsSpawnedInWave = 0
         
         // Mostra messaggio WAVE
-        let waveMessage = SKLabelNode(fontNamed: "Courier-Bold")
-        waveMessage.fontSize = 60
+        let waveMessage = SKLabelNode(fontNamed: "Zerovelo")
+        waveMessage.fontSize = 64
         waveMessage.fontColor = .white
         waveMessage.text = "WAVE \(wave)"
         waveMessage.position = CGPoint(x: size.width / 2, y: size.height / 2)
