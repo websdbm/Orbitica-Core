@@ -189,15 +189,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var playerSlingshotStartAngle: CGFloat = 0.0
     private var playerSlingshotTargetRadius: CGFloat = 0.0
     
-    // Slingshot Zones system (Opzione B)
-    // SISTEMA ANELLI: Gli asteroidi attraversano gli anelli facilmente
-    private let slingshotCaptureThreshold: CGFloat = 50   // Soglia più ampia per rilevamento
-    private let slingshotCaptureChance: CGFloat = 0.85    // 85% probabilità di aggancio (molto alta)
-    private let slingshotReleaseChancePerFrame: CGFloat = 0.005  // 0.5% per frame (~5-6 sec in media)
-    private let slingshotEjectChance: CGFloat = 0.001     // 0.1% probabilità di eiezione verso esterno (rarissimo)
-    private let slingshotBoostMultiplier: CGFloat = 0.6   // Boost forte per catturare davvero
-    private let slingshotMaxDuration: TimeInterval = 7.0  // Dopo 7 sec sgancio forzato
-    private var lastSlingshotCheck: TimeInterval = 0      // Ultimo check per giri completati
+    // VECCHIO Slingshot Zones system (DISATTIVATO)
+    // private let slingshotCaptureThreshold: CGFloat = 50
+    // private let slingshotCaptureChance: CGFloat = 0.85
+    // private let slingshotReleaseChancePerFrame: CGFloat = 0.005
+    // private let slingshotEjectChance: CGFloat = 0.001
+    // private let slingshotBoostMultiplier: CGFloat = 0.6
+    // private let slingshotMaxDuration: TimeInterval = 7.0
+    // private var lastSlingshotCheck: TimeInterval = 0
+    
+    // NUOVO: Spiral Descent System - Forze continue per movimento a spirale
+    private let spiralInfluenceDistance: CGFloat = 60      // Distanza di influenza dal ring
+    private let spiralTangentialForce: CGFloat = 150       // Forza tangenziale (rotazione)
+    private let spiralRadialForce: CGFloat = 30            // Forza radiale verso l'interno (discesa)
+    private let spiralDamping: CGFloat = 0.98              // Damping per stabilizzare orbita
     
     // Planet health system
     private var planetHealth: Int = 3
@@ -1145,7 +1150,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         applyRepulsorForces()  // Gestisce repulsione asteroidi repulsor sul player
         limitAsteroidSpeed()  // Limita velocità asteroidi
         updateOrbitalGrapple()  // Gestisce slingshot zones del player
-        updateAsteroidSlingshotZones(currentTime)  // Gestisce slingshot zones degli asteroidi
+        updateAsteroidSpiralForces(currentTime)  // NUOVO: Sistema a spirale discendente per asteroidi
         updatePlayerMovement()
         updatePlayerShooting(currentTime)
         updateCameraZoom()  // Aggiorna zoom dinamico basato su distanza
@@ -1643,6 +1648,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func updateAsteroidSlingshotZones(_ currentTime: TimeInterval) {
+        // SISTEMA DISATTIVATO - In fase di riprogettazione
+        // TODO: Implementare movimento a spirale discendente
+        return
+        
+        /* VECCHIO CODICE DISATTIVATO
         let planetCenter = planet.position
         
         // Check per giri completati ogni 0.1 secondi
@@ -1791,6 +1801,83 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Fuori dall'anello: rimuovi rotazione
             if asteroid.action(forKey: "slingshotRotation") != nil {
                 asteroid.removeAction(forKey: "slingshotRotation")
+            }
+        }
+    }
+    */
+    
+    // MARK: - Spiral Descent System (Nuovo)
+    /// Applica forze continue agli asteroidi vicino ai ring per creare movimento a spirale discendente
+    private func updateAsteroidSpiralForces(_ currentTime: TimeInterval) {
+        guard let worldLayer = worldLayer else { return }
+        
+        let ringRadii: [CGFloat] = [ring1Radius, ring2Radius, ring3Radius]
+        
+        for child in worldLayer.children {
+            guard let asteroid = child as? SKSpriteNode,
+                  asteroid.name?.hasPrefix("asteroid") == true,
+                  let asteroidBody = asteroid.physicsBody else {
+                continue
+            }
+            
+            // Calcola distanza dal centro
+            let distanceFromCenter = sqrt(asteroid.position.x * asteroid.position.x + 
+                                         asteroid.position.y * asteroid.position.y)
+            
+            // Trova il ring più vicino
+            var minDistanceToRing: CGFloat = .infinity
+            var nearestRingRadius: CGFloat = 0
+            
+            for ringRadius in ringRadii {
+                let distToRing = abs(distanceFromCenter - ringRadius)
+                if distToRing < minDistanceToRing {
+                    minDistanceToRing = distToRing
+                    nearestRingRadius = ringRadius
+                }
+            }
+            
+            // Se l'asteroide è nell'area di influenza di un ring
+            if minDistanceToRing < spiralInfluenceDistance {
+                // Calcola l'intensità delle forze basata sulla vicinanza
+                let influenceRatio = 1.0 - (minDistanceToRing / spiralInfluenceDistance)
+                
+                // Calcola vettore tangenziale (perpendicolare al raggio)
+                let angle = atan2(asteroid.position.y, asteroid.position.x)
+                let tangentialAngle = angle + .pi / 2  // 90° per direzione tangenziale
+                
+                let tangentialX = cos(tangentialAngle)
+                let tangentialY = sin(tangentialAngle)
+                
+                // Calcola vettore radiale (verso il centro)
+                let radialX = -asteroid.position.x / distanceFromCenter
+                let radialY = -asteroid.position.y / distanceFromCenter
+                
+                // Applica forza tangenziale (rotazione)
+                let tangentialForce = spiralTangentialForce * influenceRatio
+                asteroidBody.applyForce(CGVector(dx: tangentialX * tangentialForce,
+                                                 dy: tangentialY * tangentialForce))
+                
+                // Applica forza radiale (discesa verso interno)
+                let radialForce = spiralRadialForce * influenceRatio
+                asteroidBody.applyForce(CGVector(dx: radialX * radialForce,
+                                                 dy: radialY * radialForce))
+                
+                // Applica damping per stabilizzare
+                asteroidBody.velocity.dx *= spiralDamping
+                asteroidBody.velocity.dy *= spiralDamping
+                
+                // Visual feedback: rotazione dell'asteroide basata sulla velocità angolare
+                if asteroid.action(forKey: "spiralRotation") == nil {
+                    let rotationSpeed = 0.5 + Double(influenceRatio) * 1.5  // Più veloce vicino al ring
+                    let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotationSpeed)
+                    let repeatAction = SKAction.repeatForever(rotateAction)
+                    asteroid.run(repeatAction, withKey: "spiralRotation")
+                }
+            } else {
+                // Fuori dall'area di influenza: rimuovi rotazione
+                if asteroid.action(forKey: "spiralRotation") != nil {
+                    asteroid.removeAction(forKey: "spiralRotation")
+                }
             }
         }
     }
