@@ -199,10 +199,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // private var lastSlingshotCheck: TimeInterval = 0
     
     // NUOVO: Spiral Descent System - Forze continue per movimento a spirale
-    private let spiralInfluenceDistance: CGFloat = 60      // Distanza di influenza dal ring
-    private let spiralTangentialForce: CGFloat = 150       // Forza tangenziale (rotazione)
-    private let spiralRadialForce: CGFloat = 30            // Forza radiale verso l'interno (discesa)
-    private let spiralDamping: CGFloat = 0.98              // Damping per stabilizzare orbita
+    private let spiralInfluenceDistance: CGFloat = 80      // Distanza di influenza dal ring (aumentata)
+    private let spiralTangentialForce: CGFloat = 500       // Forza tangenziale (rotazione) - MOLTO AUMENTATA
+    private let spiralRadialForce: CGFloat = 100           // Forza radiale verso l'interno (discesa) - MOLTO AUMENTATA
+    private let spiralDamping: CGFloat = 0.95              // Damping per stabilizzare orbita (più forte)
     
     // Planet health system
     private var planetHealth: Int = 3
@@ -1652,7 +1652,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // TODO: Implementare movimento a spirale discendente
         return
         
-        /* VECCHIO CODICE DISATTIVATO
+        /* VECCHIO CODICE DISATTIVATO - Commentato per riprogettazione
         let planetCenter = planet.position
         
         // Check per giri completati ogni 0.1 secondi
@@ -1803,20 +1803,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 asteroid.removeAction(forKey: "slingshotRotation")
             }
         }
+        */
     }
-    */
     
     // MARK: - Spiral Descent System (Nuovo)
     /// Applica forze continue agli asteroidi vicino ai ring per creare movimento a spirale discendente
     private func updateAsteroidSpiralForces(_ currentTime: TimeInterval) {
-        guard let worldLayer = worldLayer else { return }
+        let ringRadii: [CGFloat] = [orbitalRing1Radius, orbitalRing2Radius, orbitalRing3Radius]
+        var asteroidsInInfluence = 0  // Debug counter
         
-        let ringRadii: [CGFloat] = [ring1Radius, ring2Radius, ring3Radius]
-        
-        for child in worldLayer.children {
-            guard let asteroid = child as? SKSpriteNode,
-                  asteroid.name?.hasPrefix("asteroid") == true,
-                  let asteroidBody = asteroid.physicsBody else {
+        // Itera sugli asteroidi (array asteroids, non worldLayer.children!)
+        for asteroid in asteroids {
+            guard let asteroidBody = asteroid.physicsBody else {
                 continue
             }
             
@@ -1838,6 +1836,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Se l'asteroide è nell'area di influenza di un ring
             if minDistanceToRing < spiralInfluenceDistance {
+                asteroidsInInfluence += 1
+                
                 // Calcola l'intensità delle forze basata sulla vicinanza
                 let influenceRatio = 1.0 - (minDistanceToRing / spiralInfluenceDistance)
                 
@@ -1879,6 +1879,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     asteroid.removeAction(forKey: "spiralRotation")
                 }
             }
+        }
+        
+        // Debug: mostra quanti asteroidi sono nell'area di influenza
+        if asteroidsInInfluence > 0 {
+            debugLog("🌀 Spiral Forces: \(asteroidsInInfluence) asteroids in ring influence")
         }
     }
     
@@ -2014,7 +2019,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let distanceFromRing = minDistance
         
         // AGGANCIO GRADUALE: più sei vicino, più sei attratto
-        if distanceFromRing < orbitalGrappleThreshold {
+        // NUOVO: Controlla velocità del player - se troppo veloce NON agganciare
+        let currentSpeed = sqrt(playerBody.velocity.dx * playerBody.velocity.dx + 
+                               playerBody.velocity.dy * playerBody.velocity.dy)
+        let maxSpeedForGrapple: CGFloat = 150  // Velocità massima per permettere aggancio
+        
+        if distanceFromRing < orbitalGrappleThreshold && currentSpeed < maxSpeedForGrapple {
             if !isGrappledToOrbit || currentOrbitalRing != closestRing {
                 isGrappledToOrbit = true
                 currentOrbitalRing = closestRing
@@ -2028,7 +2038,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Aumenta gradualmente la forza di aggancio solo se NON sta spingendo
             if !isThrusting {
                 let targetStrength: CGFloat = 1.0 - (distanceFromRing / orbitalGrappleThreshold)
-                let transitionSpeed: CGFloat = 0.08
+                let transitionSpeed: CGFloat = 0.05  // Ridotto da 0.08 - aggancio più lento
                 orbitalGrappleStrength += (targetStrength - orbitalGrappleStrength) * transitionSpeed
             }
             // Se sta spingendo, l'aggancio non si rafforza (si indebolisce solo nella sezione sgancio manuale)
@@ -2117,11 +2127,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let targetX = planetCenter.x + cos(newAngle) * closestRingRadius
             let targetY = planetCenter.y + sin(newAngle) * closestRingRadius
             
-            // Interpola tra posizione attuale e target in base alla forza di aggancio
+            // RIDOTTO: Interpola più dolcemente per evitare blocco quando si cambia direzione
             let currentX = player.position.x
             let currentY = player.position.y
-            let newX = currentX + (targetX - currentX) * orbitalGrappleStrength
-            let newY = currentY + (targetY - currentY) * orbitalGrappleStrength
+            let positionInterpolation = orbitalGrappleStrength * 0.3  // Ridotto molto - era 1.0
+            let newX = currentX + (targetX - currentX) * positionInterpolation
+            let newY = currentY + (targetY - currentY) * positionInterpolation
             
             player.position = CGPoint(x: newX, y: newY)
             
@@ -2133,8 +2144,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Mescola velocità orbitale con velocità attuale
             let currentVx = playerBody.velocity.dx
             let currentVy = playerBody.velocity.dy
-            let mixedVx = currentVx + (tangentialVx - currentVx) * orbitalGrappleStrength * 0.3
-            let mixedVy = currentVy + (tangentialVy - currentVy) * orbitalGrappleStrength * 0.3
+            // RIDOTTO: forza di mescolamento velocità - da 0.3 a 0.15 per più controllo
+            let mixedVx = currentVx + (tangentialVx - currentVx) * orbitalGrappleStrength * 0.15
+            let mixedVy = currentVy + (tangentialVy - currentVy) * orbitalGrappleStrength * 0.15
             
             // LIMITA la velocità del player: non può superare la velocità dell'anello (meteoriti)
             let maxOrbitalSpeed = tangentialVelocity * 0.85  // 85% della velocità orbitale massima (ridotto)
