@@ -200,9 +200,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // NUOVO: Spiral Descent System - Forze continue per movimento a spirale
     private let spiralInfluenceDistance: CGFloat = 80      // Distanza di influenza dal ring (aumentata)
-    private let spiralTangentialForce: CGFloat = 500       // Forza tangenziale (rotazione) - MOLTO AUMENTATA
-    private let spiralRadialForce: CGFloat = 100           // Forza radiale verso l'interno (discesa) - MOLTO AUMENTATA
-    private let spiralDamping: CGFloat = 0.95              // Damping per stabilizzare orbita (più forte)
+    private let spiralTangentialForce: CGFloat = 120       // Forza tangenziale (rotazione) - RIDOTTA per evitare loop
+    private let spiralRadialForce: CGFloat = 200           // Forza radiale verso l'interno (discesa) - AUMENTATA per spirale
+    private let spiralDamping: CGFloat = 0.92              // Damping per stabilizzare orbita
     
     // Planet health system
     private var planetHealth: Int = 3
@@ -2086,30 +2086,43 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         
-        // SGANCIO MANUALE: qualsiasi spinta forte del joystick sgancia
+        // SGANCIO MANUALE: solo se spinta RADIALE forte (verso dentro/fuori), NON per rotazione tangenziale
         if isGrappledToOrbit && orbitalGrappleStrength > 0.2 {
             let thrustDirection = joystickDirection
             let forceMagnitude = sqrt(thrustDirection.dx * thrustDirection.dx + thrustDirection.dy * thrustDirection.dy)
             
-            // Sgancio semplificato: qualsiasi spinta sopra la soglia riduce l'aggancio
-            if forceMagnitude > 0.25 {  // Soglia molto bassa per facilitare lo sgancio
-                orbitalGrappleStrength -= 0.35  // Sgancio molto rapido
+            // NUOVO: Calcola componente RADIALE della spinta (proiezione verso centro/esterno)
+            if forceMagnitude > 0.4 {  // Soglia aumentata: serve più gas per sganciare
+                // Normalizza direzione player rispetto al centro
+                let playerAngle = atan2(dy, dx)
+                let radialX = cos(playerAngle)  // Direzione verso esterno
+                let radialY = sin(playerAngle)
                 
-                if orbitalGrappleStrength <= 0 {
-                    isGrappledToOrbit = false
-                    orbitalGrappleStrength = 0
-                    currentOrbitalRing = 0
+                // Proiezione dot product: quanto la spinta è allineata con direzione radiale
+                let thrustNormX = thrustDirection.dx / forceMagnitude
+                let thrustNormY = thrustDirection.dy / forceMagnitude
+                let radialAlignment = abs(thrustNormX * radialX + thrustNormY * radialY)
+                
+                // Sgancio SOLO se la spinta è prevalentemente radiale (> 60% allineamento)
+                if radialAlignment > 0.6 {
+                    orbitalGrappleStrength -= 0.25  // Sgancio moderato
                     
-                    // Ripristina tutti gli anelli (con safe unwrapping)
-                    orbitalRing1?.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                    orbitalRing1?.lineWidth = 1
-                    orbitalRing2?.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                    orbitalRing2?.lineWidth = 1
-                    orbitalRing3?.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                    orbitalRing3?.lineWidth = 1
-                    
-                    debugLog("🔓 Detached from orbital ring (manual)")
-                    return
+                    if orbitalGrappleStrength <= 0 {
+                        isGrappledToOrbit = false
+                        orbitalGrappleStrength = 0
+                        currentOrbitalRing = 0
+                        
+                        // Ripristina tutti gli anelli (con safe unwrapping)
+                        orbitalRing1?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                        orbitalRing1?.lineWidth = 1
+                        orbitalRing2?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                        orbitalRing2?.lineWidth = 1
+                        orbitalRing3?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                        orbitalRing3?.lineWidth = 1
+                        
+                        debugLog("🔓 Detached from orbital ring (radial thrust)")
+                        return
+                    }
                 }
             }
         }
