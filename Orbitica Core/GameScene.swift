@@ -199,10 +199,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // private var lastSlingshotCheck: TimeInterval = 0
     
     // NUOVO: Spiral Descent System - Forze continue per movimento a spirale
-    private let spiralInfluenceDistance: CGFloat = 80      // Distanza di influenza dal ring (aumentata)
-    private let spiralTangentialForce: CGFloat = 120       // Forza tangenziale (rotazione) - RIDOTTA per evitare loop
-    private let spiralRadialForce: CGFloat = 200           // Forza radiale verso l'interno (discesa) - AUMENTATA per spirale
-    private let spiralDamping: CGFloat = 0.92              // Damping per stabilizzare orbita
+    private let spiralInfluenceDistance: CGFloat = 40      // Distanza di influenza dal ring - RIDOTTA (era 80)
+    private let spiralTangentialForce: CGFloat = 40        // Forza tangenziale debole come piccolo reattore
+    private let spiralRadialForce: CGFloat = 150           // Forza radiale verso l'interno (discesa principale)
+    private let spiralDamping: CGFloat = 0.96              // Damping leggero per fluidità
     
     // Planet health system
     private var planetHealth: Int = 3
@@ -1845,10 +1845,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 if radialVelocity < 0 {
                     asteroidsInInfluence += 1
                     
-                    // Calcola l'intensità delle forze basata sulla vicinanza
+                    // Calcola l'intensità delle forze basata sulla vicinanza (quadratica per drop-off più naturale)
                     let influenceRatio = 1.0 - (minDistanceToRing / spiralInfluenceDistance)
+                    let influenceSquared = influenceRatio * influenceRatio  // Drop-off quadratico
                     
-                    // Calcola vettore tangenziale (perpendicolare al raggio)
+                    // Calcola vettore tangenziale (perpendicolare al raggio, direzione orbita)
                     let angle = atan2(asteroid.position.y, asteroid.position.x)
                     let tangentialAngle = angle + .pi / 2  // 90° per direzione tangenziale
                     
@@ -1859,23 +1860,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     let radialX = -asteroid.position.x / distanceFromCenter
                     let radialY = -asteroid.position.y / distanceFromCenter
                     
-                    // Applica forza tangenziale (rotazione)
-                    let tangentialForce = spiralTangentialForce * influenceRatio
+                    // FORZA TANGENZIALE: come piccolo reattore che cerca di seguire orbita
+                    // Usa influenza quadratica per essere più debole a distanza
+                    let tangentialForce = spiralTangentialForce * influenceSquared
                     asteroidBody.applyForce(CGVector(dx: tangentialX * tangentialForce,
                                                      dy: tangentialY * tangentialForce))
                     
-                    // Applica forza radiale (discesa verso interno)
+                    // FORZA RADIALE: attrazione principale verso il centro (più forte)
                     let radialForce = spiralRadialForce * influenceRatio
                     asteroidBody.applyForce(CGVector(dx: radialX * radialForce,
                                                      dy: radialY * radialForce))
                     
-                    // Applica damping per stabilizzare
+                    // Damping leggero per fluidità
                     asteroidBody.velocity.dx *= spiralDamping
                     asteroidBody.velocity.dy *= spiralDamping
                     
-                    // Visual feedback: rotazione dell'asteroide basata sulla velocità angolare
+                    // Visual feedback SOTTILE: rotazione lenta dell'asteroide su se stesso
                     if asteroid.action(forKey: "spiralRotation") == nil {
-                        let rotationSpeed = 0.5 + Double(influenceRatio) * 1.5  // Più veloce vicino al ring
+                        let rotationSpeed = 3.0 + Double(influenceRatio) * 2.0  // MOLTO più lento
                         let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotationSpeed)
                         let repeatAction = SKAction.repeatForever(rotateAction)
                         asteroid.run(repeatAction, withKey: "spiralRotation")
