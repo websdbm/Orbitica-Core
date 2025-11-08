@@ -1836,42 +1836,55 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Se l'asteroide è nell'area di influenza di un ring
             if minDistanceToRing < spiralInfluenceDistance {
-                asteroidsInInfluence += 1
+                // NUOVO: Calcola velocità radiale (verso centro = negativa, via dal centro = positiva)
+                let radialVelocity = (asteroidBody.velocity.dx * asteroid.position.x + 
+                                     asteroidBody.velocity.dy * asteroid.position.y) / distanceFromCenter
                 
-                // Calcola l'intensità delle forze basata sulla vicinanza
-                let influenceRatio = 1.0 - (minDistanceToRing / spiralInfluenceDistance)
-                
-                // Calcola vettore tangenziale (perpendicolare al raggio)
-                let angle = atan2(asteroid.position.y, asteroid.position.x)
-                let tangentialAngle = angle + .pi / 2  // 90° per direzione tangenziale
-                
-                let tangentialX = cos(tangentialAngle)
-                let tangentialY = sin(tangentialAngle)
-                
-                // Calcola vettore radiale (verso il centro)
-                let radialX = -asteroid.position.x / distanceFromCenter
-                let radialY = -asteroid.position.y / distanceFromCenter
-                
-                // Applica forza tangenziale (rotazione)
-                let tangentialForce = spiralTangentialForce * influenceRatio
-                asteroidBody.applyForce(CGVector(dx: tangentialX * tangentialForce,
-                                                 dy: tangentialY * tangentialForce))
-                
-                // Applica forza radiale (discesa verso interno)
-                let radialForce = spiralRadialForce * influenceRatio
-                asteroidBody.applyForce(CGVector(dx: radialX * radialForce,
-                                                 dy: radialY * radialForce))
-                
-                // Applica damping per stabilizzare
-                asteroidBody.velocity.dx *= spiralDamping
-                asteroidBody.velocity.dy *= spiralDamping
-                
-                // Visual feedback: rotazione dell'asteroide basata sulla velocità angolare
-                if asteroid.action(forKey: "spiralRotation") == nil {
-                    let rotationSpeed = 0.5 + Double(influenceRatio) * 1.5  // Più veloce vicino al ring
-                    let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotationSpeed)
-                    let repeatAction = SKAction.repeatForever(rotateAction)
-                    asteroid.run(repeatAction, withKey: "spiralRotation")
+                // APPLICA FORZE SOLO SE ASTEROIDE STA AVVICINANDO AL CENTRO (velocità radiale < 0)
+                // Questo evita che asteroidi rimbalzati restino intrappolati tra ring
+                if radialVelocity < 0 {
+                    asteroidsInInfluence += 1
+                    
+                    // Calcola l'intensità delle forze basata sulla vicinanza
+                    let influenceRatio = 1.0 - (minDistanceToRing / spiralInfluenceDistance)
+                    
+                    // Calcola vettore tangenziale (perpendicolare al raggio)
+                    let angle = atan2(asteroid.position.y, asteroid.position.x)
+                    let tangentialAngle = angle + .pi / 2  // 90° per direzione tangenziale
+                    
+                    let tangentialX = cos(tangentialAngle)
+                    let tangentialY = sin(tangentialAngle)
+                    
+                    // Calcola vettore radiale (verso il centro)
+                    let radialX = -asteroid.position.x / distanceFromCenter
+                    let radialY = -asteroid.position.y / distanceFromCenter
+                    
+                    // Applica forza tangenziale (rotazione)
+                    let tangentialForce = spiralTangentialForce * influenceRatio
+                    asteroidBody.applyForce(CGVector(dx: tangentialX * tangentialForce,
+                                                     dy: tangentialY * tangentialForce))
+                    
+                    // Applica forza radiale (discesa verso interno)
+                    let radialForce = spiralRadialForce * influenceRatio
+                    asteroidBody.applyForce(CGVector(dx: radialX * radialForce,
+                                                     dy: radialY * radialForce))
+                    
+                    // Applica damping per stabilizzare
+                    asteroidBody.velocity.dx *= spiralDamping
+                    asteroidBody.velocity.dy *= spiralDamping
+                    
+                    // Visual feedback: rotazione dell'asteroide basata sulla velocità angolare
+                    if asteroid.action(forKey: "spiralRotation") == nil {
+                        let rotationSpeed = 0.5 + Double(influenceRatio) * 1.5  // Più veloce vicino al ring
+                        let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotationSpeed)
+                        let repeatAction = SKAction.repeatForever(rotateAction)
+                        asteroid.run(repeatAction, withKey: "spiralRotation")
+                    }
+                } else {
+                    // Asteroide sta allontanando (rimbalzato) - nessuna forza, rimuovi rotazione
+                    if asteroid.action(forKey: "spiralRotation") != nil {
+                        asteroid.removeAction(forKey: "spiralRotation")
+                    }
                 }
             } else {
                 // Fuori dall'area di influenza: rimuovi rotazione
@@ -2092,7 +2105,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let forceMagnitude = sqrt(thrustDirection.dx * thrustDirection.dx + thrustDirection.dy * thrustDirection.dy)
             
             // NUOVO: Calcola componente RADIALE della spinta (proiezione verso centro/esterno)
-            if forceMagnitude > 0.4 {  // Soglia aumentata: serve più gas per sganciare
+            // DOPPIA SOGLIA: gas sufficiente E allineamento radiale
+            if forceMagnitude > 0.6 {  // Soglia gas aumentata: serve MOLTO gas per sganciare
                 // Normalizza direzione player rispetto al centro
                 let playerAngle = atan2(dy, dx)
                 let radialX = cos(playerAngle)  // Direzione verso esterno
@@ -2103,9 +2117,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let thrustNormY = thrustDirection.dy / forceMagnitude
                 let radialAlignment = abs(thrustNormX * radialX + thrustNormY * radialY)
                 
-                // Sgancio SOLO se la spinta è prevalentemente radiale (> 60% allineamento)
-                if radialAlignment > 0.6 {
-                    orbitalGrappleStrength -= 0.25  // Sgancio moderato
+                // Sgancio SOLO se la spinta è FORTEMENTE radiale (> 70% allineamento)
+                if radialAlignment > 0.7 {
+                    orbitalGrappleStrength -= 0.15  // Sgancio graduale - non fermare il player!
                     
                     if orbitalGrappleStrength <= 0 {
                         isGrappledToOrbit = false
@@ -2140,10 +2154,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let targetX = planetCenter.x + cos(newAngle) * closestRingRadius
             let targetY = planetCenter.y + sin(newAngle) * closestRingRadius
             
-            // RIDOTTO: Interpola più dolcemente per evitare blocco quando si cambia direzione
+            // RIDOTTO: Interpola più dolcemente - NON fermare mai il player
             let currentX = player.position.x
             let currentY = player.position.y
-            let positionInterpolation = orbitalGrappleStrength * 0.3  // Ridotto molto - era 1.0
+            let positionInterpolation = orbitalGrappleStrength * 0.15  // MOLTO ridotto - era 0.3
             let newX = currentX + (targetX - currentX) * positionInterpolation
             let newY = currentY + (targetY - currentY) * positionInterpolation
             
