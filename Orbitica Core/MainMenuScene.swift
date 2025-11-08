@@ -9,12 +9,16 @@ import SpriteKit
 
 class MainMenuScene: SKScene {
     
+    // FLAG DEBUG: Imposta a false per nascondere il pulsante debug
+    private let debugButtonEnabled: Bool = true
+    
     private var titleLabel: SKLabelNode!
     private var subtitleLabel: SKLabelNode!
     private var playButton: SKShapeNode!
     private var playButtonLabel: SKLabelNode!
     private var hiScoreButton: SKShapeNode!
     private var hiScoreButtonLabel: SKLabelNode!
+    private var debugButton: SKShapeNode?
     
     override func didMove(to view: SKView) {
         backgroundColor = .black
@@ -24,6 +28,11 @@ class MainMenuScene: SKScene {
         setupTitle()
         setupPlayButton()
         setupHiScoreButton()
+        
+        // Pulsante debug temporaneo
+        if debugButtonEnabled {
+            setupDebugButton()
+        }
     }
     
     private func setupOverlay() {
@@ -242,6 +251,31 @@ class MainMenuScene: SKScene {
         hiScoreButton.run(SKAction.repeatForever(buttonPulse))
     }
     
+    private func setupDebugButton() {
+        // Bottone DEBUG piccolo in basso a sinistra
+        let buttonSize: CGFloat = 80
+        
+        debugButton = SKShapeNode(rectOf: CGSize(width: buttonSize, height: buttonSize * 0.6), cornerRadius: 5)
+        debugButton?.fillColor = UIColor.orange.withAlphaComponent(0.2)
+        debugButton?.strokeColor = .orange
+        debugButton?.lineWidth = 2
+        debugButton?.position = CGPoint(x: 60, y: 50)
+        debugButton?.zPosition = 10
+        debugButton?.name = "debugButton"
+        
+        if let button = debugButton {
+            addChild(button)
+            
+            let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+            label.text = "DEBUG"
+            label.fontSize = 14
+            label.fontColor = .orange
+            label.verticalAlignmentMode = .center
+            label.zPosition = 11
+            button.addChild(label)
+        }
+    }
+    
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
@@ -253,6 +287,9 @@ class MainMenuScene: SKScene {
                 return
             } else if node.name == "hiScoreButton" || node.parent?.name == "hiScoreButton" {
                 showHiScore()
+                return
+            } else if node.name == "debugButton" || node.parent?.name == "debugButton" {
+                showDebugScene()
                 return
             }
         }
@@ -286,5 +323,13 @@ class MainMenuScene: SKScene {
         run(SKAction.wait(forDuration: 0.2)) {
             self.view?.presentScene(hiScoreScene, transition: transition)
         }
+    }
+    
+    private func showDebugScene() {
+        // Transizione alla DebugScene
+        let transition = SKTransition.fade(withDuration: 0.5)
+        let debugScene = DebugScene(size: size)
+        debugScene.scaleMode = .aspectFill
+        view?.presentScene(debugScene, transition: transition)
     }
 }

@@ -52,10 +52,11 @@ enum AsteroidType {
     case explosive(AsteroidSize) // Asteroide esplosivo (esplode in più frammenti)
     case heavy(AsteroidSize)     // Asteroide pesante (verde acido, 2x vita, 2x danno atmosfera, linea spessa)
     case square(AsteroidSize)    // Asteroide quadrato (arancione, cambia direzione random)
+    case repulsor(AsteroidSize)  // Asteroide repulsore (viola, sfera con particelle, respinge il player)
     
     var size: AsteroidSize {
         switch self {
-        case .normal(let size), .fast(let size), .armored(let size), .explosive(let size), .heavy(let size), .square(let size):
+        case .normal(let size), .fast(let size), .armored(let size), .explosive(let size), .heavy(let size), .square(let size), .repulsor(let size):
             return size
         }
     }
@@ -68,6 +69,7 @@ enum AsteroidType {
         case .explosive: return .red
         case .heavy: return UIColor(red: 0.5, green: 1.0, blue: 0.0, alpha: 1.0)  // Verde acido
         case .square: return UIColor(red: 0.9, green: 0.6, blue: 0.2, alpha: 1.0)  // Arancione
+        case .repulsor: return UIColor(red: 0.7, green: 0.3, blue: 1.0, alpha: 1.0)  // Viola
         }
     }
     
@@ -90,6 +92,7 @@ enum AsteroidType {
         case .armored: return 2  // Armored richiede 2 colpi
         case .heavy: return 4     // Heavy molto resistente - richiede 4 colpi
         case .square: return 2    // Square richiede 2 colpi (doppia resistenza)
+        case .repulsor: return 2  // Repulsor richiede 2 colpi
         default: return 1
         }
     }
@@ -99,6 +102,19 @@ enum AsteroidType {
         case .heavy: return 4.0  // Quadruplo danno all'atmosfera
         case .square: return 2.0 // Doppio danno all'atmosfera
         default: return 1.0
+        }
+    }
+    
+    var repulsionForce: CGFloat {
+        switch self {
+        case .repulsor(let size):
+            // Forza di repulsione proporzionale alla dimensione
+            switch size {
+            case .large: return 150.0   // Repulsione forte
+            case .medium: return 100.0  // Repulsione media (2/3 di large)
+            case .small: return 50.0    // Repulsione debole (1/3 di large)
+            }
+        default: return 0.0
         }
     }
 }
@@ -156,18 +172,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let minAtmosphereRadius: CGFloat = 40
     
     // Orbital Ring (grapple system) - 3 anelli concentrici
-    private var orbitalRing1: SKShapeNode!  // Anello interno
-    private var orbitalRing2: SKShapeNode!  // Anello medio
-    private var orbitalRing3: SKShapeNode!  // Anello esterno
+    private var orbitalRing1: SKShapeNode?  // Anello interno
+    private var orbitalRing2: SKShapeNode?  // Anello medio
+    private var orbitalRing3: SKShapeNode?  // Anello esterno
     private let orbitalRing1Radius: CGFloat = 200
-    private let orbitalRing2Radius: CGFloat = 280  // +80px dal precedente
-    private let orbitalRing3Radius: CGFloat = 360  // +80px dal precedente
-    private let orbitalBaseAngularVelocity: CGFloat = 0.15  // velocità base (anello 1)
+    private let orbitalRing2Radius: CGFloat = 300  // +100px dal precedente (era 280)
+    private let orbitalRing3Radius: CGFloat = 430  // +130px dal precedente (era 360) - molto più largo
+    private let orbitalBaseAngularVelocity: CGFloat = 0.28  // Velocità bilanciata (più veloce del player ma non eccessiva)
     private let orbitalGrappleThreshold: CGFloat = 8    // distanza per aggancio
     private let orbitalDetachForce: CGFloat = 80        // forza necessaria per sganciarsi (ridotta da 200)
     private var isGrappledToOrbit: Bool = false
     private var orbitalGrappleStrength: CGFloat = 0.0   // 0.0 = libero, 1.0 = completamente agganciato
     private var currentOrbitalRing: Int = 0  // 1, 2, o 3 - quale anello è agganciato
+    // Player slingshot state
+    private var playerSlingshotOrbits: Int = 0
+    private var playerSlingshotStartAngle: CGFloat = 0.0
+    private var playerSlingshotTargetRadius: CGFloat = 0.0
+    
+    // Slingshot Zones system (Opzione B)
+    // SISTEMA ANELLI: Gli asteroidi attraversano gli anelli facilmente
+    private let slingshotCaptureThreshold: CGFloat = 50   // Soglia più ampia per rilevamento
+    private let slingshotCaptureChance: CGFloat = 0.85    // 85% probabilità di aggancio (molto alta)
+    private let slingshotReleaseChancePerFrame: CGFloat = 0.005  // 0.5% per frame (~5-6 sec in media)
+    private let slingshotEjectChance: CGFloat = 0.001     // 0.1% probabilità di eiezione verso esterno (rarissimo)
+    private let slingshotBoostMultiplier: CGFloat = 0.6   // Boost forte per catturare davvero
+    private let slingshotMaxDuration: TimeInterval = 7.0  // Dopo 7 sec sgancio forzato
+    private var lastSlingshotCheck: TimeInterval = 0      // Ultimo check per giri completati
     
     // Planet health system
     private var planetHealth: Int = 3
@@ -185,9 +215,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var hudLayer: SKNode!
     
     // Parallax background layers
-    private var starsLayer1: SKNode!  // Stelle più lontane (movimento lento)
-    private var starsLayer2: SKNode!  // Stelle medie
-    private var starsLayer3: SKNode!  // Stelle più vicine (movimento veloce)
+    private var starsLayer1: SKNode?  // Stelle più lontane (movimento lento)
+    private var starsLayer2: SKNode?  // Stelle medie
+    private var starsLayer3: SKNode?  // Stelle più vicine (movimento veloce)
     private var nebulaLayer: SKNode?  // Layer per nebulose (opzionale)
     private var currentEnvironment: SpaceEnvironment = .deepSpace
     
@@ -372,16 +402,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupLayers() {
-        // Background parallax layers - DIETRO a tutto
-        setupParallaxBackground()
-        
         // World layer: contiene tutti gli oggetti di gioco (player, pianeta, asteroidi, etc)
-        // Posizionato al centro della scena - le coordinate del world sono relative al centro
+        // DEVE essere creato PRIMA del background perché alcuni setup lo usano!
         worldLayer = SKNode()
         worldLayer.position = .zero  // Nessun offset, usiamo coordinate assolute
         addChild(worldLayer)
         
         debugLog("✅ World layer created")
+        
+        // Background parallax layers - DIETRO a tutto (dopo worldLayer)
+        setupParallaxBackground()
     }
     
     private func setupParallaxBackground() {
@@ -420,9 +450,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         starsLayer2 = createDeepSpaceStars(starCount: 70, zPosition: -20, sizeRange: CGFloat(1.5)...CGFloat(2.5), alphaRange: CGFloat(0.3)...CGFloat(0.5))
         starsLayer3 = createDeepSpaceStars(starCount: 50, zPosition: -10, sizeRange: CGFloat(2.0)...CGFloat(3.5), alphaRange: CGFloat(0.5)...CGFloat(0.7))
         
-        addChild(starsLayer1)
-        addChild(starsLayer2)
-        addChild(starsLayer3)
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+        if let layer3 = starsLayer3 { addChild(layer3) }
     }
     
     private func setupNebulaEnvironment() {
@@ -472,9 +502,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         starsLayer2 = createStarsLayer(starCount: 45, alpha: 0.3, zPosition: -20)
         starsLayer3 = createStarsLayer(starCount: 30, alpha: 0.4, zPosition: -10)
         
-        addChild(starsLayer1)
-        addChild(starsLayer2)
-        addChild(starsLayer3)
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+        if let layer3 = starsLayer3 { addChild(layer3) }
     }
     
     private func setupVoidSpaceEnvironment() {
@@ -495,9 +525,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         starsLayer2 = createStarsLayer(starCount: 50, alpha: 0.4, zPosition: -20)
         starsLayer3 = createStarsLayer(starCount: 35, alpha: 0.6, zPosition: -10)
         
-        addChild(starsLayer1)
-        addChild(starsLayer2)
-        addChild(starsLayer3)
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+        if let layer3 = starsLayer3 { addChild(layer3) }
         
         // Aggiungi alcune linee galattiche lontane - PIÙ GRANDI per coprire il playfield
         let galaxyLayer = SKNode()
@@ -692,63 +722,133 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func setupOrbitalRing() {
         let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
-        let dashPattern: [CGFloat] = [10, 10]
         
-        // ANELLO 1 (interno) - velocità base
-        let path1 = CGMutablePath()
-        path1.addArc(center: .zero, radius: orbitalRing1Radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        // ===== ANELLO 1 (interno) - Magenta/Rosa =====
+        createGravityWellRing(
+            radius: orbitalRing1Radius,
+            ringNode: &orbitalRing1,
+            color: UIColor(red: 1.0, green: 0.3, blue: 0.7, alpha: 1.0),  // Magenta
+            velocity: orbitalBaseAngularVelocity,
+            centerPosition: centerPosition,
+            name: "orbitalRing1"
+        )
         
-        orbitalRing1 = SKShapeNode(path: path1)
-        orbitalRing1.strokeColor = UIColor.white.withAlphaComponent(0.25)
-        orbitalRing1.lineWidth = 1
-        orbitalRing1.fillColor = .clear
-        orbitalRing1.name = "orbitalRing1"
-        orbitalRing1.zPosition = 1
-        orbitalRing1.position = centerPosition
-        orbitalRing1.path = path1.copy(dashingWithPhase: 0, lengths: dashPattern)
-        worldLayer.addChild(orbitalRing1)
+        // ===== ANELLO 2 (medio) - Cyan brillante =====
+        createGravityWellRing(
+            radius: orbitalRing2Radius,
+            ringNode: &orbitalRing2,
+            color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0),  // Cyan
+            velocity: orbitalBaseAngularVelocity * 1.33,
+            centerPosition: centerPosition,
+            name: "orbitalRing2"
+        )
         
-        let velocity1 = orbitalBaseAngularVelocity
-        let rotateAction1 = SKAction.rotate(byAngle: .pi * 2, duration: 1.0 / velocity1 * 2 * .pi)
-        orbitalRing1.run(SKAction.repeatForever(rotateAction1))
+        // ===== ANELLO 3 (esterno) - Viola/Lavanda =====
+        createGravityWellRing(
+            radius: orbitalRing3Radius,
+            ringNode: &orbitalRing3,
+            color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0),  // Viola
+            velocity: orbitalBaseAngularVelocity * 1.77,
+            centerPosition: centerPosition,
+            name: "orbitalRing3"
+        )
         
-        // ANELLO 2 (medio) - velocità +33%
-        let path2 = CGMutablePath()
-        path2.addArc(center: .zero, radius: orbitalRing2Radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        debugLog("✅ Gravity Well rings created with concentric waves and orbiting crystals")
+    }
+    
+    private func createGravityWellRing(radius: CGFloat, ringNode: inout SKShapeNode?, color: UIColor, velocity: CGFloat, centerPosition: CGPoint, name: String) {
+        // Container per tutti gli elementi del ring
+        let ringContainer = SKNode()
+        ringContainer.position = centerPosition
+        ringContainer.zPosition = 1
+        ringContainer.name = name
         
-        orbitalRing2 = SKShapeNode(path: path2)
-        orbitalRing2.strokeColor = UIColor.white.withAlphaComponent(0.25)
-        orbitalRing2.lineWidth = 1
-        orbitalRing2.fillColor = .clear
-        orbitalRing2.name = "orbitalRing2"
-        orbitalRing2.zPosition = 1
-        orbitalRing2.position = centerPosition
-        orbitalRing2.path = path2.copy(dashingWithPhase: 0, lengths: dashPattern)
-        worldLayer.addChild(orbitalRing2)
+        // 1️⃣ ANELLO PRINCIPALE (sottile e semi-trasparente)
+        let mainPath = CGMutablePath()
+        mainPath.addArc(center: .zero, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
         
-        let velocity2 = orbitalBaseAngularVelocity * 1.33  // +33%
-        let rotateAction2 = SKAction.rotate(byAngle: .pi * 2, duration: 1.0 / velocity2 * 2 * .pi)
-        orbitalRing2.run(SKAction.repeatForever(rotateAction2))
+        let mainRingShape = SKShapeNode(path: mainPath)
+        mainRingShape.strokeColor = color.withAlphaComponent(0.15)  // Molto più trasparente
+        mainRingShape.lineWidth = 1.5  // Più sottile
+        mainRingShape.fillColor = .clear
+        mainRingShape.glowWidth = 1.0  // Glow ridotto
+        mainRingShape.name = "mainRing"
+        ringContainer.addChild(mainRingShape)
         
-        // ANELLO 3 (esterno) - velocità +66% (33% * 2)
-        let path3 = CGMutablePath()
-        path3.addArc(center: .zero, radius: orbitalRing3Radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        // 2️⃣ ONDE CONCENTRICHE (2 cerchi sottili che pulsano delicatamente)
+        for i in 1...2 {
+            let waveRadius = radius + CGFloat(i) * 6.0
+            let wavePath = CGMutablePath()
+            wavePath.addArc(center: .zero, radius: waveRadius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+            
+            let wave = SKShapeNode(path: wavePath)
+            wave.strokeColor = color.withAlphaComponent(0.08)  // Molto trasparente
+            wave.lineWidth = 0.8
+            wave.fillColor = .clear
+            wave.name = "wave\(i)"
+            ringContainer.addChild(wave)
+            
+            // Animazione pulsazione onde (più lenta e delicata)
+            let expandDuration = 3.0 + Double(i) * 0.8
+            let expand = SKAction.scale(to: 1.05, duration: expandDuration)
+            let contract = SKAction.scale(to: 1.0, duration: expandDuration)
+            let fadeOut = SKAction.fadeAlpha(to: 0.03, duration: expandDuration)
+            let fadeIn = SKAction.fadeAlpha(to: 0.08, duration: expandDuration)
+            
+            let pulseGroup = SKAction.group([
+                SKAction.sequence([expand, contract]),
+                SKAction.sequence([fadeOut, fadeIn])
+            ])
+            wave.run(SKAction.repeatForever(pulseGroup))
+        }
         
-        orbitalRing3 = SKShapeNode(path: path3)
-        orbitalRing3.strokeColor = UIColor.white.withAlphaComponent(0.25)
-        orbitalRing3.lineWidth = 1
-        orbitalRing3.fillColor = .clear
-        orbitalRing3.name = "orbitalRing3"
-        orbitalRing3.zPosition = 1
-        orbitalRing3.position = centerPosition
-        orbitalRing3.path = path3.copy(dashingWithPhase: 0, lengths: dashPattern)
-        worldLayer.addChild(orbitalRing3)
+        // 3️⃣ PULSE RADIALE (espansione periodica molto delicata)
+        let pulseEmitter = SKNode()
+        pulseEmitter.position = .zero
+        pulseEmitter.name = "pulseEmitter"
+        ringContainer.addChild(pulseEmitter)
         
-        let velocity3 = orbitalBaseAngularVelocity * 1.77  // +77% (1.33 * 1.33)
-        let rotateAction3 = SKAction.rotate(byAngle: .pi * 2, duration: 1.0 / velocity3 * 2 * .pi)
-        orbitalRing3.run(SKAction.repeatForever(rotateAction3))
+        // Crea pulse ogni 3 secondi
+        let createPulse = SKAction.run { [weak ringContainer] in
+            guard let container = ringContainer else { return }
+            self.createRadialPulse(at: container, radius: radius, color: color)
+        }
+        let waitAction = SKAction.wait(forDuration: 3.0)
+        let pulseSequence = SKAction.sequence([createPulse, waitAction])
+        pulseEmitter.run(SKAction.repeatForever(pulseSequence))
         
-        debugLog("✅ Orbital rings created: R1=\(orbitalRing1Radius) (v=\(velocity1)), R2=\(orbitalRing2Radius) (v=\(velocity2)), R3=\(orbitalRing3Radius) (v=\(velocity3))")
+        // 5️⃣ ROTAZIONE DELL'INTERO CONTAINER (cristalli orbitano)
+        let rotateDuration = 1.0 / velocity * 2 * .pi
+        let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotateDuration)
+        ringContainer.run(SKAction.repeatForever(rotateAction))
+        
+        worldLayer.addChild(ringContainer)
+        ringNode = mainRingShape  // Riferimento all'anello principale per interazioni
+    }
+    
+    private func createRadialPulse(at container: SKNode, radius: CGFloat, color: UIColor) {
+        // Crea un cerchio che si espande e svanisce (molto delicato)
+        let pulsePath = CGMutablePath()
+        pulsePath.addArc(center: .zero, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        
+        let pulse = SKShapeNode(path: pulsePath)
+        pulse.strokeColor = color.withAlphaComponent(0.12)  // Molto più trasparente
+        pulse.lineWidth = 1.5  // Più sottile
+        pulse.fillColor = .clear
+        pulse.glowWidth = 2.0  // Glow ridotto
+        
+        container.addChild(pulse)
+        
+        // Animazione: expand + fade out (più lenta)
+        let expand = SKAction.scale(to: 1.3, duration: 2.0)
+        let fadeOut = SKAction.fadeOut(withDuration: 2.0)
+        let remove = SKAction.removeFromParent()
+        
+        let sequence = SKAction.sequence([
+            SKAction.group([expand, fadeOut]),
+            remove
+        ])
+        pulse.run(sequence)
     }
 
     
@@ -1042,8 +1142,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         lastUpdateTime = currentTime  // Salva per usarlo in didBegin
         
         applyGravity()
+        applyRepulsorForces()  // Gestisce repulsione asteroidi repulsor sul player
         limitAsteroidSpeed()  // Limita velocità asteroidi
-        updateOrbitalGrapple()  // Gestisce aggancio/sgancio orbital ring
+        updateOrbitalGrapple()  // Gestisce slingshot zones del player
+        updateAsteroidSlingshotZones(currentTime)  // Gestisce slingshot zones degli asteroidi
         updatePlayerMovement()
         updatePlayerShooting(currentTime)
         updateCameraZoom()  // Aggiorna zoom dinamico basato su distanza
@@ -1348,16 +1450,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Se Gravity power-up è attivo, applica gravità VERSO IL PLAYER (5x più forte)
         if gravityActive {
             // NESSUNA gravità sul player verso il pianeta
-            // Applica forte gravità verso il player per asteroidi e power-up
+            // Applica forte gravità verso il player SOLO per asteroidi (NON power-up)
             for asteroid in asteroids {
                 if let asteroidBody = asteroid.physicsBody {
                     applyGravityToPlayer(node: asteroid, body: asteroidBody, multiplier: 5.0)
                 }
             }
             
+            // I power-up continuano con gravità NORMALE verso il pianeta
             worldLayer.enumerateChildNodes(withName: "powerup_*") { node, _ in
                 if let powerupBody = node.physicsBody {
-                    self.applyGravityToPlayer(node: node, body: powerupBody, multiplier: 5.0)
+                    self.applyGravityToNode(node: node, body: powerupBody, multiplier: 1.0)
                 }
             }
         } else {
@@ -1467,6 +1570,58 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         body.applyForce(CGVector(dx: forceX, dy: forceY))
     }
     
+    private func applyRepulsorForces() {
+        // Applica forza di repulsione dal player per ogni asteroide repulsor
+        guard let playerBody = player.physicsBody else { return }
+        
+        for asteroid in asteroids {
+            // Controlla se è un repulsor
+            guard let asteroidType = asteroid.userData?["type"] as? AsteroidType,
+                  case .repulsor = asteroidType else { continue }
+            
+            // Calcola distanza tra player e asteroide repulsor
+            let dx = player.position.x - asteroid.position.x
+            let dy = player.position.y - asteroid.position.y
+            let distanceSquared = dx * dx + dy * dy
+            let distance = sqrt(distanceSquared)
+            
+            // Raggio di influenza: 3x il raggio dell'asteroide
+            let influenceRadius = asteroidType.size.radius * 3.0
+            
+            // Applica repulsione solo se entro il raggio di influenza
+            guard distance < influenceRadius && distance > 0 else { continue }
+            
+            // Forza di repulsione (più forte quando più vicino)
+            // Inversamente proporzionale al quadrato della distanza
+            let baseForce = asteroidType.repulsionForce
+            let force = baseForce * (influenceRadius / distance)
+            
+            // Direzione: ALLONTANA il player dall'asteroide (opposta alla gravità)
+            let normalX = dx / distance
+            let normalY = dy / distance
+            
+            let repulsionX = normalX * force
+            let repulsionY = normalY * force
+            
+            // Applica la forza al player
+            playerBody.applyForce(CGVector(dx: repulsionX, dy: repulsionY))
+            
+            // Feedback visivo: flash delle particelle quando repulsa attivamente
+            if let particles = asteroid.childNode(withName: "repulsorParticles") as? SKEmitterNode {
+                particles.particleBirthRate = 50  // Aumenta temporaneamente
+                
+                // Ripristina dopo un breve delay
+                let resetAction = SKAction.run {
+                    particles.particleBirthRate = 30
+                }
+                particles.run(SKAction.sequence([
+                    SKAction.wait(forDuration: 0.1),
+                    resetAction
+                ]))
+            }
+        }
+    }
+    
     private func limitAsteroidSpeed() {
         let maxSpeed: CGFloat = 150  // Velocità massima per gli asteroidi (ridotta da 200)
         
@@ -1487,6 +1642,251 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
+    private func updateAsteroidSlingshotZones(_ currentTime: TimeInterval) {
+        let planetCenter = planet.position
+        
+        // Check per giri completati ogni 0.1 secondi
+        let shouldCheckOrbits = (currentTime - lastSlingshotCheck) >= 0.1
+        if shouldCheckOrbits {
+            lastSlingshotCheck = currentTime
+        }
+        
+        for asteroid in asteroids {
+            guard let asteroidBody = asteroid.physicsBody,
+                  let userData = asteroid.userData else { continue }
+            
+            // Leggi stato slingshot corrente
+            let inSlingshot = userData["inSlingshot"] as? Bool ?? false
+            let slingshotRing = userData["slingshotRing"] as? Int ?? 0
+            var slingshotOrbits = userData["slingshotOrbits"] as? Int ?? 0
+            var slingshotStartAngle = userData["slingshotStartAngle"] as? CGFloat ?? 0.0
+            var slingshotTargetRadius = userData["slingshotTargetRadius"] as? CGFloat ?? 0.0
+            
+            // Calcola distanza e angolo dal centro
+            let dx = asteroid.position.x - planetCenter.x
+            let dy = asteroid.position.y - planetCenter.y
+            let distanceFromCenter = sqrt(dx * dx + dy * dy)
+            let currentAngle = atan2(dy, dx)
+            
+            // Determina l'anello più vicino
+            let distanceFromRing1 = abs(distanceFromCenter - orbitalRing1Radius)
+            let distanceFromRing2 = abs(distanceFromCenter - orbitalRing2Radius)
+            let distanceFromRing3 = abs(distanceFromCenter - orbitalRing3Radius)
+            
+            let minDistance = min(distanceFromRing1, distanceFromRing2, distanceFromRing3)
+            let closestRing: Int
+            let closestRingRadius: CGFloat
+            let closestRingVelocity: CGFloat
+            
+            if minDistance == distanceFromRing1 {
+                closestRing = 1
+                closestRingRadius = orbitalRing1Radius
+                closestRingVelocity = orbitalBaseAngularVelocity
+            } else if minDistance == distanceFromRing2 {
+                closestRing = 2
+                closestRingRadius = orbitalRing2Radius
+                closestRingVelocity = orbitalBaseAngularVelocity * 1.33
+            } else {
+                closestRing = 3
+                closestRingRadius = orbitalRing3Radius
+                closestRingVelocity = orbitalBaseAngularVelocity * 1.77
+            }
+            
+            // ===== CAPTURE: Tentativo probabilistico di cattura =====
+            if !inSlingshot && minDistance < slingshotCaptureThreshold {
+                // Solo 30% di probabilità di aggancio (70% passa attraverso)
+                if CGFloat.random(in: 0...1) < slingshotCaptureChance {
+                    userData["inSlingshot"] = true
+                    userData["slingshotRing"] = closestRing
+                    userData["slingshotCaptureTime"] = currentTime
+                    debugLog("🎯 Asteroid captured in ring \(closestRing) (30% chance)")
+                }
+                continue
+            }
+            
+            // ===== SLINGSHOT ORBIT: Gestione realistica con gravità attiva =====
+            if inSlingshot && slingshotRing > 0 {
+                let captureTime = userData["slingshotCaptureTime"] as? TimeInterval ?? currentTime
+                let timeInRing = currentTime - captureTime
+                
+                // SGANCIO FORZATO dopo 3 secondi
+                if timeInRing > slingshotMaxDuration {
+                    userData["inSlingshot"] = false
+                    userData["slingshotRing"] = 0
+                    asteroid.removeAction(forKey: "slingshotRotation")
+                    debugLog("⏱️ Asteroid forced release (timeout)")
+                    continue
+                }
+                
+                // PROBABILITÀ CONTINUA DI SGANCIO verso interno (3% per frame)
+                if CGFloat.random(in: 0...1) < slingshotReleaseChancePerFrame {
+                    userData["inSlingshot"] = false
+                    userData["slingshotRing"] = 0
+                    asteroid.removeAction(forKey: "slingshotRotation")
+                    
+                    // Piccolo impulso radiale verso interno
+                    let releaseForce: CGFloat = 30.0
+                    asteroidBody.applyImpulse(CGVector(
+                        dx: -(dx / distanceFromCenter) * releaseForce,
+                        dy: -(dy / distanceFromCenter) * releaseForce
+                    ))
+                    debugLog("📉 Asteroid released inward from ring \(slingshotRing)")
+                    continue
+                }
+                
+                // PROBABILITÀ BASSA DI EIEZIONE verso esterno (8%)
+                if CGFloat.random(in: 0...1) < slingshotEjectChance {
+                    userData["inSlingshot"] = false
+                    userData["slingshotRing"] = 0
+                    asteroid.removeAction(forKey: "slingshotRotation")
+                    
+                    let ringVelocity = slingshotRing == 1 ? orbitalBaseAngularVelocity :
+                                       slingshotRing == 2 ? orbitalBaseAngularVelocity * 1.33 :
+                                       orbitalBaseAngularVelocity * 1.77
+                    
+                    let ejectSpeed = ringVelocity * closestRingRadius * 1.5
+                    let ejectAngle = currentAngle + .pi / 4
+                    asteroidBody.velocity = CGVector(
+                        dx: cos(ejectAngle) * ejectSpeed,
+                        dy: sin(ejectAngle) * ejectSpeed
+                    )
+                    debugLog("🚀 Asteroid ejected outward from ring \(slingshotRing)")
+                    continue
+                }
+                
+                // FORZA CENTRIPETA per mantenere l'asteroide sull'anello
+                let radiusDiff = closestRingRadius - distanceFromCenter
+                let centripetalForce: CGFloat = 80.0  // Forza forte per trattenere
+                let forceX = (dx / distanceFromCenter) * radiusDiff * centripetalForce
+                let forceY = (dy / distanceFromCenter) * radiusDiff * centripetalForce
+                asteroidBody.applyForce(CGVector(dx: forceX, dy: forceY))
+                
+                // BOOST TANGENZIALE
+                let ringVelocity = slingshotRing == 1 ? orbitalBaseAngularVelocity :
+                                   slingshotRing == 2 ? orbitalBaseAngularVelocity * 1.33 :
+                                   orbitalBaseAngularVelocity * 1.77
+                
+                let tangentialSpeed = ringVelocity * closestRingRadius
+                let tangentialVx = -sin(currentAngle) * tangentialSpeed
+                let tangentialVy = cos(currentAngle) * tangentialSpeed
+                
+                let currentVx = asteroidBody.velocity.dx
+                let currentVy = asteroidBody.velocity.dy
+                
+                // Boost forte per sincronizzare con l'anello
+                asteroidBody.velocity = CGVector(
+                    dx: currentVx + (tangentialVx - currentVx) * slingshotBoostMultiplier,
+                    dy: currentVy + (tangentialVy - currentVy) * slingshotBoostMultiplier
+                )
+                
+                // ROTAZIONE
+                let rotationSpeed = ringVelocity * 2.5
+                if asteroid.action(forKey: "slingshotRotation") == nil {
+                    let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: 1.0 / Double(rotationSpeed))
+                    asteroid.run(SKAction.repeatForever(rotateAction), withKey: "slingshotRotation")
+                }
+                continue  // Salta il resto per evitare controlli inutili
+            }
+            
+            // Fuori dall'anello: rimuovi rotazione
+            if asteroid.action(forKey: "slingshotRotation") != nil {
+                asteroid.removeAction(forKey: "slingshotRotation")
+            }
+        }
+    }
+    
+    // VECCHIO CODICE COMMENTATO (non più usato)
+    /*
+    private func oldSlingshotCode() {
+                if false {
+                    let angleDiff = currentAngle - slingshotStartAngle
+                    let normalizedDiff = atan2(sin(angleDiff), cos(angleDiff))
+                    
+                    // Se ha fatto un giro completo (tolleranza ±0.2 radianti)
+                    if abs(normalizedDiff) < 0.2 && slingshotOrbits > 0 {
+                        slingshotOrbits += 1
+                        userData["slingshotOrbits"] = slingshotOrbits
+                        userData["slingshotStartAngle"] = currentAngle
+                        
+                        debugLog("🔄 Asteroid completed orbit \(slingshotOrbits) in ring \(slingshotRing)")
+                        
+                        // Decay del raggio dopo ogni giro
+                        slingshotTargetRadius -= slingshotDecayPerOrbit
+                        userData["slingshotTargetRadius"] = slingshotTargetRadius
+                        
+                        // Check per eiezione
+                        if slingshotOrbits >= slingshotOrbitsBeforeEject || CGFloat.random(in: 0...1) < slingshotEjectionChance {
+                            // EIEZIONE verso l'anello interno!
+                            let nextRing = slingshotRing - 1
+                            if nextRing > 0 {
+                                // Eject verso anello interno con boost
+                                let ejectAngle = currentAngle + .pi / 2  // Perpendic to radial
+                                let ejectSpeed: CGFloat = 100
+                                asteroidBody.velocity = CGVector(
+                                    dx: cos(ejectAngle) * ejectSpeed,
+                                    dy: sin(ejectAngle) * ejectSpeed
+                                )
+                                
+                                userData["inSlingshot"] = false
+                                userData["slingshotRing"] = 0
+                                userData["slingshotOrbits"] = 0
+                                debugLog("� Asteroid ejected from ring \(slingshotRing) to ring \(nextRing)")
+                                continue
+                            } else {
+                                // Eject verso il pianeta
+                                userData["inSlingshot"] = false
+                                userData["slingshotRing"] = 0
+                                userData["slingshotOrbits"] = 0
+                                debugLog("🚀 Asteroid ejected from ring 1 towards planet")
+                                continue
+                            }
+                        }
+                    } else if slingshotOrbits == 0 {
+                        // Primo passaggio: marca che ha iniziato
+                        slingshotOrbits = 1
+                        userData["slingshotOrbits"] = slingshotOrbits
+                    }
+                }
+                
+                // Applica boost tangenziale per mantenere l'orbita
+                let targetRadius = slingshotTargetRadius
+                let ringVelocity = slingshotRing == 1 ? orbitalBaseAngularVelocity :
+                                   slingshotRing == 2 ? orbitalBaseAngularVelocity * 1.33 :
+                                   orbitalBaseAngularVelocity * 1.77
+                
+                // Forza centripeta per mantenere il raggio
+                let radiusDiff = targetRadius - distanceFromCenter
+                let centripetalForce: CGFloat = 50.0
+                let forceX = (dx / distanceFromCenter) * radiusDiff * centripetalForce
+                let forceY = (dy / distanceFromCenter) * radiusDiff * centripetalForce
+                asteroidBody.applyForce(CGVector(dx: forceX, dy: forceY))
+                
+                // Boost tangenziale
+                let tangentialSpeed = ringVelocity * targetRadius
+                let tangentialVx = -sin(currentAngle) * tangentialSpeed
+                let tangentialVy = cos(currentAngle) * tangentialSpeed
+                
+                // Correggi la velocità verso la tangente
+                let currentVx = asteroidBody.velocity.dx
+                let currentVy = asteroidBody.velocity.dy
+                asteroidBody.velocity = CGVector(
+                    dx: currentVx + (tangentialVx - currentVx) * 0.1,
+                    dy: currentVy + (tangentialVy - currentVy) * 0.1
+                )
+                
+                // ROTAZIONE REALISTICA: ruota l'asteroide in base alla velocità orbitale
+                // Velocità angolare proporzionale alla velocità dell'anello
+                let rotationSpeed = ringVelocity * 2.0  // Moltiplicatore per renderla visibile
+                
+                // Controlla se esiste già un'azione di rotazione
+                if asteroid.action(forKey: "slingshotRotation") == nil {
+                    let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: 1.0 / Double(rotationSpeed))
+                    asteroid.run(SKAction.repeatForever(rotateAction), withKey: "slingshotRotation")
+                }
+            }
+    }
+    */
+    
     private func updateOrbitalGrapple() {
         guard let playerBody = player.physicsBody else { return }
         
@@ -1505,7 +1905,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let closestRing: Int
         let closestRingRadius: CGFloat
         let closestRingVelocity: CGFloat
-        let closestRingNode: SKShapeNode
+        let closestRingNode: SKShapeNode?
         
         if minDistance == distanceFromRing1 {
             closestRing = 1
@@ -1549,21 +1949,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Feedback visivo graduale - solo sull'anello corrente
             let visualAlpha = 0.25 + (0.35 * orbitalGrappleStrength)  // Da 0.25 a 0.6
             let visualWidth = 1.0 + (1.0 * orbitalGrappleStrength)    // Da 1 a 2
-            closestRingNode.strokeColor = UIColor.cyan.withAlphaComponent(visualAlpha)
-            closestRingNode.lineWidth = visualWidth
+            closestRingNode?.strokeColor = UIColor.cyan.withAlphaComponent(visualAlpha)
+            closestRingNode?.lineWidth = visualWidth
             
-            // Ripristina gli altri anelli
-            if closestRing != 1 {
-                orbitalRing1.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                orbitalRing1.lineWidth = 1
+            // Ripristina gli altri anelli (con safe unwrapping)
+            if closestRing != 1, let ring1 = orbitalRing1 {
+                ring1.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                ring1.lineWidth = 1
             }
-            if closestRing != 2 {
-                orbitalRing2.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                orbitalRing2.lineWidth = 1
+            if closestRing != 2, let ring2 = orbitalRing2 {
+                ring2.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                ring2.lineWidth = 1
             }
-            if closestRing != 3 {
-                orbitalRing3.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                orbitalRing3.lineWidth = 1
+            if closestRing != 3, let ring3 = orbitalRing3 {
+                ring3.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                ring3.lineWidth = 1
             }
             
         } else if isGrappledToOrbit {
@@ -1576,13 +1976,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 orbitalGrappleStrength = 0
                 currentOrbitalRing = 0
                 
-                // Ripristina tutti gli anelli
-                orbitalRing1.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                orbitalRing1.lineWidth = 1
-                orbitalRing2.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                orbitalRing2.lineWidth = 1
-                orbitalRing3.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                orbitalRing3.lineWidth = 1
+                // Ripristina tutti gli anelli (con safe unwrapping)
+                orbitalRing1?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                orbitalRing1?.lineWidth = 1
+                orbitalRing2?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                orbitalRing2?.lineWidth = 1
+                orbitalRing3?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                orbitalRing3?.lineWidth = 1
                 
                 debugLog("🔓 Detached from orbital ring (distance)")
                 return
@@ -1603,13 +2003,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     orbitalGrappleStrength = 0
                     currentOrbitalRing = 0
                     
-                    // Ripristina tutti gli anelli
-                    orbitalRing1.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                    orbitalRing1.lineWidth = 1
-                    orbitalRing2.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                    orbitalRing2.lineWidth = 1
-                    orbitalRing3.strokeColor = UIColor.white.withAlphaComponent(0.25)
-                    orbitalRing3.lineWidth = 1
+                    // Ripristina tutti gli anelli (con safe unwrapping)
+                    orbitalRing1?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                    orbitalRing1?.lineWidth = 1
+                    orbitalRing2?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                    orbitalRing2?.lineWidth = 1
+                    orbitalRing3?.strokeColor = UIColor.white.withAlphaComponent(0.25)
+                    orbitalRing3?.lineWidth = 1
                     
                     debugLog("🔓 Detached from orbital ring (manual)")
                     return
@@ -1646,10 +2046,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Mescola velocità orbitale con velocità attuale
             let currentVx = playerBody.velocity.dx
             let currentVy = playerBody.velocity.dy
-            playerBody.velocity = CGVector(
-                dx: currentVx + (tangentialVx - currentVx) * orbitalGrappleStrength * 0.3,
-                dy: currentVy + (tangentialVy - currentVy) * orbitalGrappleStrength * 0.3
-            )
+            let mixedVx = currentVx + (tangentialVx - currentVx) * orbitalGrappleStrength * 0.3
+            let mixedVy = currentVy + (tangentialVy - currentVy) * orbitalGrappleStrength * 0.3
+            
+            // LIMITA la velocità del player: non può superare la velocità dell'anello (meteoriti)
+            let maxOrbitalSpeed = tangentialVelocity * 0.85  // 85% della velocità orbitale massima (ridotto)
+            let currentSpeed = sqrt(mixedVx * mixedVx + mixedVy * mixedVy)
+            
+            if currentSpeed > maxOrbitalSpeed {
+                // Cap alla velocità massima dell'anello
+                let scale = maxOrbitalSpeed / currentSpeed
+                playerBody.velocity = CGVector(
+                    dx: mixedVx * scale,
+                    dy: mixedVy * scale
+                )
+            } else {
+                playerBody.velocity = CGVector(
+                    dx: mixedVx,
+                    dy: mixedVy
+                )
+            }
         }
     }
     
@@ -1659,12 +2075,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func configureWave(_ wave: Int) -> WaveConfig {
         switch wave {
         case 1:
-            // WAVE 1 - Meteoriti normali + introduzione SQUARE (arancioni quadrati con jet random)
+            // WAVE 1 - Solo meteoriti normali
             return WaveConfig(
                 waveNumber: 1,
                 asteroidSpawns: [
-                    (.normal(.large), 5),      // 5 normali
-                    (.square(.large), 2)       // 2 quadrati per testare
+                    (.normal(.large), 7)       // 7 normali
                 ],
                 spawnInterval: 3.0
             )
@@ -1684,30 +2099,49 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             )
             
         case 3:
-            // WAVE 3 - Mix bilanciato di tutti i tipi (+20%)
+            // WAVE 3 - Introduzione SQUARE (arancioni quadrati con jet random) + mix completo
             return WaveConfig(
                 waveNumber: 3,
                 asteroidSpawns: [
-                    (.normal(.large), 4),      // +1 da 3
+                    (.normal(.large), 3),
                     (.fast(.large), 2),
                     (.armored(.large), 2),     // Grigi: 2x vita
                     (.heavy(.large), 2),       // Verdi: 4x danno
-                    (.normal(.medium), 3)      // +1 da 2
+                    (.square(.large), 3),      // SQUARE: 2x vita, 2x danno, 4 frammenti
+                    (.normal(.medium), 2)
                 ],
                 spawnInterval: 2.5
             )
             
+        case 4:
+            // WAVE 4 - Introduzione REPULSOR (viola con particelle, respinge il player)
+            return WaveConfig(
+                waveNumber: 4,
+                asteroidSpawns: [
+                    (.normal(.large), 3),
+                    (.fast(.large), 2),
+                    (.armored(.large), 1),
+                    (.heavy(.large), 1),
+                    (.square(.large), 2),
+                    (.repulsor(.large), 2),    // REPULSOR: 2x vita, respinge player, 3-4 frammenti
+                    (.normal(.medium), 2)
+                ],
+                spawnInterval: 2.3
+            )
+            
         default:
-            // WAVE 4+ - Progressione automatica con tutti i tipi (+20% da baseCount)
+            // WAVE 5+ - Progressione automatica con TUTTI i tipi incluso repulsor
             let baseCount = 12 + (wave - 1) * 2  // +20% da 10 -> 12
             return WaveConfig(
                 waveNumber: wave,
                 asteroidSpawns: [
-                    (.normal(.large), baseCount / 3),
-                    (.fast(.large), baseCount / 3),
-                    (.armored(.large), baseCount / 5),   // Grigi: 2x vita (stessa quantità dei verdi)
-                    (.heavy(.large), baseCount / 5),     // Verdi: 4x danno (stessa quantità dei grigi)
-                    (.normal(.medium), baseCount / 4)
+                    (.normal(.large), baseCount / 4),
+                    (.fast(.large), baseCount / 4),
+                    (.armored(.large), baseCount / 6),   // Grigi: 2x vita
+                    (.heavy(.large), baseCount / 6),     // Verdi: 4x danno
+                    (.square(.large), baseCount / 6),    // Square: 2x vita, 2x danno
+                    (.repulsor(.large), baseCount / 6),  // Repulsor: 2x vita, respinge
+                    (.normal(.medium), baseCount / 5)
                 ],
                 spawnInterval: max(1.5, 3.0 - CGFloat(wave) * 0.2)
             )
@@ -1838,13 +2272,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard asteroidsSpawnedInWave >= asteroidsToSpawnInWave else { return }
         guard asteroids.isEmpty else { return }
         
-        // Wave completata! Ripristina la salute del pianeta
+        // Wave completata! Ripristina la salute del pianeta E l'atmosfera
         debugLog("🎉 Wave \(currentWave) completed!")
         
         // Ripristina la salute del pianeta al massimo
         planetHealth = maxPlanetHealth
         updatePlanetHealthLabel()
         debugLog("💚 Planet health restored to \(maxPlanetHealth)")
+        
+        // Ripristina l'atmosfera al massimo
+        atmosphereRadius = maxAtmosphereRadius
+        atmosphere.alpha = 1.0  // Rendi visibile se era invisibile
+        updateAtmosphereVisuals()
+        debugLog("🌀 Atmosphere fully restored to \(maxAtmosphereRadius)")
         
         startWave(currentWave + 1)
     }
@@ -1863,6 +2303,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             asteroid = SKShapeNode(rectOf: CGSize(width: sideLength, height: sideLength))
             asteroid.fillColor = asteroidType.color  // Pieno arancione
             asteroid.strokeColor = UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 1.0)  // Bordo più chiaro
+        } else if case .repulsor = asteroidType {
+            // SFERA piena viola per repulsor asteroids
+            asteroid = SKShapeNode(circleOfRadius: asteroidSize.radius)
+            asteroid.fillColor = asteroidType.color  // Pieno viola
+            asteroid.strokeColor = UIColor(red: 0.9, green: 0.6, blue: 1.0, alpha: 1.0)  // Bordo viola chiaro
+            asteroid.glowWidth = 3.0  // Glow viola
         } else {
             // Forma a linee spezzate (stile Asteroids) per gli altri
             let path = createAsteroidPath(radius: asteroidSize.radius)
@@ -1879,6 +2325,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.userData?["type"] = asteroidType
         asteroid.userData?["health"] = asteroidType.healthMultiplier
         asteroid.userData?["size"] = asteroidSize.rawValue
+        // Slingshot state
+        asteroid.userData?["inSlingshot"] = false
+        asteroid.userData?["slingshotRing"] = 0         // 0 = libero, 1-3 = anello catturato
+        asteroid.userData?["slingshotOrbits"] = 0       // Numero di giri completati
+        asteroid.userData?["slingshotStartAngle"] = CGFloat(0.0)  // Angolo iniziale cattura
+        asteroid.userData?["slingshotTargetRadius"] = CGFloat(0.0)  // Raggio target attuale
         
         // Posizione
         if let pos = position {
@@ -1950,6 +2402,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             scheduleSquareAsteroidJets(for: asteroid)
             addMetallicShineEffect(to: asteroid)
         }
+        
+        // Se è repulsor, aggiungi particelle orbitanti viola
+        if case .repulsor = asteroidType {
+            addRepulsorParticles(to: asteroid, radius: asteroidSize.radius)
+        }
+        
+        // NON creiamo più l'indicatore di grapple (anello)
+        // Gli asteroidi ruoteranno quando agganciati per maggior realismo
         
         debugLog("☄️ \(asteroidType) asteroid spawned at: \(asteroid.position)")
     }
@@ -2247,6 +2707,60 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         effectContainer.run(cleanup)
     }
     
+    private func addRepulsorParticles(to asteroid: SKShapeNode, radius: CGFloat) {
+        // Sistema particellare che orbita attorno all'asteroide
+        let particles = SKEmitterNode()
+        particles.particleTexture = particleTexture
+        particles.position = CGPoint.zero  // Centro dell'asteroide
+        
+        // Emissione continua in cerchio attorno all'asteroide
+        particles.particleBirthRate = 30
+        particles.numParticlesToEmit = 0  // Continuo
+        
+        // Dimensione particelle
+        particles.particleSize = CGSize(width: 4, height: 4)
+        particles.particleScale = 0.6
+        particles.particleScaleRange = 0.3
+        particles.particleScaleSpeed = -0.3
+        
+        // Colore viola luminoso
+        particles.particleColor = UIColor(red: 0.8, green: 0.4, blue: 1.0, alpha: 1.0)
+        particles.particleColorBlendFactor = 1.0
+        
+        // Emissione circolare uniforme
+        particles.emissionAngle = 0
+        particles.emissionAngleRange = .pi * 2
+        
+        // Velocità: orbita attorno all'asteroide
+        particles.particleSpeed = 0  // Non si allontanano subito
+        particles.particleSpeedRange = 0
+        
+        // Vita delle particelle
+        particles.particleLifetime = 2.0
+        particles.particleLifetimeRange = 0.5
+        
+        // Alpha
+        particles.particleAlpha = 0.8
+        particles.particleAlphaSpeed = -0.4
+        
+        // Posizione di spawn: sulla circonferenza dell'asteroide
+        particles.particlePositionRange = CGVector(dx: radius * 2.2, dy: radius * 2.2)
+        
+        // Blend mode per effetto luminoso
+        particles.particleBlendMode = .add
+        particles.particleZPosition = -1
+        
+        // CRUCIALE: Le particelle rimangono nel sistema locale dell'asteroide
+        // così orbitano con esso
+        particles.name = "repulsorParticles"
+        
+        asteroid.addChild(particles)
+        
+        // Animazione di rotazione continua delle particelle per simulare orbita
+        let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 3.0)
+        particles.run(SKAction.repeatForever(rotate))
+    }
+    
     private func createAsteroidPath(radius: CGFloat) -> CGPath {
         let path = CGMutablePath()
         let sides = Int.random(in: 7...10)
@@ -2352,19 +2866,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let offsetY = cameraPos.y - centerY
         
         // Layer 1: Stelle più lontane - movimento molto lento (10% della camera)
-        starsLayer1.position = CGPoint(
+        starsLayer1?.position = CGPoint(
             x: centerX - offsetX * 0.1,
             y: centerY - offsetY * 0.1
         )
         
         // Layer 2: Stelle medie - movimento medio (20% della camera)
-        starsLayer2.position = CGPoint(
+        starsLayer2?.position = CGPoint(
             x: centerX - offsetX * 0.2,
             y: centerY - offsetY * 0.2
         )
         
         // Layer 3: Stelle più vicine - movimento veloce (35% della camera)
-        starsLayer3.position = CGPoint(
+        starsLayer3?.position = CGPoint(
             x: centerX - offsetX * 0.35,
             y: centerY - offsetY * 0.35
         )
@@ -2637,7 +3151,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let reflectedVelocityX = velocity.dx - 2 * dotProduct * normalX
                 let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
                 
-                let bounceFactor: CGFloat = 6.5  // Rimbalzo MOLTO più forte per i power-up (aumentato del 30%)
+                // Durante debris cleanup, aumenta il rimbalzo del 50%
+                var bounceFactor: CGFloat = 6.5  // Rimbalzo MOLTO più forte per i power-up (aumentato del 30%)
+                if debrisCleanupActive {
+                    bounceFactor *= 1.5  // +50% durante cleanup
+                }
                 powerupBody.velocity = CGVector(
                     dx: reflectedVelocityX * bounceFactor,
                     dy: reflectedVelocityY * bounceFactor
@@ -2705,7 +3223,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
         
         // Applica la velocità riflessa con boost per il rimbalzo
-        let bounceFactor: CGFloat = 1.3  // 30% più veloce dopo il rimbalzo
+        // Durante debris cleanup, aumenta il rimbalzo del 50%
+        var bounceFactor: CGFloat = 1.3  // 30% più veloce dopo il rimbalzo
+        if debrisCleanupActive {
+            bounceFactor *= 1.5  // +50% durante cleanup
+        }
         bouncingBody.velocity = CGVector(
             dx: reflectedVelocityX * bounceFactor,
             dy: reflectedVelocityY * bounceFactor
@@ -2745,7 +3267,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
         
         // Rimbalzo più forte per gli asteroidi
-        let bounceFactor: CGFloat = 1.5
+        // Durante debris cleanup, aumenta il rimbalzo del 50%
+        var bounceFactor: CGFloat = 1.5
+        if debrisCleanupActive {
+            bounceFactor *= 1.5  // +50% durante cleanup
+        }
         asteroidBody.velocity = CGVector(
             dx: reflectedVelocityX * bounceFactor,
             dy: reflectedVelocityY * bounceFactor
@@ -2787,6 +3313,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             } else if sizeData == .medium {
                 bounceFactor = 5.5  // Frammenti medi: boost intermedio
             }
+        }
+        
+        // Durante debris cleanup, aumenta ulteriormente il rimbalzo del 50%
+        if debrisCleanupActive {
+            bounceFactor *= 1.5  // +50% durante cleanup
         }
         
         asteroidBody.velocity = CGVector(
@@ -2922,6 +3453,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 case .square:
                     fragmentType = .square(nextSize)  // I frammenti square rimangono SQUARE
                     fragmentCount = 4  // SEMPRE 4 frammenti
+                case .repulsor:
+                    fragmentType = .repulsor(nextSize)  // I frammenti repulsor rimangono REPULSOR
+                    fragmentCount = Int.random(in: 3...4)  // 3-4 frammenti repulsor
                 default:
                     fragmentType = .normal(nextSize)  // Gli altri diventano normali
                     fragmentCount = Int.random(in: 2...3)
@@ -2982,6 +3516,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         score += points
         scoreLabel.text = "\(score)"
         
+        // Mostra label con i punti accanto all'asteroide
+        showPointsLabel(points: points, at: asteroid.position)
+        
         // L'astronave danneggia ma non distrugge completamente
         // Large diventa medium, medium diventa small, small viene distrutto
         if size == .small {
@@ -3026,6 +3563,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 case .square:
                     fragmentType = .square(nextSize)  // Square rimane SQUARE
                     fragmentCount = 4  // I quadrati fanno sempre 4 frammenti
+                case .repulsor:
+                    fragmentType = .repulsor(nextSize)  // Repulsor rimane REPULSOR
+                    fragmentCount = 3  // 3 frammenti repulsor
                 default:
                     fragmentType = .normal(nextSize)
                     fragmentCount = 2
@@ -3741,6 +4281,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Pausa la fisica
         physicsWorld.speed = 0
         
+        // PAUSA LA MUSICA
+        musicPlayerCurrent?.pause()
+        musicPlayerNext?.pause()
+        
         // Crea overlay scuro (coordinate relative alla camera)
         let overlay = SKNode()
         overlay.name = "pauseOverlay"
@@ -3810,6 +4354,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Ripristina la fisica
         physicsWorld.speed = 1
         
+        // RIPRENDI LA MUSICA
+        musicPlayerCurrent?.play()
+        musicPlayerNext?.play()
+        
         // Rimuovi overlay con animazione
         if let overlay = pauseOverlay {
             overlay.run(SKAction.sequence([
@@ -3823,23 +4371,39 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func quitToMenu() {
+        // FERMA TUTTA LA MUSICA prima di uscire
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = nil
+        musicPlayerCurrent?.stop()
+        musicPlayerCurrent = nil
+        musicPlayerNext?.stop()
+        musicPlayerNext = nil
+        
         // Transizione al menu principale
         let transition = SKTransition.fade(withDuration: 0.5)
         let menuScene = MainMenuScene(size: size)
         menuScene.scaleMode = scaleMode
         view?.presentScene(menuScene, transition: transition)
         
-        debugLog("🏠 Returning to main menu")
+        debugLog("🏠 Returning to main menu (music stopped)")
     }
     
     private func retryGame() {
+        // FERMA TUTTA LA MUSICA prima di riavviare
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = nil
+        musicPlayerCurrent?.stop()
+        musicPlayerCurrent = nil
+        musicPlayerNext?.stop()
+        musicPlayerNext = nil
+        
         // Riavvia il gioco
         let newGame = GameScene(size: size)
         newGame.scaleMode = scaleMode
         let transition = SKTransition.fade(withDuration: 0.5)
         view?.presentScene(newGame, transition: transition)
         
-        debugLog("🔄 Restarting game")
+        debugLog("🔄 Restarting game (music stopped)")
     }
     
     // MARK: - Planet Health System
@@ -3935,6 +4499,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func showInitialEntryScene() {
+        // FERMA TUTTA LA MUSICA prima di cambiare scena
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = nil
+        musicPlayerCurrent?.stop()
+        musicPlayerCurrent = nil
+        musicPlayerNext?.stop()
+        musicPlayerNext = nil
+        
         // Vai alla schermata inserimento iniziali
         let transition = SKTransition.fade(withDuration: 0.5)
         let initialEntryScene = InitialEntryScene(size: size, score: score, wave: currentWave)
