@@ -34,6 +34,22 @@ class HiScoreScene: SKScene {
     }
     
     private func setupUI() {
+        // Fondino scuro trasparente dietro il titolo e sottotitolo
+        let headerBackground = SKShapeNode(rectOf: CGSize(width: size.width, height: 160))
+        headerBackground.fillColor = UIColor.black.withAlphaComponent(0.8)
+        headerBackground.strokeColor = .clear
+        headerBackground.position = CGPoint(x: size.width / 2, y: size.height - 80)
+        headerBackground.zPosition = 9  // Sotto i testi ma sopra il contentNode
+        addChild(headerBackground)
+        
+        // Linea sfumatura in basso per separare meglio (opzionale)
+        let gradientLine = SKShapeNode(rectOf: CGSize(width: size.width, height: 3))
+        gradientLine.fillColor = UIColor.cyan.withAlphaComponent(0.4)
+        gradientLine.strokeColor = .clear
+        gradientLine.position = CGPoint(x: size.width / 2, y: size.height - 160)
+        gradientLine.zPosition = 9
+        addChild(gradientLine)
+        
         // Titolo "HIGH SCORES" stile arcade - FISSO
         let title = SKLabelNode(fontNamed: "AvenirNext-Bold")
         title.text = "HIGH SCORES"
