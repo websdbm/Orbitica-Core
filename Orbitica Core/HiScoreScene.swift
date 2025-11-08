@@ -34,21 +34,8 @@ class HiScoreScene: SKScene {
     }
     
     private func setupUI() {
-        // Fondino scuro trasparente dietro il titolo e sottotitolo
-        let headerBackground = SKShapeNode(rectOf: CGSize(width: size.width, height: 160))
-        headerBackground.fillColor = UIColor.black.withAlphaComponent(0.8)
-        headerBackground.strokeColor = .clear
-        headerBackground.position = CGPoint(x: size.width / 2, y: size.height - 80)
-        headerBackground.zPosition = 9  // Sotto i testi ma sopra il contentNode
-        addChild(headerBackground)
-        
-        // Linea sfumatura in basso per separare meglio (opzionale)
-        let gradientLine = SKShapeNode(rectOf: CGSize(width: size.width, height: 3))
-        gradientLine.fillColor = UIColor.cyan.withAlphaComponent(0.4)
-        gradientLine.strokeColor = .clear
-        gradientLine.position = CGPoint(x: size.width / 2, y: size.height - 160)
-        gradientLine.zPosition = 9
-        addChild(gradientLine)
+        // Fondino con gradiente sfumato (da opaco in alto a trasparente in basso)
+        createGradientBackground()
         
         // Titolo "HIGH SCORES" stile arcade - FISSO
         let title = SKLabelNode(fontNamed: "AvenirNext-Bold")
@@ -56,7 +43,7 @@ class HiScoreScene: SKScene {
         title.fontSize = 48
         title.fontColor = .yellow
         title.position = CGPoint(x: size.width / 2, y: size.height - 80)
-        title.zPosition = 10
+        title.zPosition = 101  // Sopra il background
         addChild(title)
         
         // Sottotitolo - FISSO
@@ -65,7 +52,7 @@ class HiScoreScene: SKScene {
         subtitle.fontSize = 20
         subtitle.fontColor = .cyan
         subtitle.position = CGPoint(x: size.width / 2, y: size.height - 120)
-        subtitle.zPosition = 10
+        subtitle.zPosition = 101  // Sopra il background
         addChild(subtitle)
         
         // Loading indicator
@@ -75,7 +62,7 @@ class HiScoreScene: SKScene {
         loadingLabel.fontColor = .white
         loadingLabel.position = CGPoint(x: size.width / 2, y: size.height / 2)
         loadingLabel.name = "loadingLabel"
-        loadingLabel.zPosition = 10
+        loadingLabel.zPosition = 50  // Sotto il background ma visibile
         addChild(loadingLabel)
         
         // Animazione blink loading
@@ -86,6 +73,41 @@ class HiScoreScene: SKScene {
         
         // Back button (freccia) - FISSO in alto a sinistra
         createBackButton()
+    }
+    
+    private func createGradientBackground() {
+        // Crea sfumatura con più strati sovrapposti
+        let totalHeight: CGFloat = 160
+        let numLayers = 20  // Numero di layer per creare il gradiente
+        let layerHeight = totalHeight / CGFloat(numLayers)
+        
+        for i in 0..<numLayers {
+            let layer = SKShapeNode(rectOf: CGSize(width: size.width, height: layerHeight + 1))  // +1 per evitare gap
+            layer.strokeColor = .clear
+            
+            // Calcola alpha: opaco in alto (1.0), trasparente in basso (0.0)
+            // I primi 3/4 sono completamente opachi, poi sfuma
+            let position = CGFloat(i) / CGFloat(numLayers)
+            let fadeStart: CGFloat = 0.75  // Inizia a sfumare dopo il 75%
+            
+            let alpha: CGFloat
+            if position < fadeStart {
+                alpha = 1.0  // Completamente opaco
+            } else {
+                // Sfuma gradualmente da 1.0 a 0.0
+                let fadeProgress = (position - fadeStart) / (1.0 - fadeStart)
+                alpha = 1.0 - fadeProgress
+            }
+            
+            layer.fillColor = UIColor.black.withAlphaComponent(alpha)
+            
+            // Posiziona il layer dall'alto verso il basso
+            let yPosition = size.height - (CGFloat(i) * layerHeight) - (layerHeight / 2)
+            layer.position = CGPoint(x: size.width / 2, y: yPosition)
+            layer.zPosition = 100
+            
+            addChild(layer)
+        }
     }
     
     private func createBackButton() {
@@ -187,7 +209,7 @@ class HiScoreScene: SKScene {
             emptyLabel.fontSize = 32
             emptyLabel.fontColor = .cyan
             emptyLabel.position = CGPoint(x: size.width / 2, y: size.height / 2)
-            emptyLabel.zPosition = 10
+            emptyLabel.zPosition = 50
             
             // Animazione blink
             let fadeOut = SKAction.fadeAlpha(to: 0.4, duration: 1.0)
@@ -219,7 +241,7 @@ class HiScoreScene: SKScene {
         separator.fillColor = UIColor.white.withAlphaComponent(0.3)
         separator.strokeColor = .clear
         separator.position = CGPoint(x: size.width / 2, y: startY + 15)
-        separator.zPosition = 10
+        separator.zPosition = 50
         contentNode.addChild(separator)
         
         // Scores - con più spazio dall'header
@@ -274,7 +296,7 @@ class HiScoreScene: SKScene {
         errorLabel.fontSize = 32
         errorLabel.fontColor = .red
         errorLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 30)
-        errorLabel.zPosition = 10
+        errorLabel.zPosition = 50
         contentNode.addChild(errorLabel)
         
         let detailLabel = SKLabelNode(fontNamed: "AvenirNext-Regular")
@@ -282,7 +304,7 @@ class HiScoreScene: SKScene {
         detailLabel.fontSize = 18
         detailLabel.fontColor = .white
         detailLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 10)
-        detailLabel.zPosition = 10
+        detailLabel.zPosition = 50
         contentNode.addChild(detailLabel)
         
         print("❌ HiScore Error: \(message)")
@@ -296,7 +318,7 @@ class HiScoreScene: SKScene {
         label.position = CGPoint(x: x, y: y)
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .center
-        label.zPosition = 10
+        label.zPosition = 50  // Sotto il background (100) ma sopra il nero (0)
         return label
     }
     
