@@ -109,6 +109,21 @@ struct WaveConfig {
     }
 }
 
+// MARK: - Space Environments
+enum SpaceEnvironment: CaseIterable {
+    case deepSpace   // Nero profondo con stelle twinkle e colorate
+    case nebula      // Nebulose colorate (blu/viola/rosa) con sfumature
+    case voidSpace   // Gradiente nero-blu con stelle luminose
+    
+    var name: String {
+        switch self {
+        case .deepSpace: return "Deep Space"
+        case .nebula: return "Nebula"
+        case .voidSpace: return "Void Space"
+        }
+    }
+}
+
 // MARK: - Game Scene
 class GameScene: SKScene, SKPhysicsContactDelegate {
     
@@ -126,12 +141,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var player: SKShapeNode!
     private var playerShield: SKShapeNode!  // Barriera circolare
     private var thrusterGlow: SKShapeNode!
+    private var brakeFlame: SKNode!  // Può essere SKEmitterNode o SKShapeNode
     
     // Planet & Atmosphere
     private var planet: SKShapeNode!
     private var atmosphere: SKShapeNode!
-    private var atmosphereRadius: CGFloat = 80
-    private let maxAtmosphereRadius: CGFloat = 80
+    private var atmosphereRadius: CGFloat = 96  // Aumentato del 20% (80 * 1.2)
+    private let maxAtmosphereRadius: CGFloat = 96  // Aumentato del 20% (80 * 1.2)
     private let minAtmosphereRadius: CGFloat = 40
     
     // Orbital Ring (grapple system) - 3 anelli concentrici
@@ -167,6 +183,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var starsLayer1: SKNode!  // Stelle più lontane (movimento lento)
     private var starsLayer2: SKNode!  // Stelle medie
     private var starsLayer3: SKNode!  // Stelle più vicine (movimento veloce)
+    private var nebulaLayer: SKNode?  // Layer per nebulose (opzionale)
+    private var currentEnvironment: SpaceEnvironment = .deepSpace
     
     // Play field size multiplier (3x larger than screen)
     private let playFieldMultiplier: CGFloat = 3.0
@@ -184,7 +202,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Controls
     private var joystick: JoystickNode!
     private var fireButton: FireButtonNode!
+    private var brakeButton: BrakeButtonNode!
     private var joystickDirection = CGVector.zero
+    private var isBraking = false
     private var isFiring = false
     private var lastFireTime: TimeInterval = 0
     private let fireRate: TimeInterval = 0.45  // Triplicato da 0.15 a 0.45 (1/3 della frequenza)
@@ -212,7 +232,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var asteroidsSpawnedInWave: Int = 0
     private var currentWaveConfig: WaveConfig?
     private var asteroidSpawnQueue: [AsteroidType] = []  // Coda di spawn
-    private var asteroidGravityMultiplier: CGFloat = 1.4375  // Base: 1.25 + 15% = 1.4375, aumenta del 5% per wave
+    private var asteroidGravityMultiplier: CGFloat = 1.25  // Base: 1.25 (ridotto da 1.4375), aumenta del 5% per wave
     
     // Collision tracking
     private var lastCollisionTime: TimeInterval = 0
@@ -222,6 +242,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Score
     private var score: Int = 0
     private var scoreLabel: SKLabelNode!
+    private var waveLabel: SKLabelNode!  // Wave corrente in alto al centro
     // Power-up HUD label (sotto il punteggio in alto a destra)
     private var powerupLabel: SKLabelNode!
 
@@ -275,6 +296,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupPlayer()
         setupControls()
         setupScore()
+        setupWaveLabel()
         setupPauseButton()
         
         // Avvia Wave 1
@@ -351,16 +373,197 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupParallaxBackground() {
-        // Crea 3 layer di stelle con parallasse
-        starsLayer1 = createStarsLayer(starCount: 80, alpha: 0.15, zPosition: -30)  // Lontane, quasi invisibili
-        starsLayer2 = createStarsLayer(starCount: 60, alpha: 0.25, zPosition: -20)  // Medie
-        starsLayer3 = createStarsLayer(starCount: 40, alpha: 0.35, zPosition: -10)  // Vicine, più visibili
+        // Inizia con un ambiente random
+        currentEnvironment = SpaceEnvironment.allCases.randomElement() ?? .deepSpace
+        applyEnvironment(currentEnvironment)
+        
+        debugLog("✅ Parallax background created - Environment: \(currentEnvironment.name)")
+    }
+    
+    private func applyEnvironment(_ environment: SpaceEnvironment) {
+        // Rimuovi layer esistenti
+        starsLayer1?.removeFromParent()
+        starsLayer2?.removeFromParent()
+        starsLayer3?.removeFromParent()
+        nebulaLayer?.removeFromParent()
+        
+        switch environment {
+        case .deepSpace:
+            setupDeepSpaceEnvironment()
+        case .nebula:
+            setupNebulaEnvironment()
+        case .voidSpace:
+            setupVoidSpaceEnvironment()
+        }
+        
+        currentEnvironment = environment
+    }
+    
+    private func setupDeepSpaceEnvironment() {
+        // Background nero profondo
+        backgroundColor = .black
+        
+        // Stelle di dimensioni variabili con colori
+        starsLayer1 = createDeepSpaceStars(starCount: 100, zPosition: -30, sizeRange: 0.8...1.5, alphaRange: 0.1...0.3)
+        starsLayer2 = createDeepSpaceStars(starCount: 70, zPosition: -20, sizeRange: 1.5...2.5, alphaRange: 0.3...0.5)
+        starsLayer3 = createDeepSpaceStars(starCount: 50, zPosition: -10, sizeRange: 2.0...3.5, alphaRange: 0.5...0.7)
+        
+        addChild(starsLayer1)
+        addChild(starsLayer2)
+        addChild(starsLayer3)
+    }
+    
+    private func setupNebulaEnvironment() {
+        // Background nero
+        backgroundColor = .black
+        
+        // Layer nebulosa dietro alle stelle
+        nebulaLayer = SKNode()
+        nebulaLayer!.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        nebulaLayer!.zPosition = -40
+        
+        // Crea 3-4 nebulose grandi e sfumate
+        let nebulaColors: [UIColor] = [
+            UIColor(red: 0.4, green: 0.2, blue: 0.8, alpha: 0.15),  // Viola
+            UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 0.12),  // Blu
+            UIColor(red: 0.8, green: 0.3, blue: 0.5, alpha: 0.10)   // Rosa
+        ]
+        
+        let areaWidth = size.width * playFieldMultiplier
+        let areaHeight = size.height * playFieldMultiplier
+        
+        for i in 0..<4 {
+            let x = CGFloat.random(in: -areaWidth/2...areaWidth/2)
+            let y = CGFloat.random(in: -areaHeight/2...areaHeight/2)
+            let nebulaSize = CGFloat.random(in: 400...800)
+            
+            let nebula = SKShapeNode(circleOfRadius: nebulaSize)
+            nebula.fillColor = nebulaColors[i % nebulaColors.count]
+            nebula.strokeColor = .clear
+            nebula.position = CGPoint(x: x, y: y)
+            nebula.alpha = 0.8
+            nebula.glowWidth = nebulaSize * 0.3
+            
+            // Animazione lenta di pulsazione
+            let pulseOut = SKAction.scale(to: 1.15, duration: Double.random(in: 8...12))
+            let pulseIn = SKAction.scale(to: 0.85, duration: Double.random(in: 8...12))
+            let pulse = SKAction.sequence([pulseOut, pulseIn])
+            nebula.run(SKAction.repeatForever(pulse))
+            
+            nebulaLayer!.addChild(nebula)
+        }
+        
+        addChild(nebulaLayer!)
+        
+        // Stelle normali sopra le nebulose
+        starsLayer1 = createStarsLayer(starCount: 60, alpha: 0.2, zPosition: -30)
+        starsLayer2 = createStarsLayer(starCount: 45, alpha: 0.3, zPosition: -20)
+        starsLayer3 = createStarsLayer(starCount: 30, alpha: 0.4, zPosition: -10)
+        
+        addChild(starsLayer1)
+        addChild(starsLayer2)
+        addChild(starsLayer3)
+    }
+    
+    private func setupVoidSpaceEnvironment() {
+        // Gradiente nero → blu scuro
+        let gradientTexture = createGradientTexture()
+        let background = SKSpriteNode(texture: gradientTexture)
+        background.size = CGSize(width: size.width, height: size.height)
+        background.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        background.zPosition = -50
+        
+        // Aggiungilo come child della scene, non del worldLayer
+        addChild(background)
+        
+        // Stelle più luminose e visibili
+        starsLayer1 = createStarsLayer(starCount: 70, alpha: 0.25, zPosition: -30)
+        starsLayer2 = createStarsLayer(starCount: 50, alpha: 0.4, zPosition: -20)
+        starsLayer3 = createStarsLayer(starCount: 35, alpha: 0.6, zPosition: -10)
         
         addChild(starsLayer1)
         addChild(starsLayer2)
         addChild(starsLayer3)
         
-        debugLog("✅ Parallax background created")
+        // Aggiungi alcune linee galattiche lontane
+        let galaxyLayer = SKNode()
+        galaxyLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        galaxyLayer.zPosition = -35
+        
+        for _ in 0..<3 {
+            let x = CGFloat.random(in: -size.width...size.width)
+            let y = CGFloat.random(in: -size.height...size.height)
+            let width = CGFloat.random(in: 200...400)
+            
+            let line = SKShapeNode(rectOf: CGSize(width: width, height: 2))
+            line.fillColor = UIColor.cyan.withAlphaComponent(0.15)
+            line.strokeColor = .clear
+            line.position = CGPoint(x: x, y: y)
+            line.zRotation = CGFloat.random(in: 0...(.pi * 2))
+            line.glowWidth = 2
+            
+            galaxyLayer.addChild(line)
+        }
+        
+        addChild(galaxyLayer)
+    }
+    
+    private func createGradientTexture() -> SKTexture {
+        let size = CGSize(width: 256, height: 256)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            let colors = [UIColor.black.cgColor, UIColor(red: 0.0, green: 0.05, blue: 0.15, alpha: 1.0).cgColor]
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0.0, 1.0])!
+            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
+        }
+        return SKTexture(image: image)
+    }
+    
+    private func createDeepSpaceStars(starCount: Int, zPosition: CGFloat, sizeRange: ClosedRange<CGFloat>, alphaRange: ClosedRange<CGFloat>) -> SKNode {
+        let layer = SKNode()
+        layer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        layer.zPosition = zPosition
+        
+        let areaWidth = size.width * playFieldMultiplier
+        let areaHeight = size.height * playFieldMultiplier
+        
+        for _ in 0..<starCount {
+            let x = CGFloat.random(in: -areaWidth/2...areaWidth/2)
+            let y = CGFloat.random(in: -areaHeight/2...areaHeight/2)
+            
+            let starSize = CGFloat.random(in: sizeRange)
+            let star = SKShapeNode(circleOfRadius: starSize)
+            
+            // Colori variati: principalmente bianche, alcune colorate
+            let colorChoice = Int.random(in: 0...10)
+            let baseAlpha = CGFloat.random(in: alphaRange)
+            
+            if colorChoice < 8 {
+                star.fillColor = UIColor.white.withAlphaComponent(baseAlpha)
+            } else if colorChoice == 8 {
+                star.fillColor = UIColor(red: 0.7, green: 0.8, blue: 1.0, alpha: baseAlpha)  // Blu
+            } else if colorChoice == 9 {
+                star.fillColor = UIColor(red: 1.0, green: 0.9, blue: 0.7, alpha: baseAlpha)  // Giallo
+            } else {
+                star.fillColor = UIColor(red: 1.0, green: 0.7, blue: 0.7, alpha: baseAlpha)  // Rosso
+            }
+            
+            star.strokeColor = .clear
+            star.position = CGPoint(x: x, y: y)
+            star.glowWidth = starSize * 0.5
+            
+            // Animazione twinkle random per alcune stelle
+            if Bool.random() && starSize > 1.5 {
+                let fadeOut = SKAction.fadeAlpha(to: baseAlpha * 0.3, duration: Double.random(in: 1.5...3.0))
+                let fadeIn = SKAction.fadeAlpha(to: baseAlpha, duration: Double.random(in: 1.5...3.0))
+                let twinkle = SKAction.sequence([fadeOut, fadeIn])
+                star.run(SKAction.repeatForever(twinkle))
+            }
+            
+            layer.addChild(star)
+        }
+        
+        return layer
     }
     
     private func createStarsLayer(starCount: Int, alpha: CGFloat, zPosition: CGFloat) -> SKNode {
@@ -572,6 +775,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         player.addChild(thrusterGlow)
         
+        // Fiamma frenata: fiamma conica che esce dalla punta (opposta al thruster)
+        createBrakeFlame()
+        
         // Scudo - barriera circolare attorno alla nave
         playerShield = SKShapeNode(circleOfRadius: 20)
         playerShield.fillColor = .clear
@@ -611,8 +817,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         hudLayer.addChild(joystick)
         
-        // Fire button - fisso in basso a destra (nell'HUD layer)
-        fireButton = FireButtonNode(radius: 60)
+        // Brake button - a sinistra del fire button (nell'HUD layer) - ridotto ulteriormente del 15%
+        brakeButton = BrakeButtonNode(radius: 36.1)  // 42.5 * 0.85 = 36.125
+        brakeButton.position = CGPoint(x: size.width - 240 - halfWidth, y: 120 - halfHeight)
+        brakeButton.zPosition = 1000
+        brakeButton.onPress = { [weak self] in
+            self?.isBraking = true
+        }
+        brakeButton.onRelease = { [weak self] in
+            self?.isBraking = false
+        }
+        hudLayer.addChild(brakeButton)
+        
+        // Fire button - fisso in basso a destra (nell'HUD layer) - ridotto ulteriormente del 15%
+        fireButton = FireButtonNode(radius: 43.35)  // 51 * 0.85 = 43.35
         fireButton.position = CGPoint(x: size.width - 120 - halfWidth, y: 120 - halfHeight)
         fireButton.zPosition = 1000
         fireButton.onPress = { [weak self] in
@@ -666,6 +884,36 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     hudLayer.addChild(powerupLabel)
         
         debugLog("✅ Score label created with font: \(fontName)")
+    }
+    
+    private func setupWaveLabel() {
+        // Wave label in alto al centro
+        let possibleFontNames = ["Orbitron", "Orbitron-Bold", "Orbitron-Regular", "OrbitronVariable", "AvenirNext-Bold"]
+        var fontName = "AvenirNext-Bold"
+        
+        for name in possibleFontNames {
+            if UIFont(name: name, size: 12) != nil {
+                fontName = name
+                break
+            }
+        }
+        
+        // Coordinate relative alla camera (centrata sullo schermo)
+        let halfWidth = size.width / 2
+        let halfHeight = size.height / 2
+        
+        waveLabel = SKLabelNode(fontNamed: fontName)
+        waveLabel.fontSize = 28
+        waveLabel.fontColor = UIColor.cyan.withAlphaComponent(0.9)
+        waveLabel.text = "WAVE 1"
+        waveLabel.horizontalAlignmentMode = .center
+        waveLabel.verticalAlignmentMode = .top
+        waveLabel.position = CGPoint(x: 0, y: size.height - 20 - halfHeight)  // Centro orizzontale, allineato in alto
+        waveLabel.zPosition = 1000
+        
+        hudLayer.addChild(waveLabel)
+        
+        debugLog("✅ Wave label created with font: \(fontName)")
     }
     
     private func setupPauseButton() {
@@ -838,34 +1086,120 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func updatePlayerMovement() {
         let magnitude = hypot(joystickDirection.dx, joystickDirection.dy)
         
-        if magnitude > 0.1 {
-            // FISICA: Applica forza proporzionale - PIÙ POTENTE
-            let thrustPower: CGFloat = 50.0  // Aumentato da 30.0
-            let forceX = joystickDirection.dx * thrustPower * magnitude
-            let forceY = joystickDirection.dy * thrustPower * magnitude
+        // Gestione frenata - FISICA CORRETTA: forza opposta nella direzione dove punta la nave
+        if isBraking {
+            // Calcola direzione opposta a dove punta la nave
+            // player.zRotation è l'angolo della nave (con offset di -π/2 per l'orientamento)
+            let shipAngle = player.zRotation + .pi / 2  // Riporta all'angolo effettivo
             
-            player.physicsBody?.applyForce(CGVector(dx: forceX, dy: forceY))
+            // Direzione opposta: aggiungi π radianti (180°)
+            let brakeAngle = shipAngle + .pi
             
-            // Orienta la nave nella direzione del movimento
-            let angle = atan2(joystickDirection.dy, joystickDirection.dx) - .pi / 2
-            player.zRotation = angle
+            // Applica forza nella direzione opposta (come un retrojet) - AUMENTATO DEL 15%
+            let brakePower: CGFloat = 69.0  // 60.0 * 1.15 = 69.0
+            let brakeForceX = cos(brakeAngle) * brakePower
+            let brakeForceY = sin(brakeAngle) * brakePower
             
-            // EFFETTO REATTORI: Glow che pulsa con l'intensità
-            thrusterGlow.alpha = 0.3 + (magnitude * 0.7)  // Da 0.3 a 1.0
-            thrusterGlow.setScale(0.5 + (magnitude * 1.0))  // Da 0.5 a 1.5
+            player.physicsBody?.applyForce(CGVector(dx: brakeForceX, dy: brakeForceY))
             
-            // Colore varia con intensità: da cyan a bianco
-            let intensity = magnitude
-            thrusterGlow.fillColor = SKColor(
-                red: 0.0 + intensity * 0.8,
-                green: 1.0,
-                blue: 1.0,
-                alpha: 1.0
-            )
+            // Attiva particelle di frenata
+            if let emitter = brakeFlame as? SKEmitterNode {
+                emitter.particleBirthRate = 150
+            }
+            
+            // Spegni motore principale
+            thrusterGlow.alpha = max(0, thrusterGlow.alpha - 0.1)
         } else {
-            // Nessuna spinta: spegni reattori con fade out
-            thrusterGlow.alpha = max(0, thrusterGlow.alpha - 0.05)
+            // Spegni particelle di frenata
+            if let emitter = brakeFlame as? SKEmitterNode {
+                emitter.particleBirthRate = 0
+            }
+            
+            if magnitude > 0.1 {
+                // FISICA: Applica forza proporzionale - RIDOTTO DEL 20%
+                let thrustPower: CGFloat = 116.0  // 145.0 * 0.8 = 116.0
+                let forceX = joystickDirection.dx * thrustPower * magnitude
+                let forceY = joystickDirection.dy * thrustPower * magnitude
+                
+                player.physicsBody?.applyForce(CGVector(dx: forceX, dy: forceY))
+                
+                // Orienta la nave nella direzione del movimento
+                let angle = atan2(joystickDirection.dy, joystickDirection.dx) - .pi / 2
+                player.zRotation = angle
+                
+                // EFFETTO REATTORI: Glow che pulsa con l'intensità
+                thrusterGlow.alpha = 0.3 + (magnitude * 0.7)  // Da 0.3 a 1.0
+                thrusterGlow.setScale(0.5 + (magnitude * 1.0))  // Da 0.5 a 1.5
+                
+                // Colore varia con intensità: da cyan a bianco
+                let intensity = magnitude
+                thrusterGlow.fillColor = SKColor(
+                    red: 0.0 + intensity * 0.8,
+                    green: 1.0,
+                    blue: 1.0,
+                    alpha: 1.0
+                )
+            } else {
+                // Nessuna spinta: spegni reattori con fade out
+                thrusterGlow.alpha = max(0, thrusterGlow.alpha - 0.05)
+            }
         }
+    }
+    
+    private func createBrakeFlame() {
+        // Crea sistema particellare come "soffio d'aria" dalla punta della nave
+        let particles = SKEmitterNode()
+        
+        // Posizione: davanti alla nave
+        particles.position = CGPoint(x: 0, y: 12)
+        
+        // Particelle molto piccole e veloci - USA LA TEXTURE GENERATA
+        particles.particleTexture = particleTexture
+        particles.particleBirthRate = 150  // Molte particelle
+        particles.numParticlesToEmit = 0  // Continuo
+        
+        // Dimensione piccola ma visibile
+        particles.particleSize = CGSize(width: 4, height: 4)
+        particles.particleScale = 0.5
+        particles.particleScaleRange = 0.3
+        particles.particleScaleSpeed = -1.0
+        
+        // Colore verde brillante (visibile)
+        particles.particleColor = UIColor(red: 0.3, green: 1.0, blue: 0.5, alpha: 1.0)
+        particles.particleColorBlendFactor = 1.0
+        particles.particleColorSequence = nil
+        
+        // Direzione: verso l'alto (davanti alla nave) - RELATIVO alla rotazione della nave
+        particles.emissionAngle = .pi / 2  // 90° (su in coordinate locali della nave)
+        particles.emissionAngleRange = .pi / 6  // ±30° di spread (più concentrato)
+        
+        // Velocità MOLTO alta per spruzzare con forza
+        particles.particleSpeed = 300  // Aumentato per effetto "alta pressione"
+        particles.particleSpeedRange = 50
+        
+        // Vita breve
+        particles.particleLifetime = 0.35
+        particles.particleLifetimeRange = 0.1
+        
+        // Alpha decay rapido
+        particles.particleAlpha = 1.0
+        particles.particleAlphaRange = 0.0
+        particles.particleAlphaSpeed = -3.5
+        
+        // Posizione iniziale concentrata (getto stretto)
+        particles.particlePositionRange = CGVector(dx: 3, dy: 1)
+        particles.xAcceleration = 0
+        particles.yAcceleration = 0
+        
+        particles.zPosition = 1  // Sopra la nave
+        // RIMANE nel sistema locale della nave (no targetNode)
+        // Questo fa sì che le particelle seguano la rotazione della nave al momento dell'emissione
+        
+        // Inizialmente spento
+        particles.particleBirthRate = 0
+        
+        brakeFlame = particles
+        player.addChild(brakeFlame)
     }
     
     private func updatePlayerShooting(_ currentTime: TimeInterval) {
@@ -1286,10 +1620,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         currentWave = wave
         isWaveActive = false  // Disattiva il gioco durante il messaggio
         
+        // Aggiorna il wave label in alto
+        waveLabel.text = "WAVE \(wave)"
+        
         // Aumenta la gravità degli asteroidi del 5% per ogni wave (dopo la prima)
         if wave > 1 {
             asteroidGravityMultiplier *= 1.05
             debugLog("🌍 Asteroid gravity increased to \(asteroidGravityMultiplier) for wave \(wave)")
+        }
+        
+        // Cambia ambiente spaziale randomicamente ad ogni wave
+        let newEnvironment = SpaceEnvironment.allCases.randomElement() ?? .deepSpace
+        if newEnvironment != currentEnvironment {
+            applyEnvironment(newEnvironment)
+            debugLog("🌌 Environment changed to: \(newEnvironment.name)")
         }
         
         // Avvia la musica per questa wave con crossfade
@@ -1788,7 +2132,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Calcola danno basato sul tipo di asteroide
             let asteroidBody = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA : contact.bodyB
-            var damageAmount: CGFloat = 2.66  // Danno base aumentato del 33% (era 2.0)
+            var damageAmount: CGFloat = 1.96  // Danno base ridotto ulteriormente (2.3 * 0.85 = 1.955 ≈ 1.96)
             
             if let asteroidNode = asteroidBody.node as? SKShapeNode,
                let asteroidType = asteroidNode.userData?["type"] as? AsteroidType {
@@ -1944,7 +2288,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let reflectedVelocityX = velocity.dx - 2 * dotProduct * normalX
                 let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
                 
-                let bounceFactor: CGFloat = 5.0  // Rimbalzo molto forte per i power-up
+                let bounceFactor: CGFloat = 6.5  // Rimbalzo MOLTO più forte per i power-up (aumentato del 30%)
                 powerupBody.velocity = CGVector(
                     dx: reflectedVelocityX * bounceFactor,
                     dy: reflectedVelocityY * bounceFactor
@@ -2459,17 +2803,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Non risolvere se gli oggetti si stanno già separando
         guard velAlongNormal < 0 else { return }
         
-        // Coefficiente di restituzione (bounciness) - dipende dalla dimensione dell'asteroide
-        var restitution: CGFloat = 0.7
+        // Coefficiente di restituzione (bounciness) - AUMENTATO per migliore rimbalzo giocatore
+        var restitution: CGFloat = 0.8  // Aumentato da 0.7
         
-        // Asteroidi più grandi hanno un rimbalzo più forte
+        // Asteroidi più grandi hanno un rimbalzo ancora più forte
         if let asteroidName = asteroid.name {
             if asteroidName.contains("large") {
-                restitution = 0.8
+                restitution = 0.9  // Aumentato da 0.8
             } else if asteroidName.contains("medium") {
-                restitution = 0.7
+                restitution = 0.8  // Aumentato da 0.7
             } else if asteroidName.contains("small") {
-                restitution = 0.6
+                restitution = 0.7  // Aumentato da 0.6
             }
         }
         
@@ -3222,5 +3566,78 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 debugLog("🎵 Music stopped")
             }
         }
+    }
+}
+
+// MARK: - Brake Button Node
+class BrakeButtonNode: SKNode {
+    private var baseNode: SKShapeNode!
+    private var isPressed = false
+    private var touchId: UITouch?
+    
+    var onPress: (() -> Void)?
+    var onRelease: (() -> Void)?
+    
+    init(radius: CGFloat) {
+        super.init()
+        
+        // Base circolare verde - SENZA BORDO E SENZA ICONA
+        baseNode = SKShapeNode(circleOfRadius: radius)
+        baseNode.fillColor = UIColor.green.withAlphaComponent(0.3)
+        baseNode.strokeColor = .clear  // Nessun bordo
+        baseNode.lineWidth = 0
+        baseNode.zPosition = 0
+        addChild(baseNode)
+        
+        // Nessuna icona - solo il cerchio verde
+        
+        isUserInteractionEnabled = true
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first, touchId == nil else { return }
+        let location = touch.location(in: self)
+        
+        if baseNode.contains(location) {
+            touchId = touch
+            isPressed = true
+            baseNode.fillColor = UIColor.green.withAlphaComponent(0.6)
+            baseNode.setScale(0.9)
+            onPress?()
+        }
+    }
+    
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touchId, touches.contains(touch) else { return }
+        let location = touch.location(in: self)
+        
+        if !baseNode.contains(location) && isPressed {
+            // Uscito dal pulsante
+            isPressed = false
+            baseNode.fillColor = UIColor.green.withAlphaComponent(0.3)
+            baseNode.setScale(1.0)
+            onRelease?()
+            touchId = nil
+        }
+    }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touchId, touches.contains(touch) else { return }
+        
+        if isPressed {
+            isPressed = false
+            baseNode.fillColor = UIColor.green.withAlphaComponent(0.3)
+            baseNode.setScale(1.0)
+            onRelease?()
+        }
+        touchId = nil
+    }
+    
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        touchesEnded(touches, with: event)
     }
 }

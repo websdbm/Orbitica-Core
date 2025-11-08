@@ -36,13 +36,13 @@ class InitialEntryScene: SKScene {
     }
     
     private func setupUI() {
-        // Titolo "NEW HIGH SCORE!"
+        // Titolo "NEW HIGH SCORE!" - RIDOTTO
         let title = SKLabelNode(fontNamed: "AvenirNext-Bold")
         title.text = "NEW HIGH SCORE!"
-        title.fontSize = 32
+        title.fontSize = 26  // Ridotto da 32
         title.fontColor = .yellow
-        title.position = CGPoint(x: size.width / 2, y: size.height - 70)
-        title.zPosition = 10
+        title.position = CGPoint(x: size.width / 2, y: size.height - 60)  // Più in basso
+        title.zPosition = 110
         addChild(title)
         
         // Animazione blink titolo
@@ -51,40 +51,40 @@ class InitialEntryScene: SKScene {
         let blink = SKAction.sequence([fadeOut, fadeIn])
         title.run(SKAction.repeatForever(blink))
         
-        // Score display
+        // Score display - RIDOTTO
         let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         scoreLabel.text = "SCORE: \(playerScore)"
-        scoreLabel.fontSize = 20
+        scoreLabel.fontSize = 18  // Ridotto da 20
         scoreLabel.fontColor = .cyan
-        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height - 110)
-        scoreLabel.zPosition = 10
+        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height - 90)  // Spaziatura ridotta
+        scoreLabel.zPosition = 110
         addChild(scoreLabel)
         
-        // Wave display
+        // Wave display - RIDOTTO
         let waveLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         waveLabel.text = "WAVE: \(playerWave)"
-        waveLabel.fontSize = 20
+        waveLabel.fontSize = 18  // Ridotto da 20
         waveLabel.fontColor = .white
-        waveLabel.position = CGPoint(x: size.width / 2, y: size.height - 135)
-        waveLabel.zPosition = 10
+        waveLabel.position = CGPoint(x: size.width / 2, y: size.height - 113)  // Spaziatura ridotta
+        waveLabel.zPosition = 110
         addChild(waveLabel)
         
-        // Istruzioni "ENTER YOUR INITIALS"
+        // Istruzioni "ENTER YOUR INITIALS" - RIDOTTO
         let instruction = SKLabelNode(fontNamed: "AvenirNext-Bold")
         instruction.text = "ENTER YOUR INITIALS"
-        instruction.fontSize = 22
+        instruction.fontSize = 18  // Ridotto da 22
         instruction.fontColor = .white
-        instruction.position = CGPoint(x: size.width / 2, y: size.height / 2 + 90)
-        instruction.zPosition = 10
+        instruction.position = CGPoint(x: size.width / 2, y: size.height / 2 + 70)  // Ridotto margine
+        instruction.zPosition = 110
         addChild(instruction)
         
-        // Istruzioni controllo
+        // Istruzioni controllo - RIDOTTO
         let controlHelp = SKLabelNode(fontNamed: "AvenirNext-Regular")
         controlHelp.text = "TAP ARROWS TO CHANGE • TAP LETTER TO SELECT"
-        controlHelp.fontSize = 11
+        controlHelp.fontSize = 10  // Ridotto da 11
         controlHelp.fontColor = .gray
-        controlHelp.position = CGPoint(x: size.width / 2, y: size.height / 2 + 65)
-        controlHelp.zPosition = 10
+        controlHelp.position = CGPoint(x: size.width / 2, y: size.height / 2 + 50)  // Ridotto margine
+        controlHelp.zPosition = 110
         addChild(controlHelp)
         
         // Initial entry boxes
@@ -98,19 +98,19 @@ class InitialEntryScene: SKScene {
     }
     
     private func setupInitialBoxes() {
-        let spacing: CGFloat = 60  // Più compatto
+        let spacing: CGFloat = 55  // ANCORA PIÙ compatto
         let startX = size.width / 2 - spacing
-        let y = size.height / 2 + 10
+        let y = size.height / 2 + 5  // Spostato leggermente più in basso
         
         for i in 0..<3 {
-            // Box più piccolo
-            let box = SKShapeNode(rectOf: CGSize(width: 50, height: 60), cornerRadius: 5)
+            // Box RIDOTTO
+            let box = SKShapeNode(rectOf: CGSize(width: 45, height: 55), cornerRadius: 5)  // Ridotto da 50x60
             box.fillColor = i == currentPosition ? UIColor.white.withAlphaComponent(0.2) : UIColor.white.withAlphaComponent(0.05)
             box.strokeColor = i == currentPosition ? .yellow : .white
             box.lineWidth = 2
             box.position = CGPoint(x: startX + CGFloat(i) * spacing, y: y)
             box.name = "box_\(i)"
-            box.zPosition = 5
+            box.zPosition = 105
             addChild(box)
             
             // Animazione pulsante per il box attivo
@@ -121,16 +121,16 @@ class InitialEntryScene: SKScene {
                 box.run(SKAction.repeatForever(pulse), withKey: "pulse")
             }
             
-            // Letter label più piccolo
+            // Letter label RIDOTTO
             let label = SKLabelNode(fontNamed: "Courier-Bold")
             label.text = currentInitials[i]
-            label.fontSize = 36
+            label.fontSize = 32  // Ridotto da 36
             label.fontColor = .white
-            label.position = CGPoint(x: startX + CGFloat(i) * spacing, y: y - 5)
+            label.position = CGPoint(x: startX + CGFloat(i) * spacing, y: y - 4)
             label.verticalAlignmentMode = .center
             label.horizontalAlignmentMode = .center
             label.name = "initial_\(i)"
-            label.zPosition = 10
+            label.zPosition = 110
             addChild(label)
             
             initialLabels.append(label)
@@ -140,8 +140,8 @@ class InitialEntryScene: SKScene {
     }
     
     private func createArrowButtons() {
-        let x = size.width / 2 + 140  // Più vicino
-        let y = size.height / 2 + 10
+        let x = size.width / 2 + 120  // ANCORA PIÙ vicino
+        let y = size.height / 2 + 5  // Allineato ai box
         
         // Up arrow
         let upButton = createArrowButton(direction: "▲", position: CGPoint(x: x, y: y + 30), name: "upButton")
@@ -153,17 +153,17 @@ class InitialEntryScene: SKScene {
     }
     
     private func createArrowButton(direction: String, position: CGPoint, name: String) -> SKShapeNode {
-        let button = SKShapeNode(circleOfRadius: 25)  // Più piccolo
+        let button = SKShapeNode(circleOfRadius: 22)  // RIDOTTO da 25
         button.fillColor = UIColor.white.withAlphaComponent(0.1)
         button.strokeColor = .white
         button.lineWidth = 2
         button.position = position
         button.name = name
-        button.zPosition = 10
+        button.zPosition = 110
         
         let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
         label.text = direction
-        label.fontSize = 24  // Più piccolo
+        label.fontSize = 20  // RIDOTTO da 24
         label.fontColor = .white
         label.verticalAlignmentMode = .center
         button.addChild(label)
@@ -172,17 +172,17 @@ class InitialEntryScene: SKScene {
     }
     
     private func createConfirmButton() {
-        let button = SKShapeNode(rectOf: CGSize(width: 180, height: 50), cornerRadius: 8)  // Più piccolo
+        let button = SKShapeNode(rectOf: CGSize(width: 150, height: 45), cornerRadius: 8)  // RIDOTTO da 180x50
         button.fillColor = UIColor.green.withAlphaComponent(0.2)
         button.strokeColor = .green
         button.lineWidth = 2
-        button.position = CGPoint(x: size.width / 2, y: 100)  // Più in basso
+        button.position = CGPoint(x: size.width / 2, y: 80)  // ANCORA PIÙ in basso
         button.name = "confirmButton"
-        button.zPosition = 10
+        button.zPosition = 110
         
         let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
         label.text = "CONFIRM"
-        label.fontSize = 24
+        label.fontSize = 20  // RIDOTTO da 24
         label.fontColor = .green
         label.verticalAlignmentMode = .center
         button.addChild(label)
@@ -200,7 +200,7 @@ class InitialEntryScene: SKScene {
         closeButton.lineWidth = 2
         closeButton.position = CGPoint(x: size.width - 40, y: size.height - 40)
         closeButton.name = "closeButton"
-        closeButton.zPosition = 10
+        closeButton.zPosition = 110
         
         let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
         label.text = "✕"

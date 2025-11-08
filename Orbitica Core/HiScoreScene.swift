@@ -104,7 +104,7 @@ class HiScoreScene: SKScene {
             // Posiziona il layer dall'alto verso il basso
             let yPosition = size.height - (CGFloat(i) * layerHeight) - (layerHeight / 2)
             layer.position = CGPoint(x: size.width / 2, y: yPosition)
-            layer.zPosition = 100
+            layer.zPosition = 50  // SOTTO le label (che sono a 101)
             
             addChild(layer)
         }
@@ -209,7 +209,7 @@ class HiScoreScene: SKScene {
             emptyLabel.fontSize = 32
             emptyLabel.fontColor = .cyan
             emptyLabel.position = CGPoint(x: size.width / 2, y: size.height / 2)
-            emptyLabel.zPosition = 50
+            emptyLabel.zPosition = 101  // Sopra il gradient
             
             // Animazione blink
             let fadeOut = SKAction.fadeAlpha(to: 0.4, duration: 1.0)
@@ -241,7 +241,7 @@ class HiScoreScene: SKScene {
         separator.fillColor = UIColor.white.withAlphaComponent(0.3)
         separator.strokeColor = .clear
         separator.position = CGPoint(x: size.width / 2, y: startY + 15)
-        separator.zPosition = 50
+        separator.zPosition = 101  // Sopra il gradient background
         contentNode.addChild(separator)
         
         // Scores - con più spazio dall'header
@@ -296,7 +296,7 @@ class HiScoreScene: SKScene {
         errorLabel.fontSize = 32
         errorLabel.fontColor = .red
         errorLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 30)
-        errorLabel.zPosition = 50
+        errorLabel.zPosition = 101  // Sopra il gradient
         contentNode.addChild(errorLabel)
         
         let detailLabel = SKLabelNode(fontNamed: "AvenirNext-Regular")
@@ -318,7 +318,7 @@ class HiScoreScene: SKScene {
         label.position = CGPoint(x: x, y: y)
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .center
-        label.zPosition = 50  // Sotto il background (100) ma sopra il nero (0)
+        label.zPosition = 101  // Sopra il gradient background (100)
         return label
     }
     
