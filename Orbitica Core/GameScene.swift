@@ -1093,6 +1093,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // ===== ANELLO 1 (interno) - Magenta/Rosa =====
         // Appare da wave 2
         if currentWave >= 2 {
+            let isEllipse = currentWave >= 7  // Diventa ellisse dalla wave 7
             createGravityWellRing(
                 radius: orbitalRing1Radius,
                 ringNode: &orbitalRing1,
@@ -1100,14 +1101,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 velocity: orbitalBaseAngularVelocity,
                 centerPosition: centerPosition,
                 name: "orbitalRing1",
-                isEllipse: false,
-                ellipseRatio: 1.0
+                isEllipse: isEllipse,
+                ellipseRatio: 1.5
             )
+            orbitalRing1IsEllipse = isEllipse
         }
         
         // ===== ANELLO 2 (medio) - Cyan brillante =====
         // Appare da wave 3
         if currentWave >= 3 {
+            let isEllipse = currentWave >= 6  // Diventa ellisse dalla wave 6
             createGravityWellRing(
                 radius: orbitalRing2Radius,
                 ringNode: &orbitalRing2,
@@ -1115,9 +1118,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 velocity: orbitalBaseAngularVelocity * 1.33,
                 centerPosition: centerPosition,
                 name: "orbitalRing2",
-                isEllipse: false,
-                ellipseRatio: 1.0
+                isEllipse: isEllipse,
+                ellipseRatio: 1.5
             )
+            orbitalRing2IsEllipse = isEllipse
         }
         
         // ===== ANELLO 3 (esterno) - Viola/Lavanda =====
@@ -1134,10 +1138,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 isEllipse: isEllipse,
                 ellipseRatio: 1.5  // Ellisse orizzontale
             )
+            orbitalRing3IsEllipse = isEllipse
         }
         
         let numRings = currentWave >= 4 ? 3 : (currentWave >= 3 ? 2 : (currentWave >= 2 ? 1 : 0))
-        debugLog("✅ Gravity Well rings created: \(numRings) active (wave \(currentWave))")
+        debugLog("✅ Gravity Well rings created: \(numRings) active (wave \(currentWave)), ellipses: R1=\(orbitalRing1IsEllipse), R2=\(orbitalRing2IsEllipse), R3=\(orbitalRing3IsEllipse)")
     }
     
     // Aggiorna gli anelli orbitali quando si passa a una nuova wave
@@ -1146,6 +1151,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Aggiungi l'anello 1 se siamo alla wave 2+ e non esiste ancora
         if currentWave >= 2 && orbitalRing1 == nil {
+            let isEllipse = currentWave >= 7  // Diventa ellisse dalla wave 7
             createGravityWellRing(
                 radius: orbitalRing1Radius,
                 ringNode: &orbitalRing1,
@@ -1153,19 +1159,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 velocity: orbitalBaseAngularVelocity,
                 centerPosition: centerPosition,
                 name: "orbitalRing1",
-                isEllipse: false,
-                ellipseRatio: 1.0
+                isEllipse: isEllipse,
+                ellipseRatio: 1.5
             )
+            
+            // Imposta lo stato ellisse
+            orbitalRing1IsEllipse = isEllipse
             
             if let ring1Container = worldLayer.childNode(withName: "orbitalRing1") {
                 activateRingAnimations(for: ring1Container)
             }
             
-            debugLog("✨ Orbital ring 1 added and activated for wave \(currentWave)")
+            debugLog("✨ Orbital ring 1 added and activated for wave \(currentWave), isEllipse: \(isEllipse)")
         }
         
         // Aggiungi l'anello 2 se siamo alla wave 3+ e non esiste ancora
         if currentWave >= 3 && orbitalRing2 == nil {
+            let isEllipse = currentWave >= 6  // Diventa ellisse dalla wave 6
             createGravityWellRing(
                 radius: orbitalRing2Radius,
                 ringNode: &orbitalRing2,
@@ -1173,19 +1183,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 velocity: orbitalBaseAngularVelocity * 1.33,
                 centerPosition: centerPosition,
                 name: "orbitalRing2",
-                isEllipse: currentWave >= 6,  // Diventa ellisse dalla wave 6
+                isEllipse: isEllipse,
                 ellipseRatio: 1.5
             )
+            
+            // Imposta lo stato ellisse
+            orbitalRing2IsEllipse = isEllipse
             
             if let ring2Container = worldLayer.childNode(withName: "orbitalRing2") {
                 activateRingAnimations(for: ring2Container)
             }
             
-            debugLog("✨ Orbital ring 2 added and activated for wave \(currentWave)")
+            debugLog("✨ Orbital ring 2 added and activated for wave \(currentWave), isEllipse: \(isEllipse)")
         }
         
         // Aggiungi l'anello 3 se siamo alla wave 4+ e non esiste ancora
         if currentWave >= 4 && orbitalRing3 == nil {
+            let isEllipse = currentWave >= 5  // Diventa ellisse dalla wave 5
             createGravityWellRing(
                 radius: orbitalRing3Radius,
                 ringNode: &orbitalRing3,
@@ -1193,15 +1207,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 velocity: orbitalBaseAngularVelocity * 1.77,
                 centerPosition: centerPosition,
                 name: "orbitalRing3",
-                isEllipse: currentWave >= 5,  // Diventa ellisse dalla wave 5
+                isEllipse: isEllipse,
                 ellipseRatio: 1.5
             )
+            
+            // Imposta lo stato ellisse
+            orbitalRing3IsEllipse = isEllipse
             
             if let ring3Container = worldLayer.childNode(withName: "orbitalRing3") {
                 activateRingAnimations(for: ring3Container)
             }
             
-            debugLog("✨ Orbital ring 3 added and activated for wave \(currentWave)")
+            debugLog("✨ Orbital ring 3 added and activated for wave \(currentWave), isEllipse: \(isEllipse)")
         }
         
         // Trasforma gli anelli in ellissi quando necessario
