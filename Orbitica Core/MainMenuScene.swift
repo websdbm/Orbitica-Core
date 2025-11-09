@@ -247,23 +247,23 @@ class MainMenuScene: SKScene {
             }
         }
         
-        // Bottone rettangolare con bordo - ridotto del 20%
-        let buttonWidth: CGFloat = 200  // Era 250, ora 200 (20% in meno)
-        let buttonHeight: CGFloat = 56   // Era 70, ora 56 (20% in meno)
+        // Bottone rettangolare con bordo - ulteriormente ridotto
+        let buttonWidth: CGFloat = 180  // Ridotto da 200 a 180
+        let buttonHeight: CGFloat = 48   // Ridotto da 56 a 48
         
         playButton = SKShapeNode(rectOf: CGSize(width: buttonWidth, height: buttonHeight), cornerRadius: 10)
         playButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         playButton.strokeColor = .white
         playButton.lineWidth = 3
-        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 40)  // Più distante dal titolo
+        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60)  // Ancora più distante dal titolo
         playButton.zPosition = 10
         playButton.name = "playButton"
         addChild(playButton)
         
-        // Label del bottone - ridotta del 20%
+        // Label del bottone - ridotta ulteriormente
         playButtonLabel = SKLabelNode(fontNamed: fontName)
         playButtonLabel.text = "PLAY NOW"
-        playButtonLabel.fontSize = 26  // Era 32, ora 26 (circa 20% in meno)
+        playButtonLabel.fontSize = 22  // Ridotto da 26 a 22
         playButtonLabel.fontColor = .white
         playButtonLabel.verticalAlignmentMode = .center
         playButtonLabel.position = .zero
@@ -299,23 +299,23 @@ class MainMenuScene: SKScene {
             }
         }
         
-        // Bottone HI-SCORE sotto PLAY - ridotto del 20%
-        let buttonWidth: CGFloat = 200  // Era 250, ora 200 (20% in meno)
-        let buttonHeight: CGFloat = 56   // Era 70, ora 56 (20% in meno)
+        // Bottone HI-SCORE sotto PLAY - ulteriormente ridotto
+        let buttonWidth: CGFloat = 180  // Ridotto da 200 a 180
+        let buttonHeight: CGFloat = 48   // Ridotto da 56 a 48
         
         hiScoreButton = SKShapeNode(rectOf: CGSize(width: buttonWidth, height: buttonHeight), cornerRadius: 10)
         hiScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.1)
         hiScoreButton.strokeColor = .yellow
         hiScoreButton.lineWidth = 3
-        hiScoreButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 130)  // Più distanziato dal PLAY
+        hiScoreButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 140)  // Più distanziato dal PLAY
         hiScoreButton.zPosition = 10
         hiScoreButton.name = "hiScoreButton"
         addChild(hiScoreButton)
         
-        // Label del bottone - ridotta del 20%
+        // Label del bottone - ridotta ulteriormente
         hiScoreButtonLabel = SKLabelNode(fontNamed: fontName)
         hiScoreButtonLabel.text = "HI-SCORE"
-        hiScoreButtonLabel.fontSize = 26  // Era 32, ora 26 (circa 20% in meno)
+        hiScoreButtonLabel.fontSize = 22  // Ridotto da 26 a 22
         hiScoreButtonLabel.fontColor = .yellow
         hiScoreButtonLabel.verticalAlignmentMode = .center
         hiScoreButtonLabel.position = .zero

@@ -4075,19 +4075,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let reflectedVelocityX = velocity.dx - 2 * dotProduct * normalX
         let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
         
-        // Rimbalzo molto più forte per gli asteroidi
+        // Rimbalzo molto più forte per gli asteroidi - aumentato per evitare rimbalzi multipli
         // Durante debris cleanup, aumenta ulteriormente il rimbalzo
-        var bounceFactor: CGFloat = 2.5  // Aumentato da 1.5 a 2.5 per rimbalzo più energico
+        var bounceFactor: CGFloat = 3.5  // Aumentato da 2.5 a 3.5 per rimbalzo più deciso
         if debrisCleanupActive {
-            bounceFactor *= 2.0  // Aumentato da 1.5x a 2.0x durante cleanup (totale 5.0x)
+            bounceFactor *= 2.0  // Durante cleanup (totale 7.0x)
         }
         asteroidBody.velocity = CGVector(
             dx: reflectedVelocityX * bounceFactor,
             dy: reflectedVelocityY * bounceFactor
         )
         
-        // Sposta l'asteroide fuori dall'atmosfera
-        let pushDistance: CGFloat = 10
+        // Sposta l'asteroide molto più lontano dall'atmosfera per evitare rimbalzi multipli
+        let pushDistance: CGFloat = 25  // Aumentato da 10 a 25
         asteroid.position.x += normalX * pushDistance
         asteroid.position.y += normalY * pushDistance
     }
