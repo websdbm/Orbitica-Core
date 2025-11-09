@@ -6,6 +6,7 @@
 //
 
 import SpriteKit
+import AVFoundation
 
 class DebugScene: SKScene {
     
@@ -14,8 +15,15 @@ class DebugScene: SKScene {
     private var waveLabel: SKLabelNode!
     private var playButton: SKShapeNode!
     
+    // Debouncing per evitare tap multipli
+    private var lastTouchTime: TimeInterval = 0
+    private let touchDebounceInterval: TimeInterval = 0.2  // 200ms tra tap
+    
     override func didMove(to view: SKView) {
         backgroundColor = .black
+        
+        // FERMA la musica del menu principale
+        stopMenuMusic()
         
         // Titolo
         let title = SKLabelNode(fontNamed: "AvenirNext-Bold")
@@ -138,6 +146,14 @@ class DebugScene: SKScene {
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
+        
+        // Debouncing: ignora tap troppo ravvicinati
+        let currentTime = CACurrentMediaTime()
+        guard currentTime - lastTouchTime >= touchDebounceInterval else {
+            return
+        }
+        lastTouchTime = currentTime
+        
         let location = touch.location(in: self)
         let touchedNodes = nodes(at: location)
         
@@ -154,18 +170,35 @@ class DebugScene: SKScene {
                 if selectedWave > 1 {
                     selectedWave -= 1
                     waveLabel.text = "\(selectedWave)"
+                    // Feedback visivo
+                    animateButtonPress(node: node.name == "decrement" ? node : node.parent!)
                 }
             } else if node.name == "increment" || node.parent?.name == "increment" {
                 // Incrementa wave (massimo 20)
                 if selectedWave < 20 {
                     selectedWave += 1
                     waveLabel.text = "\(selectedWave)"
+                    // Feedback visivo
+                    animateButtonPress(node: node.name == "increment" ? node : node.parent!)
                 }
             } else if node.name == "play" || node.parent?.name == "play" {
                 // Avvia il gioco dalla wave selezionata
                 startGameAtWave(selectedWave)
             }
         }
+    }
+    
+    private func animateButtonPress(node: SKNode) {
+        let scale = SKAction.sequence([
+            SKAction.scale(to: 0.9, duration: 0.1),
+            SKAction.scale(to: 1.0, duration: 0.1)
+        ])
+        node.run(scale)
+    }
+    
+    private func stopMenuMusic() {
+        // Ferma tutti i player audio attivi
+        NotificationCenter.default.post(name: NSNotification.Name("StopMenuMusic"), object: nil)
     }
     
     private func startGameAtWave(_ wave: Int) {

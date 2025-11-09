@@ -41,6 +41,18 @@ class MainMenuScene: SKScene {
         
         // Avvia musica di sottofondo
         setupBackgroundMusic()
+        
+        // Listener per fermare la musica quando richiesto
+        NotificationCenter.default.addObserver(self, selector: #selector(stopMusic), name: NSNotification.Name("StopMenuMusic"), object: nil)
+    }
+    
+    @objc private func stopMusic() {
+        musicPlayer?.stop()
+        musicPlayer = nil
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func setupOverlay() {

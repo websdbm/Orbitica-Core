@@ -1224,13 +1224,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let ringContainer = worldLayer.childNode(withName: ringName) else { return }
         guard let mainRing = ringContainer.childNode(withName: "mainRing") as? SKShapeNode else { return }
         
+        // FERMA la rotazione del container (le ellissi non devono ruotare)
+        ringContainer.removeAction(forKey: "ringRotation")
+        ringContainer.zRotation = 0  // Reset della rotazione
+        
         // Crea path ellittico
         let ellipsePath = CGMutablePath()
         ellipsePath.addEllipse(in: CGRect(x: -radius * 1.5, y: -radius, width: radius * 3.0, height: radius * 2.0))
         
         mainRing.path = ellipsePath
         
-        debugLog("🔄 Ring \(ringName) transformed to ellipse")
+        // Anima le particelle lungo il percorso ellittico
+        let velocity: CGFloat
+        switch ringName {
+        case "orbitalRing1": velocity = orbitalBaseAngularVelocity
+        case "orbitalRing2": velocity = orbitalBaseAngularVelocity * 1.33
+        case "orbitalRing3": velocity = orbitalBaseAngularVelocity * 1.77
+        default: velocity = orbitalBaseAngularVelocity
+        }
+        
+        animateEllipseParticles(container: ringContainer, radius: radius, ellipseRatio: ellipseRatio, velocity: velocity, numParticles: 4)
+        
+        debugLog("🔄 Ring \(ringName) transformed to ellipse - rotation stopped, particles animated")
     }
     
     // Attiva tutte le animazioni di un anello orbitale
@@ -1339,7 +1354,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         for i in 0..<numParticles {
             let angle = (CGFloat(i) / CGFloat(numParticles)) * .pi * 2
             let particleNode = SKNode()
-            particleNode.position = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
+            
+            // Per ellissi: usa posizione ellittica, per cerchi: posizione circolare
+            if isEllipse {
+                let a = radius * ellipseRatio  // semiasse maggiore
+                let b = radius                  // semiasse minore
+                particleNode.position = CGPoint(x: cos(angle) * a, y: sin(angle) * b)
+            } else {
+                particleNode.position = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
+            }
             particleNode.name = "rotationParticle\(i)"
             
             // Particella bianca piccola
@@ -1353,10 +1376,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             ringContainer.addChild(particleNode)
         }
         
-        // 5️⃣ ROTAZIONE DELL'INTERO CONTAINER (particelle orbitano seguendo direzione)
-        let rotateDuration = 1.0 / velocity * 2 * .pi
-        let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotateDuration)
-        ringContainer.run(SKAction.repeatForever(rotateAction))
+        // 5️⃣ ROTAZIONE DELL'INTERO CONTAINER - SOLO PER CERCHI, NON PER ELLISSI
+        if !isEllipse {
+            let rotateDuration = 1.0 / velocity * 2 * .pi
+            let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotateDuration)
+            ringContainer.run(SKAction.repeatForever(rotateAction), withKey: "ringRotation")
+        } else {
+            // Per ellissi: anima le particelle lungo il percorso ellittico
+            animateEllipseParticles(container: ringContainer, radius: radius, ellipseRatio: ellipseRatio, velocity: velocity, numParticles: numParticles)
+        }
         
         worldLayer.addChild(ringContainer)
         ringNode = mainRingShape  // Riferimento all'anello principale per interazioni
@@ -1364,6 +1392,36 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Salva il riferimento al container per poterlo controllare
         ringContainer.userData = NSMutableDictionary()
         ringContainer.userData?["ringContainer"] = true
+    }
+    
+    // Anima le particelle lungo un percorso ellittico (senza ruotare l'ellisse stessa)
+    private func animateEllipseParticles(container: SKNode, radius: CGFloat, ellipseRatio: CGFloat, velocity: CGFloat, numParticles: Int) {
+        let a = radius * ellipseRatio  // semiasse maggiore (orizzontale)
+        let b = radius                  // semiasse minore (verticale)
+        
+        // Durata completa dell'orbita
+        let orbitDuration = 1.0 / velocity * 2 * .pi
+        
+        for i in 0..<numParticles {
+            guard let particleNode = container.childNode(withName: "rotationParticle\(i)") else { continue }
+            
+            // Offset iniziale per distribuire le particelle
+            let startAngle = (CGFloat(i) / CGFloat(numParticles)) * .pi * 2
+            
+            // Crea un'azione personalizzata che muove la particella lungo l'ellisse
+            let moveAction = SKAction.customAction(withDuration: orbitDuration) { node, elapsedTime in
+                let progress = elapsedTime / orbitDuration
+                let currentAngle = startAngle + (progress * .pi * 2)
+                
+                // Posizione parametrica sull'ellisse
+                let x = cos(currentAngle) * a
+                let y = sin(currentAngle) * b
+                
+                node.position = CGPoint(x: x, y: y)
+            }
+            
+            particleNode.run(SKAction.repeatForever(moveAction))
+        }
     }
     
     private func createRadialPulse(at container: SKNode, radius: CGFloat, color: UIColor) {
