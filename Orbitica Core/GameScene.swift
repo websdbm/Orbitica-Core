@@ -1256,6 +1256,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
+    // Calcola la distanza minima di un punto da un'ellisse
+    private func distanceFromEllipse(point: CGPoint, center: CGPoint, baseRadius: CGFloat, isEllipse: Bool) -> CGFloat {
+        guard isEllipse else {
+            // Per cerchi: distanza standard
+            let dx = point.x - center.x
+            let dy = point.y - center.y
+            let distanceFromCenter = sqrt(dx * dx + dy * dy)
+            return abs(distanceFromCenter - baseRadius)
+        }
+        
+        // Per ellisse: trova il punto più vicino sul percorso ellittico
+        let a = baseRadius * ellipseRatio  // semiasse maggiore (orizzontale)
+        let b = baseRadius                  // semiasse minore (verticale)
+        
+        let dx = point.x - center.x
+        let dy = point.y - center.y
+        let angle = atan2(dy, dx)
+        
+        // Punto sull'ellisse a questo angolo
+        let ellipseX = center.x + cos(angle) * a
+        let ellipseY = center.y + sin(angle) * b
+        
+        // Distanza dal punto sull'ellisse
+        let distX = point.x - ellipseX
+        let distY = point.y - ellipseY
+        return sqrt(distX * distX + distY * distY)
+    }
+    
     // Calcola il moltiplicatore di velocità in base alla posizione sull'ellisse
     // Ritorna 2.0 al perielio (raggio minimo) e 1.0 all'afelio (raggio massimo)
     private func getEllipseSpeedMultiplier(angle: CGFloat, baseRadius: CGFloat, isEllipse: Bool) -> CGFloat {
@@ -2839,8 +2867,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Anello 1 disponibile dalla wave 2
         if currentWave >= 2 {
+            let distance1 = distanceFromEllipse(point: player.position, center: planetCenter, baseRadius: orbitalRing1Radius, isEllipse: orbitalRing1IsEllipse)
             availableRings.append((
-                distance: abs(distanceFromCenter - orbitalRing1Radius),
+                distance: distance1,
                 ring: 1,
                 radius: orbitalRing1Radius,
                 velocity: orbitalBaseAngularVelocity,
@@ -2850,8 +2879,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Anello 2 dalla wave 3
         if currentWave >= 3 {
+            let distance2 = distanceFromEllipse(point: player.position, center: planetCenter, baseRadius: orbitalRing2Radius, isEllipse: orbitalRing2IsEllipse)
             availableRings.append((
-                distance: abs(distanceFromCenter - orbitalRing2Radius),
+                distance: distance2,
                 ring: 2,
                 radius: orbitalRing2Radius,
                 velocity: orbitalBaseAngularVelocity * 1.33,
@@ -2861,8 +2891,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Anello 3 dalla wave 4
         if currentWave >= 4 {
+            let distance3 = distanceFromEllipse(point: player.position, center: planetCenter, baseRadius: orbitalRing3Radius, isEllipse: orbitalRing3IsEllipse)
             availableRings.append((
-                distance: abs(distanceFromCenter - orbitalRing3Radius),
+                distance: distance3,
                 ring: 3,
                 radius: orbitalRing3Radius,
                 velocity: orbitalBaseAngularVelocity * 1.77,
