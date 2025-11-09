@@ -1111,6 +1111,37 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         debugLog("✅ Gravity Well rings created: \(numRings) active (wave \(currentWave))")
     }
     
+    // Aggiorna gli anelli orbitali quando si passa a una nuova wave
+    private func updateOrbitalRingsForWave() {
+        let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
+        
+        // Aggiungi l'anello 2 se siamo alla wave 2+ e non esiste ancora
+        if currentWave >= 2 && orbitalRing2 == nil {
+            createGravityWellRing(
+                radius: orbitalRing2Radius,
+                ringNode: &orbitalRing2,
+                color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0),  // Cyan
+                velocity: orbitalBaseAngularVelocity * 1.33,
+                centerPosition: centerPosition,
+                name: "orbitalRing2"
+            )
+            debugLog("✨ Orbital ring 2 added for wave \(currentWave)")
+        }
+        
+        // Aggiungi l'anello 3 se siamo alla wave 3+ e non esiste ancora
+        if currentWave >= 3 && orbitalRing3 == nil {
+            createGravityWellRing(
+                radius: orbitalRing3Radius,
+                ringNode: &orbitalRing3,
+                color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0),  // Viola
+                velocity: orbitalBaseAngularVelocity * 1.77,
+                centerPosition: centerPosition,
+                name: "orbitalRing3"
+            )
+            debugLog("✨ Orbital ring 3 added for wave \(currentWave)")
+        }
+    }
+    
     private func createGravityWellRing(radius: CGFloat, ringNode: inout SKShapeNode?, color: UIColor, velocity: CGFloat, centerPosition: CGPoint, name: String) {
         // Container per tutti gli elementi del ring
         let ringContainer = SKNode()
@@ -2860,6 +2891,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             applyEnvironment(newEnvironment)
             debugLog("🌌 Environment changed to: \(newEnvironment.name)")
         }
+        
+        // Aggiorna gli anelli orbitali in base alla wave corrente
+        updateOrbitalRingsForWave()
         
         // Avvia la musica per questa wave con crossfade
         // Randomizza tra tutte le tracce disponibili
@@ -4793,37 +4827,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard roll < 25 else { return }
 
         // DISTRIBUZIONE PROGRESSIVA power-up per wave
-        // Wave 1: V (Vulcan), B (Bullet) - offensivi base
-        // Wave 2: V, B, A (Attack)
-        // Wave 3: V, B, A, G (Gravity)
-        // Wave 4: V, B, A, G, W (Wave)
-        // Wave 5+: V, B, A, G, W, M (Missile)
+        // Wave 1: V (Vulcan), B (Bullet), A (Atmosphere)
+        // Wave 2: V, B, A, G (Gravity)
+        // Wave 3: V, B, A, G, W (Wave)
+        // Wave 4+: V, B, A, G, W, M (Missile)
         // TUTTI CON PESO 1 = PROBABILITÀ PARIFICATE
         
         var weightedTypes: [(String, UIColor, Int)] = []
         
-        // Power-up base (wave 1+)
-        weightedTypes.append(("V", UIColor.orange, 1))  // Vulcan - sempre disponibile
-        weightedTypes.append(("B", UIColor.green, 1))   // Bullet - sempre disponibile
+        // Power-up base (wave 1+) - sempre disponibili
+        weightedTypes.append(("V", UIColor.orange, 1))  // Vulcan - fuoco rapido
+        weightedTypes.append(("B", UIColor.green, 1))   // Bullet - munizioni potenziate
+        weightedTypes.append(("A", UIColor.cyan, 1))    // Atmosphere - ricarica atmosfera
         
-        // Wave 2+: aggiungi Attack
+        // Wave 2+: aggiungi Gravity
         if currentWave >= 2 {
-            weightedTypes.append(("A", UIColor.cyan, 1))  // Attack
+            weightedTypes.append(("G", UIColor.gray, 1))  // Gravity - attira asteroidi
         }
         
-        // Wave 3+: aggiungi Gravity
+        // Wave 3+: aggiungi Wave
         if currentWave >= 3 {
-            weightedTypes.append(("G", UIColor.gray, 1))  // Gravity (peso 1)
+            weightedTypes.append(("W", UIColor.purple, 1))  // Wave - esplosione scudo
         }
         
-        // Wave 4+: aggiungi Wave
+        // Wave 4+: aggiungi Missile
         if currentWave >= 4 {
-            weightedTypes.append(("W", UIColor.purple, 1))  // Wave (peso 1)
-        }
-        
-        // Wave 5+: aggiungi Missile
-        if currentWave >= 5 {
-            weightedTypes.append(("M", UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0), 1))  // Missile (peso 1)
+            weightedTypes.append(("M", UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0), 1))  // Missile - homing ad area
         }
         
         // Calcola il totale dei pesi
