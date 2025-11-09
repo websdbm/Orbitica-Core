@@ -194,7 +194,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var orbitalRing2IsEllipse: Bool = false
     private var orbitalRing3IsEllipse: Bool = false
     private let ellipseRatio: CGFloat = 1.5  // Ratio dell'ellisse (larghezza/altezza)
-    private let orbitalGrappleThreshold: CGFloat = 8    // distanza per aggancio
+    private let orbitalGrappleThreshold: CGFloat = 15    // distanza per aggancio (aumentata da 8 per ellissi)
     private let orbitalDetachForce: CGFloat = 80        // forza necessaria per sganciarsi (ridotta da 200)
     private var isGrappledToOrbit: Bool = false
     private var orbitalGrappleStrength: CGFloat = 0.0   // 0.0 = libero, 1.0 = completamente agganciato
@@ -2951,7 +2951,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if !isGrappledToOrbit || currentOrbitalRing != closestRing {
                 isGrappledToOrbit = true
                 currentOrbitalRing = closestRing
-                debugLog("🔗 Grappling to orbital ring \(closestRing)...")
+                let isEllipse = (closestRing == 1 && orbitalRing1IsEllipse) ||
+                               (closestRing == 2 && orbitalRing2IsEllipse) ||
+                               (closestRing == 3 && orbitalRing3IsEllipse)
+                debugLog("🔗 Grappling to orbital ring \(closestRing), isEllipse: \(isEllipse), distance: \(Int(distanceFromRing))")
             }
             
             // Controlla se il giocatore sta spingendo forte (tentativo di sgancio)
@@ -3106,9 +3109,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             
             // RIDOTTO: Interpola più dolcemente - NON fermare mai il player
+            // Per ellissi: interpolazione ancora più debole perché il percorso varia
             let currentX = player.position.x
             let currentY = player.position.y
-            let positionInterpolation = orbitalGrappleStrength * 0.15  // MOLTO ridotto - era 0.3
+            let baseInterpolation = isEllipseRing ? 0.08 : 0.15  // Ellisse: metà della forza
+            let positionInterpolation = orbitalGrappleStrength * baseInterpolation
             let newX = currentX + (targetX - currentX) * positionInterpolation
             let newY = currentY + (targetY - currentY) * positionInterpolation
             
