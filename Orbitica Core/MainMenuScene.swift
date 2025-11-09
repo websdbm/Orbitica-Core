@@ -6,6 +6,7 @@
 //
 
 import SpriteKit
+import AVFoundation
 
 class MainMenuScene: SKScene {
     
@@ -20,6 +21,10 @@ class MainMenuScene: SKScene {
     private var hiScoreButtonLabel: SKLabelNode!
     private var debugButton: SKShapeNode?
     
+    // Music player per sottofondo
+    private var musicPlayer: AVAudioPlayer?
+    private var isFadingOut = false
+    
     override func didMove(to view: SKView) {
         backgroundColor = .black
         
@@ -33,6 +38,9 @@ class MainMenuScene: SKScene {
         if debugButtonEnabled {
             setupDebugButton()
         }
+        
+        // Avvia musica di sottofondo
+        setupBackgroundMusic()
     }
     
     private func setupOverlay() {
@@ -44,6 +52,25 @@ class MainMenuScene: SKScene {
     }
     
     private func setupBackground() {
+        // BACKGROUND RANDOMICO: sceglie casualmente tra gli sfondi disponibili
+        let backgroundTypes = ["asteroidBelt", "deepSpace", "nebula", "voidSpace"]
+        let chosenBackground = backgroundTypes.randomElement() ?? "asteroidBelt"
+        
+        switch chosenBackground {
+        case "asteroidBelt":
+            setupAsteroidBeltBackground()
+        case "deepSpace":
+            setupDeepSpaceBackground()
+        case "nebula":
+            setupNebulaBackground()
+        case "voidSpace":
+            setupVoidSpaceBackground()
+        default:
+            setupAsteroidBeltBackground()
+        }
+    }
+    
+    private func setupAsteroidBeltBackground() {
         // BACKGROUND ASTEROID BELT: grigio-marrone scuro
         backgroundColor = UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1.0)
         
@@ -328,6 +355,156 @@ class MainMenuScene: SKScene {
         }
     }
     
+    // MARK: - Altri sfondi
+    
+    private func setupDeepSpaceBackground() {
+        backgroundColor = UIColor(red: 0.01, green: 0.01, blue: 0.03, alpha: 1.0)
+        
+        // Stelle abbondanti
+        for _ in 0..<120 {
+            let starSize = CGFloat.random(in: 0.8...2.5)
+            let star = SKShapeNode(circleOfRadius: starSize)
+            star.fillColor = UIColor(white: CGFloat.random(in: 0.7...1.0), alpha: CGFloat.random(in: 0.4...0.9))
+            star.strokeColor = .clear
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            star.zPosition = -40
+            addChild(star)
+            
+            if Bool.random() {
+                let fadeOut = SKAction.fadeAlpha(to: 0.2, duration: Double.random(in: 1...2.5))
+                let fadeIn = SKAction.fadeAlpha(to: star.alpha, duration: Double.random(in: 1...2.5))
+                let twinkle = SKAction.sequence([fadeOut, fadeIn])
+                star.run(SKAction.repeatForever(twinkle))
+            }
+        }
+    }
+    
+    private func setupNebulaBackground() {
+        backgroundColor = UIColor(red: 0.05, green: 0.02, blue: 0.08, alpha: 1.0)
+        
+        // Nebulose viola/blu
+        for _ in 0..<8 {
+            let nebulaSize = CGFloat.random(in: 150...300)
+            let nebula = SKShapeNode(circleOfRadius: nebulaSize)
+            nebula.fillColor = UIColor(
+                red: CGFloat.random(in: 0.2...0.4),
+                green: CGFloat.random(in: 0.1...0.3),
+                blue: CGFloat.random(in: 0.4...0.6),
+                alpha: CGFloat.random(in: 0.08...0.15)
+            )
+            nebula.strokeColor = .clear
+            nebula.position = CGPoint(
+                x: CGFloat.random(in: -100...size.width + 100),
+                y: CGFloat.random(in: -100...size.height + 100)
+            )
+            nebula.zPosition = -60
+            addChild(nebula)
+        }
+        
+        // Stelle
+        for _ in 0..<60 {
+            let starSize = CGFloat.random(in: 1...2)
+            let star = SKShapeNode(circleOfRadius: starSize)
+            star.fillColor = UIColor(white: CGFloat.random(in: 0.6...0.9), alpha: CGFloat.random(in: 0.3...0.6))
+            star.strokeColor = .clear
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            star.zPosition = -40
+            addChild(star)
+        }
+    }
+    
+    private func setupVoidSpaceBackground() {
+        backgroundColor = UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0)
+        
+        // Pochissime stelle distanti
+        for _ in 0..<40 {
+            let starSize = CGFloat.random(in: 0.8...1.5)
+            let star = SKShapeNode(circleOfRadius: starSize)
+            star.fillColor = UIColor(white: CGFloat.random(in: 0.5...0.7), alpha: CGFloat.random(in: 0.2...0.4))
+            star.strokeColor = .clear
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            star.zPosition = -40
+            addChild(star)
+        }
+    }
+    
+    // MARK: - Musica
+    
+    private func setupBackgroundMusic() {
+        guard let url = Bundle.main.url(forResource: "temp2", withExtension: "m4a") else {
+            print("⚠️ Menu music file not found: temp2.m4a")
+            return
+        }
+        
+        do {
+            musicPlayer = try AVAudioPlayer(contentsOf: url)
+            musicPlayer?.numberOfLoops = -1  // Loop infinito
+            musicPlayer?.volume = 0.0
+            musicPlayer?.prepareToPlay()
+            musicPlayer?.play()
+            
+            // Fade in veloce
+            fadeInMusic()
+        } catch {
+            print("❌ Error loading menu music: \(error.localizedDescription)")
+        }
+    }
+    
+    private func fadeInMusic() {
+        guard let player = musicPlayer else { return }
+        
+        let fadeInDuration: TimeInterval = 0.4  // 400ms
+        let steps = 20
+        let stepDuration = fadeInDuration / Double(steps)
+        let volumeIncrement: Float = 0.6 / Float(steps)  // Volume target 0.6
+        
+        var currentStep = 0
+        Timer.scheduledTimer(withTimeInterval: stepDuration, repeats: true) { timer in
+            currentStep += 1
+            player.volume = min(0.6, Float(currentStep) * volumeIncrement)
+            
+            if currentStep >= steps {
+                timer.invalidate()
+            }
+        }
+    }
+    
+    private func fadeOutMusic(completion: @escaping () -> Void) {
+        guard let player = musicPlayer, !isFadingOut else {
+            completion()
+            return
+        }
+        
+        isFadingOut = true
+        let fadeOutDuration: TimeInterval = 0.4  // 400ms
+        let steps = 20
+        let stepDuration = fadeOutDuration / Double(steps)
+        let startVolume = player.volume
+        let volumeDecrement = startVolume / Float(steps)
+        
+        var currentStep = 0
+        Timer.scheduledTimer(withTimeInterval: stepDuration, repeats: true) { [weak self] timer in
+            currentStep += 1
+            player.volume = max(0.0, startVolume - (Float(currentStep) * volumeDecrement))
+            
+            if currentStep >= steps {
+                timer.invalidate()
+                player.stop()
+                self?.isFadingOut = false
+                completion()
+            }
+        }
+    }
+    
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
@@ -352,12 +529,12 @@ class MainMenuScene: SKScene {
         playButton.fillColor = UIColor.white.withAlphaComponent(0.5)
         playButtonLabel.fontColor = .black
         
-        // Transizione alla GameScene
-        let transition = SKTransition.fade(withDuration: 0.5)
-        let gameScene = GameScene(size: size)
-        gameScene.scaleMode = .aspectFill
-        
-        run(SKAction.wait(forDuration: 0.2)) {
+        // Fade out musica, poi transizione
+        fadeOutMusic { [weak self] in
+            guard let self = self else { return }
+            let transition = SKTransition.fade(withDuration: 0.5)
+            let gameScene = GameScene(size: self.size)
+            gameScene.scaleMode = .aspectFill
             self.view?.presentScene(gameScene, transition: transition)
         }
     }
@@ -367,21 +544,24 @@ class MainMenuScene: SKScene {
         hiScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.5)
         hiScoreButtonLabel.fontColor = .black
         
-        // Transizione alla HiScoreScene
-        let transition = SKTransition.fade(withDuration: 0.5)
-        let hiScoreScene = HiScoreScene(size: size)
-        hiScoreScene.scaleMode = scaleMode
-        
-        run(SKAction.wait(forDuration: 0.2)) {
+        // Fade out musica, poi transizione
+        fadeOutMusic { [weak self] in
+            guard let self = self else { return }
+            let transition = SKTransition.fade(withDuration: 0.5)
+            let hiScoreScene = HiScoreScene(size: self.size)
+            hiScoreScene.scaleMode = self.scaleMode
             self.view?.presentScene(hiScoreScene, transition: transition)
         }
     }
     
     private func showDebugScene() {
-        // Transizione alla DebugScene
-        let transition = SKTransition.fade(withDuration: 0.5)
-        let debugScene = DebugScene(size: size)
-        debugScene.scaleMode = .aspectFill
-        view?.presentScene(debugScene, transition: transition)
+        // Fade out musica, poi transizione
+        fadeOutMusic { [weak self] in
+            guard let self = self else { return }
+            let transition = SKTransition.fade(withDuration: 0.5)
+            let debugScene = DebugScene(size: self.size)
+            debugScene.scaleMode = .aspectFill
+            self.view?.presentScene(debugScene, transition: transition)
+        }
     }
 }
