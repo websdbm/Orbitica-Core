@@ -25,8 +25,8 @@ class GameViewController: UIViewController {
                 sceneSize = viewSize
             }
             
-            // Mostra prima il MainMenu invece di GameScene
-            let scene = MainMenuScene(size: sceneSize)
+            // Mostra prima la LoadingScene con background asteroid belt
+            let scene = LoadingScene(size: sceneSize)
             scene.scaleMode = .aspectFill
             
             // Present the scene
