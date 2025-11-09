@@ -135,12 +135,20 @@ enum SpaceEnvironment: CaseIterable {
     case deepSpace   // Nero profondo con stelle twinkle e colorate
     case nebula      // Nebulose colorate (blu/viola/rosa) con sfumature
     case voidSpace   // Gradiente nero-blu con stelle luminose
+    case redGiant    // Stella rossa gigante con atmosfera calda
+    case asteroidBelt // Campo di asteroidi distanti
+    case binaryStars // Sistema binario con due stelle
+    case ionStorm    // Tempesta di ioni elettrica
     
     var name: String {
         switch self {
         case .deepSpace: return "Deep Space"
         case .nebula: return "Nebula"
         case .voidSpace: return "Void Space"
+        case .redGiant: return "Red Giant"
+        case .asteroidBelt: return "Asteroid Belt"
+        case .binaryStars: return "Binary Stars"
+        case .ionStorm: return "Ion Storm"
         }
     }
 }
@@ -293,7 +301,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var atmosphereActive: Bool = false
     private var gravityActive: Bool = false  // Nuovo: Gravity power-up
     private var waveBlastActive: Bool = false  // Nuovo: Wave Blast power-up
+    private var missileActive: Bool = false  // Nuovo: Missile homing
     private var activePowerupEndTime: TimeInterval = 0
+    private var missiles: [SKNode] = []  // Array per tracciare tutti i missili attivi
     
     // Pause system
     private var isGamePaused: Bool = false
@@ -441,6 +451,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             setupNebulaEnvironment()
         case .voidSpace:
             setupVoidSpaceEnvironment()
+        case .redGiant:
+            setupRedGiantEnvironment()
+        case .asteroidBelt:
+            setupAsteroidBeltEnvironment()
+        case .binaryStars:
+            setupBinaryStarsEnvironment()
+        case .ionStorm:
+            setupIonStormEnvironment()
         }
         
         currentEnvironment = environment
@@ -556,6 +574,325 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         worldLayer.addChild(galaxyLayer)
+    }
+    
+    private func setupRedGiantEnvironment() {
+        // Gradiente rosso-arancio scuro
+        let gradientTexture = createRedGiantGradientTexture()
+        let background = SKSpriteNode(texture: gradientTexture)
+        let fieldWidth = size.width * playFieldMultiplier
+        let fieldHeight = size.height * playFieldMultiplier
+        background.size = CGSize(width: fieldWidth, height: fieldHeight)
+        background.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        background.zPosition = -50
+        worldLayer.addChild(background)
+        
+        // Particelle di plasma fluttuanti
+        let plasmaLayer = SKNode()
+        plasmaLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        plasmaLayer.zPosition = -35
+        
+        for _ in 0..<12 {
+            let x = CGFloat.random(in: -fieldWidth/2...fieldWidth/2)
+            let y = CGFloat.random(in: -fieldHeight/2...fieldHeight/2)
+            let size = CGFloat.random(in: CGFloat(60)...CGFloat(140))
+            
+            let plasma = SKShapeNode(circleOfRadius: size)
+            plasma.fillColor = UIColor(red: 0.9, green: CGFloat.random(in: 0.3...0.5), blue: 0.1, alpha: CGFloat.random(in: 0.08...0.15))
+            plasma.strokeColor = .clear
+            plasma.position = CGPoint(x: x, y: y)
+            plasma.glowWidth = size * 0.4
+            
+            // Movimento lento casuale
+            let moveX = CGFloat.random(in: -50...50)
+            let moveY = CGFloat.random(in: -50...50)
+            let moveDuration = Double.random(in: 15...25)
+            let moveAction = SKAction.moveBy(x: moveX, y: moveY, duration: moveDuration)
+            let moveBack = SKAction.moveBy(x: -moveX, y: -moveY, duration: moveDuration)
+            plasma.run(SKAction.repeatForever(SKAction.sequence([moveAction, moveBack])))
+            
+            // Pulsazione
+            let pulse = SKAction.sequence([
+                SKAction.scale(to: 1.2, duration: Double.random(in: 4...6)),
+                SKAction.scale(to: 0.8, duration: Double.random(in: 4...6))
+            ])
+            plasma.run(SKAction.repeatForever(pulse))
+            
+            plasmaLayer.addChild(plasma)
+        }
+        worldLayer.addChild(plasmaLayer)
+        
+        // Stelle dorate/arancioni
+        starsLayer1 = createColoredStarsLayer(starCount: 50, color: UIColor(red: 1.0, green: 0.8, blue: 0.4, alpha: 0.2), zPosition: -30)
+        starsLayer2 = createColoredStarsLayer(starCount: 35, color: UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 0.3), zPosition: -20)
+        starsLayer3 = createColoredStarsLayer(starCount: 25, color: UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 0.4), zPosition: -10)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+        if let layer3 = starsLayer3 { addChild(layer3) }
+    }
+    
+    private func setupAsteroidBeltEnvironment() {
+        // Background grigio-marrone scuro
+        backgroundColor = UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1.0)
+        
+        let fieldWidth = size.width * playFieldMultiplier
+        let fieldHeight = size.height * playFieldMultiplier
+        
+        // Polvere spaziale sottile
+        let dustLayer = SKNode()
+        dustLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        dustLayer.zPosition = -40
+        
+        for _ in 0..<20 {
+            let x = CGFloat.random(in: -fieldWidth/2...fieldWidth/2)
+            let y = CGFloat.random(in: -fieldHeight/2...fieldHeight/2)
+            let width = CGFloat.random(in: CGFloat(150)...CGFloat(350))
+            let height = CGFloat.random(in: CGFloat(80)...CGFloat(150))
+            
+            let dust = SKShapeNode(ellipseOf: CGSize(width: width, height: height))
+            dust.fillColor = UIColor(red: 0.3, green: 0.25, blue: 0.2, alpha: 0.05)
+            dust.strokeColor = .clear
+            dust.position = CGPoint(x: x, y: y)
+            dust.zRotation = CGFloat.random(in: 0...(.pi * 2))
+            
+            dustLayer.addChild(dust)
+        }
+        worldLayer.addChild(dustLayer)
+        
+        // Sagome di asteroidi distanti
+        let asteroidSilhouetteLayer = SKNode()
+        asteroidSilhouetteLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        asteroidSilhouetteLayer.zPosition = -35
+        
+        for _ in 0..<15 {
+            let x = CGFloat.random(in: -fieldWidth/2...fieldWidth/2)
+            let y = CGFloat.random(in: -fieldHeight/2...fieldHeight/2)
+            let size = CGFloat.random(in: CGFloat(20)...CGFloat(60))
+            
+            let sides = Int.random(in: 5...8)
+            let asteroid = SKShapeNode(circleOfRadius: size)
+            asteroid.path = createIrregularPolygonPath(radius: size, sides: sides)
+            asteroid.fillColor = UIColor(white: 0.15, alpha: CGFloat.random(in: 0.1...0.2))
+            asteroid.strokeColor = .clear
+            asteroid.position = CGPoint(x: x, y: y)
+            
+            asteroidSilhouetteLayer.addChild(asteroid)
+        }
+        worldLayer.addChild(asteroidSilhouetteLayer)
+        
+        // Stelle bianco-grigio opache
+        starsLayer1 = createColoredStarsLayer(starCount: 40, color: UIColor(white: 0.6, alpha: 0.15), zPosition: -30)
+        starsLayer2 = createColoredStarsLayer(starCount: 30, color: UIColor(white: 0.7, alpha: 0.2), zPosition: -20)
+        starsLayer3 = createColoredStarsLayer(starCount: 20, color: UIColor(white: 0.8, alpha: 0.25), zPosition: -10)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+        if let layer3 = starsLayer3 { addChild(layer3) }
+    }
+    
+    private func setupBinaryStarsEnvironment() {
+        // Background nero
+        backgroundColor = .black
+        
+        let fieldWidth = size.width * playFieldMultiplier
+        let fieldHeight = size.height * playFieldMultiplier
+        
+        // Due sorgenti luminose: blu a sinistra, gialla a destra
+        let lightLayer = SKNode()
+        lightLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        lightLayer.zPosition = -45
+        
+        // Stella blu (sinistra)
+        let blueGlow = SKShapeNode(circleOfRadius: 400)
+        blueGlow.fillColor = UIColor(red: 0.3, green: 0.5, blue: 0.9, alpha: 0.08)
+        blueGlow.strokeColor = .clear
+        blueGlow.position = CGPoint(x: -fieldWidth/3, y: 0)
+        blueGlow.glowWidth = 200
+        lightLayer.addChild(blueGlow)
+        
+        // Stella gialla (destra)
+        let yellowGlow = SKShapeNode(circleOfRadius: 400)
+        yellowGlow.fillColor = UIColor(red: 0.9, green: 0.8, blue: 0.3, alpha: 0.08)
+        yellowGlow.strokeColor = .clear
+        yellowGlow.position = CGPoint(x: fieldWidth/3, y: 0)
+        yellowGlow.glowWidth = 200
+        lightLayer.addChild(yellowGlow)
+        
+        worldLayer.addChild(lightLayer)
+        
+        // Fasci di luce sottili
+        let beamLayer = SKNode()
+        beamLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        beamLayer.zPosition = -40
+        
+        for _ in 0..<6 {
+            let startX = CGFloat.random(in: -fieldWidth/2...fieldWidth/2)
+            let startY = CGFloat.random(in: -fieldHeight/2...fieldHeight/2)
+            let length = CGFloat.random(in: CGFloat(300)...CGFloat(600))
+            
+            let beam = SKShapeNode(rectOf: CGSize(width: length, height: 1))
+            beam.fillColor = UIColor(white: 1.0, alpha: 0.03)
+            beam.strokeColor = .clear
+            beam.position = CGPoint(x: startX, y: startY)
+            beam.zRotation = CGFloat.random(in: 0...(.pi * 2))
+            beam.glowWidth = 1
+            
+            beamLayer.addChild(beam)
+        }
+        worldLayer.addChild(beamLayer)
+        
+        // Stelle alternate blu/gialle
+        starsLayer1 = createBinaryStarsLayer(starCount: 50, zPosition: -30)
+        starsLayer2 = createBinaryStarsLayer(starCount: 35, zPosition: -20)
+        starsLayer3 = createBinaryStarsLayer(starCount: 25, zPosition: -10)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+        if let layer3 = starsLayer3 { addChild(layer3) }
+    }
+    
+    private func setupIonStormEnvironment() {
+        // Background nero-viola pulsante
+        backgroundColor = UIColor(red: 0.05, green: 0.0, blue: 0.15, alpha: 1.0)
+        
+        let fieldWidth = size.width * playFieldMultiplier
+        let fieldHeight = size.height * playFieldMultiplier
+        
+        // Particelle luminose verde/ciano scintillanti
+        let ionLayer = SKNode()
+        ionLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        ionLayer.zPosition = -35
+        
+        for _ in 0..<80 {
+            let x = CGFloat.random(in: -fieldWidth/2...fieldWidth/2)
+            let y = CGFloat.random(in: -fieldHeight/2...fieldHeight/2)
+            let size = CGFloat.random(in: CGFloat(1.5)...CGFloat(4))
+            
+            let ion = SKShapeNode(circleOfRadius: size)
+            let useGreen = Bool.random()
+            ion.fillColor = useGreen ? UIColor(red: 0.2, green: 0.9, blue: 0.6, alpha: 0.6) : UIColor(red: 0.2, green: 0.8, blue: 0.9, alpha: 0.6)
+            ion.strokeColor = .clear
+            ion.position = CGPoint(x: x, y: y)
+            ion.glowWidth = size * 2
+            
+            // Scintillio rapido
+            let fadeOut = SKAction.fadeAlpha(to: 0.1, duration: Double.random(in: 0.3...0.8))
+            let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: Double.random(in: 0.3...0.8))
+            let sparkle = SKAction.sequence([fadeOut, fadeIn])
+            ion.run(SKAction.repeatForever(sparkle))
+            
+            ionLayer.addChild(ion)
+        }
+        worldLayer.addChild(ionLayer)
+        
+        // Fulmini elettrici occasionali (gestiti in update)
+        
+        // Stelle normali con glow intenso
+        starsLayer1 = createColoredStarsLayer(starCount: 30, color: UIColor(white: 0.9, alpha: 0.3), zPosition: -30)
+        starsLayer2 = createColoredStarsLayer(starCount: 20, color: UIColor(white: 0.95, alpha: 0.4), zPosition: -20)
+        starsLayer3 = createColoredStarsLayer(starCount: 15, color: UIColor(white: 1.0, alpha: 0.5), zPosition: -10)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+        if let layer3 = starsLayer3 { addChild(layer3) }
+    }
+    
+    private func createRedGiantGradientTexture() -> SKTexture {
+        let size = CGSize(width: 256, height: 256)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            let colors = [UIColor(red: 0.15, green: 0.05, blue: 0.0, alpha: 1.0).cgColor, UIColor(red: 0.25, green: 0.08, blue: 0.05, alpha: 1.0).cgColor]
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0.0, 1.0])!
+            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
+        }
+        return SKTexture(image: image)
+    }
+    
+    private func createIrregularPolygonPath(radius: CGFloat, sides: Int) -> CGPath {
+        let path = CGMutablePath()
+        let angleStep = (2.0 * .pi) / CGFloat(sides)
+        
+        for i in 0..<sides {
+            let angle = angleStep * CGFloat(i)
+            let randomRadius = radius * CGFloat.random(in: 0.7...1.3)
+            let x = randomRadius * cos(angle)
+            let y = randomRadius * sin(angle)
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+    
+    private func createColoredStarsLayer(starCount: Int, color: UIColor, zPosition: CGFloat) -> SKNode {
+        let layer = SKNode()
+        layer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        layer.zPosition = zPosition
+        
+        let areaWidth = size.width * playFieldMultiplier
+        let areaHeight = size.height * playFieldMultiplier
+        
+        for _ in 0..<starCount {
+            let x = CGFloat.random(in: -areaWidth/2...areaWidth/2)
+            let y = CGFloat.random(in: -areaHeight/2...areaHeight/2)
+            let starSize = CGFloat.random(in: CGFloat(1)...CGFloat(3))
+            
+            let star = SKShapeNode(circleOfRadius: starSize)
+            star.fillColor = color
+            star.strokeColor = .clear
+            star.position = CGPoint(x: x, y: y)
+            star.glowWidth = starSize * 0.8
+            
+            // Twinkle occasionale
+            if Bool.random() {
+                let fadeOut = SKAction.fadeAlpha(to: 0.3, duration: Double.random(in: 1...2))
+                let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: Double.random(in: 1...2))
+                let twinkle = SKAction.sequence([fadeOut, fadeIn])
+                star.run(SKAction.repeatForever(twinkle))
+            }
+            
+            layer.addChild(star)
+        }
+        
+        return layer
+    }
+    
+    private func createBinaryStarsLayer(starCount: Int, zPosition: CGFloat) -> SKNode {
+        let layer = SKNode()
+        layer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        layer.zPosition = zPosition
+        
+        let areaWidth = size.width * playFieldMultiplier
+        let areaHeight = size.height * playFieldMultiplier
+        
+        for _ in 0..<starCount {
+            let x = CGFloat.random(in: -areaWidth/2...areaWidth/2)
+            let y = CGFloat.random(in: -areaHeight/2...areaHeight/2)
+            let starSize = CGFloat.random(in: CGFloat(1)...CGFloat(3))
+            
+            let star = SKShapeNode(circleOfRadius: starSize)
+            
+            // Alterna colori blu/giallo
+            let useBlue = Bool.random()
+            if useBlue {
+                star.fillColor = UIColor(red: 0.6, green: 0.7, blue: 1.0, alpha: CGFloat.random(in: 0.3...0.6))
+            } else {
+                star.fillColor = UIColor(red: 1.0, green: 0.9, blue: 0.6, alpha: CGFloat.random(in: 0.3...0.6))
+            }
+            
+            star.strokeColor = .clear
+            star.position = CGPoint(x: x, y: y)
+            star.glowWidth = starSize * 0.8
+            
+            layer.addChild(star)
+        }
+        
+        return layer
     }
     
     private func createGradientTexture() -> SKTexture {
@@ -1183,6 +1520,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         limitAsteroidSpeed()  // Limita velocità asteroidi
         updateOrbitalGrapple()  // Gestisce slingshot zones del player
         updateAsteroidSpiralForces(currentTime)  // NUOVO: Sistema a spirale discendente per asteroidi
+        updateMissiles()  // Aggiorna inseguimento missili homing
         updatePlayerMovement()
         updatePlayerShooting(currentTime)
         updateCameraZoom()  // Aggiorna zoom dinamico basato su distanza
@@ -1198,6 +1536,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 powerupLabel.text = "BigAmmo \(remainingFormatted)s"
             } else if gravityActive {
                 powerupLabel.text = "Gravity \(remainingFormatted)s"
+            } else if missileActive {
+                powerupLabel.text = "Missile \(remainingFormatted)s"
             } else if atmosphereActive {
                 // Per Atmosphere: solo nome, NO timer (timer solo per tracking interno)
                 powerupLabel.text = "Atmosphere"
@@ -1368,6 +1708,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func fireProjectile() {
+        // Se missili attivi, crea un missile invece di un proiettile normale
+        if missileActive {
+            fireMissile()
+            return
+        }
+        
         // Riproduci il suono di sparo
         playShootSound()
         
@@ -1480,6 +1826,158 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func cleanupProjectiles() {
         projectiles.removeAll { $0.parent == nil }
+    }
+    
+    // MARK: - Missile System
+    private func fireMissile() {
+        playShootSound()
+        
+        // Missile: largo come big ammo (4x), con bandina rossa pulsante dietro
+        let missileWidth = projectileBaseSize.width * 4.0
+        let missileHeight = projectileBaseSize.height * 2.0
+        
+        let missile = SKNode()
+        missile.name = "missile"
+        
+        // Corpo principale (rettangolo viola/grigio)
+        let body = SKShapeNode(rectOf: CGSize(width: missileWidth, height: missileHeight), cornerRadius: 1)
+        body.fillColor = UIColor(red: 0.5, green: 0.4, blue: 0.6, alpha: 1.0)
+        body.strokeColor = UIColor(red: 0.6, green: 0.5, blue: 0.7, alpha: 1.0)
+        body.lineWidth = 1
+        missile.addChild(body)
+        
+        // Bandina rossa pulsante (reattore) - posizionata dietro
+        let flagWidth: CGFloat = missileWidth * 0.6
+        let flagHeight: CGFloat = 4
+        let flag = SKShapeNode(rectOf: CGSize(width: flagWidth, height: flagHeight))
+        flag.fillColor = .red
+        flag.strokeColor = .clear
+        flag.position = CGPoint(x: 0, y: -missileHeight/2 - flagHeight/2)  // Dietro il missile
+        flag.name = "flag"
+        missile.addChild(flag)
+        
+        // Animazione pulsazione della bandina
+        let pulseUp = SKAction.scaleY(to: 1.5, duration: 0.15)
+        let pulseDown = SKAction.scaleY(to: 1.0, duration: 0.15)
+        let pulse = SKAction.sequence([pulseUp, pulseDown])
+        flag.run(SKAction.repeatForever(pulse))
+        
+        // Physics body
+        missile.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: missileWidth, height: missileHeight))
+        missile.physicsBody?.isDynamic = true
+        missile.physicsBody?.categoryBitMask = PhysicsCategory.projectile
+        missile.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.asteroid
+        missile.physicsBody?.collisionBitMask = 0
+        missile.physicsBody?.mass = 0.05  // Più pesante per inerzia
+        missile.physicsBody?.linearDamping = 0.1  // Damping leggero per fluidità
+        missile.physicsBody?.affectedByGravity = false
+        
+        // Posizione davanti alla nave
+        let angle = player.zRotation + .pi / 2
+        let offset: CGFloat = 25
+        missile.position = CGPoint(
+            x: player.position.x + cos(angle) * offset,
+            y: player.position.y + sin(angle) * offset
+        )
+        missile.zPosition = 8
+        missile.zRotation = player.zRotation
+        
+        // Danno doppio
+        missile.userData = NSMutableDictionary()
+        missile.userData?["damageMultiplier"] = 2.0
+        
+        // Velocità iniziale nella direzione di lancio
+        let initialSpeed: CGFloat = 300
+        missile.physicsBody?.velocity = CGVector(
+            dx: cos(angle) * initialSpeed,
+            dy: sin(angle) * initialSpeed
+        )
+        
+        // Trova target più vicino
+        if let target = findClosestAsteroid(to: missile.position) {
+            missile.userData?["target"] = target
+        }
+        
+        worldLayer.addChild(missile)
+        missiles.append(missile)
+        
+        // Rimuovi dopo 10 secondi
+        let removeAction = SKAction.sequence([
+            SKAction.wait(forDuration: 10.0),
+            SKAction.removeFromParent()
+        ])
+        missile.run(removeAction)
+        
+        debugLog("🚀 Missile fired with homing capability")
+    }
+    
+    private func findClosestAsteroid(to position: CGPoint) -> SKNode? {
+        var closestAsteroid: SKNode? = nil
+        var closestDistance: CGFloat = .greatestFiniteMagnitude
+        
+        for child in worldLayer.children {
+            if child.name?.starts(with: "asteroid") == true,
+               let physicsBody = child.physicsBody,
+               physicsBody.isDynamic {
+                let distance = hypot(child.position.x - position.x, child.position.y - position.y)
+                if distance < closestDistance {
+                    closestDistance = distance
+                    closestAsteroid = child
+                }
+            }
+        }
+        
+        return closestAsteroid
+    }
+    
+    private func updateMissiles() {
+        // Rimuovi missili senza parent
+        missiles.removeAll { $0.parent == nil }
+        
+        for missile in missiles {
+            guard let physicsBody = missile.physicsBody else { continue }
+            
+            // Verifica se il target è ancora valido
+            var target = missile.userData?["target"] as? SKNode
+            if target?.parent == nil {
+                // Target distrutto, trova nuovo target
+                target = findClosestAsteroid(to: missile.position)
+                missile.userData?["target"] = target
+            }
+            
+            guard let validTarget = target else { continue }
+            
+            // Calcola direzione verso il target
+            let dx = validTarget.position.x - missile.position.x
+            let dy = validTarget.position.y - missile.position.y
+            let distance = hypot(dx, dy)
+            
+            guard distance > 1 else { continue }
+            
+            let targetAngle = atan2(dy, dx)
+            
+            // Forza di spinta del reattore (simile a player)
+            let thrustForce: CGFloat = 150
+            let thrustX = cos(targetAngle) * thrustForce
+            let thrustY = sin(targetAngle) * thrustForce
+            
+            physicsBody.applyForce(CGVector(dx: thrustX, dy: thrustY))
+            
+            // Ruota missile verso direzione di movimento (non target diretto)
+            let velocityAngle = atan2(physicsBody.velocity.dy, physicsBody.velocity.dx)
+            missile.zRotation = velocityAngle - .pi / 2  // Aggiusta per orientamento
+            
+            // Limita velocità massima
+            let maxSpeed: CGFloat = 400
+            let currentSpeed = hypot(physicsBody.velocity.dx, physicsBody.velocity.dy)
+            if currentSpeed > maxSpeed {
+                let scale = maxSpeed / currentSpeed
+                physicsBody.velocity = CGVector(
+                    dx: physicsBody.velocity.dx * scale,
+                    dy: physicsBody.velocity.dy * scale
+                )
+            }
+        }
     }
     
     // MARK: - Gravity System
@@ -2315,8 +2813,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             debugLog("🌍 Asteroid gravity increased to \(asteroidGravityMultiplier) for wave \(wave)")
         }
         
-        // Cambia ambiente spaziale randomicamente ad ogni wave
-        let newEnvironment = SpaceEnvironment.allCases.randomElement() ?? .deepSpace
+        // Cambia ambiente spaziale in sequenza progressiva (convenzionale → wow)
+        // Sequenza: deepSpace → nebula → voidSpace → redGiant → asteroidBelt → binaryStars → ionStorm
+        let environments: [SpaceEnvironment] = [.deepSpace, .nebula, .voidSpace, .redGiant, .asteroidBelt, .binaryStars, .ionStorm]
+        let environmentIndex = (wave - 1) % environments.count
+        let newEnvironment = environments[environmentIndex]
         if newEnvironment != currentEnvironment {
             applyEnvironment(newEnvironment)
             debugLog("🌌 Environment changed to: \(newEnvironment.name)")
@@ -3352,17 +3853,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Leggi il damage multiplier dal proiettile
             let damageMultiplier = (projectile?.userData?["damageMultiplier"] as? CGFloat) ?? 1.0
             
-            // Rimuovi il proiettile
-            projectile?.removeFromParent()
+            // Controlla se è un missile (esplosione ad area)
+            let isMissile = projectile?.name == "missile"
             
-            // Frammenta l'asteroide con il damage multiplier
-            if let asteroid = asteroid {
-                // Effetto particellare con colore random
-                createExplosionParticles(at: asteroid.position, color: randomExplosionColor())
-                fragmentAsteroid(asteroid, damageMultiplier: damageMultiplier)
+            if isMissile {
+                // ESPLOSIONE MISSILE: danno ad area
+                if let impactPoint = asteroid?.position {
+                    createMissileExplosion(at: impactPoint, damageMultiplier: damageMultiplier)
+                }
+            } else {
+                // Proiettile normale: danno singolo
+                if let asteroid = asteroid {
+                    // Effetto particellare con colore random
+                    createExplosionParticles(at: asteroid.position, color: randomExplosionColor())
+                    fragmentAsteroid(asteroid, damageMultiplier: damageMultiplier)
+                }
             }
             
-            debugLog("💥 Projectile destroyed asteroid (damage: \(damageMultiplier)x)")
+            // Rimuovi il proiettile/missile
+            projectile?.removeFromParent()
+            
+            debugLog("💥 \(isMissile ? "Missile" : "Projectile") hit asteroid (damage: \(damageMultiplier)x)")
         }
     }
     
@@ -4045,6 +4556,71 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.run(SKAction.sequence([waitAction, removeAction]))
     }
     
+    private func createMissileExplosion(at position: CGPoint, damageMultiplier: CGFloat) {
+        // Raggio esplosione: metà del raggio del pianeta
+        let explosionRadius = planetRadius / 2.0
+        
+        // Effetto visivo esplosione viola/rosso
+        let emitter = SKEmitterNode()
+        emitter.position = position
+        emitter.particleTexture = particleTexture
+        emitter.particleBirthRate = 500
+        emitter.numParticlesToEmit = 80
+        emitter.particleLifetime = 1.0
+        emitter.emissionAngle = 0
+        emitter.emissionAngleRange = CGFloat.pi * 2
+        emitter.particleSpeed = 150
+        emitter.particleSpeedRange = 75
+        emitter.particleScale = 0.6
+        emitter.particleScaleRange = 0.3
+        emitter.particleScaleSpeed = -0.5
+        emitter.particleAlpha = 1.0
+        emitter.particleAlphaSpeed = -1.0
+        // Colore viola/rosso per missile
+        emitter.particleColor = UIColor(red: 0.8, green: 0.2, blue: 0.6, alpha: 1.0)
+        emitter.particleColorBlendFactor = 1.0
+        emitter.particleBlendMode = .add
+        emitter.zPosition = 100
+        
+        worldLayer.addChild(emitter)
+        
+        let waitAction = SKAction.wait(forDuration: 1.2)
+        let removeAction = SKAction.removeFromParent()
+        emitter.run(SKAction.sequence([waitAction, removeAction]))
+        
+        // Cerchio di esplosione che si espande
+        let explosionCircle = SKShapeNode(circleOfRadius: 5)
+        explosionCircle.position = position
+        explosionCircle.strokeColor = UIColor(red: 0.9, green: 0.3, blue: 0.7, alpha: 0.8)
+        explosionCircle.lineWidth = 3
+        explosionCircle.fillColor = .clear
+        explosionCircle.zPosition = 99
+        
+        worldLayer.addChild(explosionCircle)
+        
+        let expandAction = SKAction.scale(to: explosionRadius / 5.0, duration: 0.4)
+        let fadeAction = SKAction.fadeOut(withDuration: 0.4)
+        let group = SKAction.group([expandAction, fadeAction])
+        explosionCircle.run(SKAction.sequence([group, removeAction]))
+        
+        // Danneggia tutti gli asteroidi nel raggio
+        var hitCount = 0
+        for child in worldLayer.children {
+            if child.name?.starts(with: "asteroid") == true,
+               let asteroid = child as? SKShapeNode {
+                let distance = hypot(asteroid.position.x - position.x, asteroid.position.y - position.y)
+                if distance <= explosionRadius {
+                    // Crea piccola esplosione su ogni asteroide colpito
+                    createExplosionParticles(at: asteroid.position, color: randomExplosionColor())
+                    fragmentAsteroid(asteroid, damageMultiplier: damageMultiplier)
+                    hitCount += 1
+                }
+            }
+        }
+        
+        debugLog("💥🚀 Missile explosion at \(position) - radius: \(explosionRadius) - hit \(hitCount) asteroids")
+    }
+    
     private func createPlanetExplosion(at position: CGPoint) {
         // Crea 3 esplosioni successive per effetto più drammatico
         for i in 0..<3 {
@@ -4116,15 +4692,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard roll < 25 else { return }
 
         // DISTRIBUZIONE PROGRESSIVA power-up per wave
-        // Wave 1: W, B
-        // Wave 2: W, B, A
-        // Wave 3+: W, B, A, G (V rimosso - era velocità, non più presente)
+        // Wave 1: W, B, M (per test missile alta probabilità)
+        // Wave 2: W, B, M, A
+        // Wave 3+: W, B, M, A, G (V rimosso - era velocità, non più presente)
         
         var weightedTypes: [(String, UIColor, Int)] = []
         
         // Power-up base (wave 1+)
         weightedTypes.append(("W", UIColor.purple, 2))  // Wave (doppio peso)
         weightedTypes.append(("B", UIColor.green, 1))   // Bullet
+        weightedTypes.append(("M", UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0), 5))  // Missile (alta probabilità per test)
         
         // Wave 2+: aggiungi Attack
         if currentWave >= 2 {
@@ -4207,9 +4784,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func activatePowerup(type: String, currentTime: TimeInterval) {
-        // Se c'è già un power-up attivo (V, B, G), disattiva il precedente e attiva il nuovo
+        // Se c'è già un power-up attivo (V, B, G, M), disattiva il precedente e attiva il nuovo
         // A (Atmosphere) e W (Wave) possono essere raccolti anche con altri power-up attivi
-        if type != "A" && type != "W" && (vulcanActive || bigAmmoActive || gravityActive) {
+        if type != "A" && type != "W" && (vulcanActive || bigAmmoActive || gravityActive || missileActive) {
             debugLog("⚠️ Replacing active power-up with \(type)")
             // Disattiva il power-up precedente (ma mantieni activePowerupEndTime per resettarlo)
             deactivatePowerups()
@@ -4300,6 +4877,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             triggerWaveBlast()
             
             debugLog("💥 Wave Blast activated - shield explosion")
+        } else if type == "M" {
+            missileActive = true
+            // Frequenza metà normale: se baseFireRate è 0.2, missile sarà 0.4
+            currentFireRate = baseFireRate * 2.0
+            powerupLabel.fontColor = UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0)  // Viola
+            powerupLabel.text = "Missile 10.00s"
+            
+            debugLog("🚀 Missile power-up activated - homing missiles")
         }
     }
 
@@ -4309,6 +4894,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bigAmmoActive = false
         atmosphereActive = false
         waveBlastActive = false
+        missileActive = false
         
         // Disattiva gravity e ripristina barriera del player
         if gravityActive {
