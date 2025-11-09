@@ -24,7 +24,7 @@ class MainMenuScene: SKScene {
         backgroundColor = .black
         
         setupBackground()
-        setupOverlay()  // Overlay opaco sopra lo sfondo
+        // setupOverlay() rimosso - lo sfondo ora è completamente visibile
         setupTitle()
         setupPlayButton()
         setupHiScoreButton()
