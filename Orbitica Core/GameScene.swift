@@ -3116,47 +3116,59 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 targetY = planetCenter.y + sin(newAngle) * closestRingRadius
             }
             
-            // Velocità tangenziale ponderata dalla forza di aggancio e moltiplicatore ellittico
-            // Per ellisse: il raggio effettivo varia, quindi usiamo la distanza attuale
-            let effectiveRadius = isEllipseRing ? sqrt(dx * dx + dy * dy) : closestRingRadius
-            let tangentialVelocity = closestRingVelocity * effectiveRadius * speedMultiplier
+            if isEllipseRing {
+                // ELLISSI: BINARIO RIGIDO - la navicella segue esattamente il percorso ellittico
+                // Trova il punto più vicino sull'ellisse rispetto alla posizione corrente
+                let a = closestRingRadius * ellipseRatio  // semiasse maggiore
+                let b = closestRingRadius                  // semiasse minore
+                
+                // Calcola l'angolo parametrico per il punto più vicino
+                // Usiamo l'angolo attuale come approssimazione
+                let playerAngle = atan2(dy, dx)
+                
+                // FORZA la posizione esattamente sul binario ellittico
+                let ellipseX = planetCenter.x + cos(playerAngle) * a
+                let ellipseY = planetCenter.y + sin(playerAngle) * b
+                
+                // Interpolazione FORTE per seguire il binario
+                let currentX = player.position.x
+                let currentY = player.position.y
+                let trackingStrength = orbitalGrappleStrength * 0.4  // Più forte per tenere sul binario
+                let newX = currentX + (ellipseX - currentX) * trackingStrength
+                let newY = currentY + (ellipseY - currentY) * trackingStrength
+                
+                player.position = CGPoint(x: newX, y: newY)
+                
+                // Velocità tangenziale basata sul moltiplicatore ellittico
+                let effectiveRadius = sqrt(dx * dx + dy * dy)
+                let speedMultiplier = getEllipseSpeedMultiplier(angle: playerAngle, baseRadius: closestRingRadius, isEllipse: true)
+                let tangentialVelocity = closestRingVelocity * effectiveRadius * speedMultiplier
+                let tangentialVx = -sin(playerAngle) * tangentialVelocity
+                let tangentialVy = cos(playerAngle) * tangentialVelocity
+                
+                // MEMORIZZA la velocità orbitale
+                lastOrbitalVelocity = CGVector(dx: tangentialVx, dy: tangentialVy)
+                
+                // Applica velocità tangenziale con mixing forte
+                let currentVx = playerBody.velocity.dx
+                let currentVy = playerBody.velocity.dy
+                let velocityMixing: CGFloat = 0.3 * orbitalGrappleStrength
+                let mixedVx = currentVx + (tangentialVx - currentVx) * velocityMixing
+                let mixedVy = currentVy + (tangentialVy - currentVy) * velocityMixing
+                
+                playerBody.velocity = CGVector(dx: mixedVx, dy: mixedVy)
+                return  // Salta il resto
+            }
+            
+            // CERCHI: sistema originale
+            let effectiveRadius = closestRingRadius
+            let tangentialVelocity = closestRingVelocity * effectiveRadius
             let tangentialVx = -sin(newAngle) * tangentialVelocity
             let tangentialVy = cos(newAngle) * tangentialVelocity
             
             // MEMORIZZA la velocità orbitale pura per conservazione del moto allo sgancio
             lastOrbitalVelocity = CGVector(dx: tangentialVx, dy: tangentialVy)
             
-            // Mescola velocità orbitale con velocità attuale
-            let currentVx = playerBody.velocity.dx
-            let currentVy = playerBody.velocity.dy
-            
-            if isEllipseRing {
-                // ELLISSI: usa SOLO velocità, NO interpolazione posizione
-                // Forza centripeta MOLTO debole verso il percorso ellittico
-                let currentX = player.position.x
-                let currentY = player.position.y
-                let toTargetX = targetX - currentX
-                let toTargetY = targetY - currentY
-                let distanceToTarget = sqrt(toTargetX * toTargetX + toTargetY * toTargetY)
-                
-                // Applica forza centripeta se lontano dal percorso
-                if distanceToTarget > 5 {
-                    let centripetalForce: CGFloat = 30.0 * orbitalGrappleStrength
-                    let forceX = (toTargetX / distanceToTarget) * centripetalForce
-                    let forceY = (toTargetY / distanceToTarget) * centripetalForce
-                    playerBody.applyForce(CGVector(dx: forceX, dy: forceY))
-                }
-                
-                // Mescola velocità in modo più aggressivo per ellissi
-                let mixingStrength: CGFloat = 0.25 * orbitalGrappleStrength
-                let mixedVx = currentVx + (tangentialVx - currentVx) * mixingStrength
-                let mixedVy = currentVy + (tangentialVy - currentVy) * mixingStrength
-                
-                playerBody.velocity = CGVector(dx: mixedVx, dy: mixedVy)
-                return  // Salta il resto per ellissi
-            }
-            
-            // CERCHI: usa interpolazione posizione (sistema originale)
             let currentX = player.position.x
             let currentY = player.position.y
             let positionInterpolation = orbitalGrappleStrength * 0.15
@@ -3166,6 +3178,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             player.position = CGPoint(x: newX, y: newY)
             
             // Mescola velocità per cerchi
+            let currentVx = playerBody.velocity.dx
+            let currentVy = playerBody.velocity.dy
             let mixedVx = currentVx + (tangentialVx - currentVx) * orbitalGrappleStrength * 0.15
             let mixedVy = currentVy + (tangentialVy - currentVy) * orbitalGrappleStrength * 0.15
             
