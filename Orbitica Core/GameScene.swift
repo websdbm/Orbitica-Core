@@ -1839,9 +1839,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func fireMissile() {
         playShootSound()
         
-        // Missile: più affusolato e lungo (3x larghezza, 4x altezza)
+        // Missile: più affusolato (3x larghezza, 3x altezza - ridotto da 4x)
         let missileWidth = projectileBaseSize.width * 3.0
-        let missileHeight = projectileBaseSize.height * 4.0
+        let missileHeight = projectileBaseSize.height * 3.0  // Ridotto da 4.0
         
         let missile = SKNode()
         missile.name = "missile"
@@ -1956,6 +1956,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         for missile in missiles {
             guard let physicsBody = missile.physicsBody else { continue }
+            
+            // EVITA LA TERRA: se troppo vicino al pianeta, applica forza repulsiva
+            let planetCenter = planet.position
+            let distanceFromPlanet = hypot(missile.position.x - planetCenter.x, missile.position.y - planetCenter.y)
+            let dangerZone: CGFloat = atmosphereRadius + 30  // Zona di sicurezza oltre atmosfera
+            
+            if distanceFromPlanet < dangerZone {
+                // Forza repulsiva per allontanarsi dal pianeta
+                let awayAngle = atan2(missile.position.y - planetCenter.y, missile.position.x - planetCenter.x)
+                let repulsionForce: CGFloat = 250  // Forza forte per allontanamento rapido
+                let repulsionX = cos(awayAngle) * repulsionForce
+                let repulsionY = sin(awayAngle) * repulsionForce
+                physicsBody.applyForce(CGVector(dx: repulsionX, dy: repulsionY))
+                
+                // Ruota missile nella direzione di allontanamento
+                missile.zRotation = awayAngle - .pi / 2
+                continue  // Salta l'inseguimento del target
+            }
             
             // Verifica se il target è ancora valido
             var target = missile.userData?["target"] as? SKNode
@@ -3889,10 +3907,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let isMissile = projectile?.name == "missile"
             
             if isMissile {
-                // ESPLOSIONE MISSILE: danno ad area
+                // ESPLOSIONE MISSILE: danno ad area (l'esplosione gestisce anche l'asteroide colpito)
                 if let impactPoint = asteroid?.position {
                     createMissileExplosion(at: impactPoint, damageMultiplier: damageMultiplier)
                 }
+                // NON frammentare l'asteroide qui - lo fa l'esplosione con delay
             } else {
                 // Proiettile normale: danno singolo
                 if let asteroid = asteroid {
