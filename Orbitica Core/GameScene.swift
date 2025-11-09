@@ -212,7 +212,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Physics constants
     private let planetRadius: CGFloat = 40
     private let planetMass: CGFloat = 10000
-    private let gravitationalConstant: CGFloat = 80
+    private let gravitationalConstant: CGFloat = 100  // Aumentata da 80 per attrazione più forte
     
     // Camera & Layers
     private var gameCamera: SKCameraNode!
@@ -822,7 +822,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let pulseSequence = SKAction.sequence([createPulse, waitAction])
         pulseEmitter.run(SKAction.repeatForever(pulseSequence))
         
-        // 5️⃣ ROTAZIONE DELL'INTERO CONTAINER (cristalli orbitano)
+        // 4️⃣ PARTICELLE CHE SEGUONO LA ROTAZIONE (indicano direzione)
+        let numParticles = 4  // 4 particelle equamente distribuite
+        for i in 0..<numParticles {
+            let angle = (CGFloat(i) / CGFloat(numParticles)) * .pi * 2
+            let particleNode = SKNode()
+            particleNode.position = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
+            particleNode.name = "rotationParticle\(i)"
+            
+            // Particella bianca piccola
+            let particle = SKShapeNode(circleOfRadius: 2)
+            particle.fillColor = .white
+            particle.strokeColor = .white
+            particle.alpha = 0.6
+            particle.glowWidth = 4.0
+            particleNode.addChild(particle)
+            
+            ringContainer.addChild(particleNode)
+        }
+        
+        // 5️⃣ ROTAZIONE DELL'INTERO CONTAINER (particelle orbitano seguendo direzione)
         let rotateDuration = 1.0 / velocity * 2 * .pi
         let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: rotateDuration)
         ringContainer.run(SKAction.repeatForever(rotateAction))
@@ -2108,7 +2127,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // NUOVO: Calcola componente RADIALE della spinta (proiezione verso centro/esterno)
             // DOPPIA SOGLIA: gas sufficiente E allineamento radiale
-            if forceMagnitude > 0.6 {  // Soglia gas aumentata: serve MOLTO gas per sganciare
+            if forceMagnitude > 0.75 {  // Soglia gas aumentata: serve MOLTISSIMO gas per sganciare (era 0.6)
                 // Normalizza direzione player rispetto al centro
                 let playerAngle = atan2(dy, dx)
                 let radialX = cos(playerAngle)  // Direzione verso esterno
