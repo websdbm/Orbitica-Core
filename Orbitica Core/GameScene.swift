@@ -1238,9 +1238,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.fillColor = .clear
         player.strokeColor = .white
         player.lineWidth = 2
-        // Posizione assoluta: centro + offset
-        player.position = CGPoint(x: size.width / 2 + 300, y: size.height / 2)
+        
+        // POSIZIONE INIZIALE RANDOMICA: sempre vicino al pianeta ma variabile
+        // Distanza: tra 150 e 350 pixel dal centro (dopo atmosfera 96px, prima ring interno 200px)
+        let spawnDistance = CGFloat.random(in: 150...350)
+        let spawnAngle = CGFloat.random(in: 0...(2 * .pi))
+        let spawnX = size.width / 2 + cos(spawnAngle) * spawnDistance
+        let spawnY = size.height / 2 + sin(spawnAngle) * spawnDistance
+        
+        player.position = CGPoint(x: spawnX, y: spawnY)
         player.zPosition = 10
+        
+        debugLog("🎯 Player spawned at distance: \(spawnDistance), angle: \(spawnAngle * 180 / .pi)°")
         
         // FISICA: Aggiungi corpo fisico con inerzia RIDOTTA per più controllo
         player.physicsBody = SKPhysicsBody(circleOfRadius: 8)
@@ -1282,8 +1291,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.physicsBody?.collisionBitMask = 0
         
         worldLayer.addChild(player)
-        
-        debugLog("✅ Player created at: \(player.position)")
     }
     
     private func setupControls() {
@@ -2903,8 +2910,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Non spawnare se la coda è vuota
         guard !asteroidSpawnQueue.isEmpty else { return }
         
-        // Usa l'intervallo di spawn della wave corrente
-        let spawnInterval = currentWaveConfig?.spawnInterval ?? asteroidSpawnInterval
+        // SPAWN INIZIALE RAPIDO: primi 5 asteroidi spawn immediato (0.3s tra uno e l'altro)
+        // Poi variabilità: intervallo base ± 30%
+        let baseInterval = currentWaveConfig?.spawnInterval ?? asteroidSpawnInterval
+        var spawnInterval: TimeInterval
+        
+        if asteroidsSpawnedInWave < 5 {
+            // Primi 5: spawn velocissimo (0.3 secondi)
+            spawnInterval = 0.3
+        } else {
+            // Dopo i primi 5: intervallo base con variabilità ±30%
+            let variation = Double.random(in: -0.3...0.3)
+            spawnInterval = baseInterval * (1.0 + variation)
+        }
+        
         guard currentTime - lastAsteroidSpawnTime > spawnInterval else { return }
         lastAsteroidSpawnTime = currentTime
         
@@ -2915,7 +2934,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         spawnAsteroid(type: asteroidType, at: nil)
         asteroidsSpawnedInWave += 1
         
-        debugLog("☄️ Spawned \(asteroidType) asteroid \(asteroidsSpawnedInWave)/\(asteroidsToSpawnInWave)")
+        debugLog("☄️ Spawned \(asteroidType) asteroid \(asteroidsSpawnedInWave)/\(asteroidsToSpawnInWave) - interval: \(String(format: "%.2f", spawnInterval))s")
     }
     
     private func checkWaveComplete() {
