@@ -1266,22 +1266,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             return abs(distanceFromCenter - baseRadius)
         }
         
-        // Per ellisse: trova il punto più vicino sul percorso ellittico
+        // Per ellisse: approssimazione con campionamento angolare
+        // Testa 36 punti sull'ellisse (ogni 10 gradi) e trova il più vicino
         let a = baseRadius * ellipseRatio  // semiasse maggiore (orizzontale)
         let b = baseRadius                  // semiasse minore (verticale)
         
-        let dx = point.x - center.x
-        let dy = point.y - center.y
-        let angle = atan2(dy, dx)
+        var minDistance: CGFloat = .infinity
+        let samples = 36  // 36 campioni = ogni 10 gradi
         
-        // Punto sull'ellisse a questo angolo
-        let ellipseX = center.x + cos(angle) * a
-        let ellipseY = center.y + sin(angle) * b
+        for i in 0..<samples {
+            let angle = (CGFloat(i) / CGFloat(samples)) * 2 * .pi
+            
+            // Punto sull'ellisse
+            let ellipseX = center.x + cos(angle) * a
+            let ellipseY = center.y + sin(angle) * b
+            
+            // Distanza da questo punto
+            let dx = point.x - ellipseX
+            let dy = point.y - ellipseY
+            let distance = sqrt(dx * dx + dy * dy)
+            
+            if distance < minDistance {
+                minDistance = distance
+            }
+        }
         
-        // Distanza dal punto sull'ellisse
-        let distX = point.x - ellipseX
-        let distY = point.y - ellipseY
-        return sqrt(distX * distX + distY * distY)
+        return minDistance
     }
     
     // Calcola il moltiplicatore di velocità in base alla posizione sull'ellisse
@@ -3067,6 +3077,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let b = closestRingRadius                  // semiasse minore (verticale)
                 targetX = planetCenter.x + cos(newAngle) * a
                 targetY = planetCenter.y + sin(newAngle) * b
+                
+                // Debug per vedere se sta usando la formula ellisse
+                if orbitalGrappleStrength > 0.5 {
+                    debugLog("🔵 Ellipse grapple: ring \(closestRing), angle \(Int(newAngle * 180 / .pi))°, a=\(Int(a)), b=\(Int(b))")
+                }
             } else {
                 // Per cerchio: usa circonferenza normale
                 targetX = planetCenter.x + cos(newAngle) * closestRingRadius
