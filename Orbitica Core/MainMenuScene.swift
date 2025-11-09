@@ -44,51 +44,103 @@ class MainMenuScene: SKScene {
     }
     
     private func setupBackground() {
-        // Stelle di sfondo animate
-        for _ in 0..<50 {
-            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 1...2))
-            star.fillColor = .white
+        // BACKGROUND ASTEROID BELT: grigio-marrone scuro
+        backgroundColor = UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1.0)
+        
+        // Polvere spaziale sottile
+        for _ in 0..<15 {
+            let width = CGFloat.random(in: 100...250)
+            let height = CGFloat.random(in: 60...120)
+            
+            let dust = SKShapeNode(ellipseOf: CGSize(width: width, height: height))
+            dust.fillColor = UIColor(red: 0.3, green: 0.25, blue: 0.2, alpha: 0.05)
+            dust.strokeColor = .clear
+            dust.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            dust.zRotation = CGFloat.random(in: 0...(2 * .pi))
+            dust.zPosition = -50
+            addChild(dust)
+        }
+        
+        // Asteroidi che ruotano e si muovono
+        for i in 0..<12 {
+            let asteroidSize = CGFloat.random(in: 15...40)
+            let sides = Int.random(in: 5...8)
+            
+            let asteroid = SKShapeNode(circleOfRadius: asteroidSize)
+            asteroid.path = createIrregularPolygonPath(radius: asteroidSize, sides: sides)
+            asteroid.fillColor = UIColor(white: 0.15, alpha: CGFloat.random(in: 0.15...0.3))
+            asteroid.strokeColor = UIColor(white: 0.25, alpha: 0.2)
+            asteroid.lineWidth = 1
+            asteroid.position = CGPoint(
+                x: CGFloat.random(in: -50...size.width + 50),
+                y: CGFloat.random(in: -50...size.height + 50)
+            )
+            asteroid.zPosition = -30 + CGFloat(i) * 0.5
+            addChild(asteroid)
+            
+            // Rotazione continua
+            let rotationDuration = Double.random(in: 8...15)
+            let rotationDirection: CGFloat = Bool.random() ? 1 : -1
+            let rotate = SKAction.rotate(byAngle: .pi * 2 * rotationDirection, duration: rotationDuration)
+            asteroid.run(SKAction.repeatForever(rotate))
+            
+            // Movimento lento casuale
+            let moveDistance: CGFloat = CGFloat.random(in: 30...80)
+            let moveAngle = CGFloat.random(in: 0...(2 * .pi))
+            let moveX = cos(moveAngle) * moveDistance
+            let moveY = sin(moveAngle) * moveDistance
+            let moveDuration = Double.random(in: 10...20)
+            
+            let moveAction = SKAction.moveBy(x: moveX, y: moveY, duration: moveDuration)
+            let moveBack = SKAction.moveBy(x: -moveX, y: -moveY, duration: moveDuration)
+            let moveSequence = SKAction.sequence([moveAction, moveBack])
+            asteroid.run(SKAction.repeatForever(moveSequence))
+        }
+        
+        // Stelle bianco-grigio opache (poche)
+        for _ in 0..<30 {
+            let starSize = CGFloat.random(in: 1...2.5)
+            let star = SKShapeNode(circleOfRadius: starSize)
+            star.fillColor = UIColor(white: CGFloat.random(in: 0.6...0.8), alpha: CGFloat.random(in: 0.15...0.25))
             star.strokeColor = .clear
             star.position = CGPoint(
                 x: CGFloat.random(in: 0...size.width),
                 y: CGFloat.random(in: 0...size.height)
             )
-            star.alpha = CGFloat.random(in: 0.3...1.0)
-            star.zPosition = -1
+            star.zPosition = -40
             addChild(star)
             
-            // Animazione pulsazione
-            let pulse = SKAction.sequence([
-                SKAction.fadeAlpha(to: 0.3, duration: Double.random(in: 1.0...3.0)),
-                SKAction.fadeAlpha(to: 1.0, duration: Double.random(in: 1.0...3.0))
-            ])
-            star.run(SKAction.repeatForever(pulse))
+            // Twinkle occasionale
+            if Bool.random() {
+                let fadeOut = SKAction.fadeAlpha(to: 0.05, duration: Double.random(in: 1.5...3))
+                let fadeIn = SKAction.fadeAlpha(to: star.alpha, duration: Double.random(in: 1.5...3))
+                let twinkle = SKAction.sequence([fadeOut, fadeIn])
+                star.run(SKAction.repeatForever(twinkle))
+            }
         }
+    }
+    
+    private func createIrregularPolygonPath(radius: CGFloat, sides: Int) -> CGPath {
+        let path = CGMutablePath()
+        let angleStep = (2.0 * .pi) / CGFloat(sides)
         
-        // Pianeta centrale decorativo
-        let planet = SKShapeNode(circleOfRadius: 30)
-        planet.fillColor = .white
-        planet.strokeColor = .white
-        planet.lineWidth = 2
-        planet.position = CGPoint(x: size.width / 2, y: size.height / 2 + 150)  // Alzato leggermente
-        planet.zPosition = -0.5
-        addChild(planet)
-        
-        // Anello attorno al pianeta
-        let ring = SKShapeNode(circleOfRadius: 50)
-        ring.fillColor = .clear
-        ring.strokeColor = UIColor.cyan.withAlphaComponent(0.5)
-        ring.lineWidth = 2
-        ring.position = planet.position
-        ring.zPosition = -0.5
-        addChild(ring)
-        
-        // Pulsazione anello
-        let ringPulse = SKAction.sequence([
-            SKAction.scale(to: 1.1, duration: 1.5),
-            SKAction.scale(to: 1.0, duration: 1.5)
-        ])
-        ring.run(SKAction.repeatForever(ringPulse))
+        for i in 0..<sides {
+            let angle = angleStep * CGFloat(i)
+            let randomRadius = radius * CGFloat.random(in: 0.7...1.3)
+            let x = randomRadius * cos(angle)
+            let y = randomRadius * sin(angle)
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        path.closeSubpath()
+        return path
     }
     
     private func setupTitle() {

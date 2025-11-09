@@ -4793,16 +4793,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard roll < 25 else { return }
 
         // DISTRIBUZIONE PROGRESSIVA power-up per wave
-        // Wave 1: W, B, M (per test missile alta probabilità)
-        // Wave 2: W, B, M, A
-        // Wave 3+: W, B, M, A, G (V rimosso - era velocità, non più presente)
+        // Wave 1: W, B
+        // Wave 2: W, B, A
+        // Wave 3: W, B, A, G
+        // Wave 4+: W, B, A, G, M (Missile dal wave 4)
         
         var weightedTypes: [(String, UIColor, Int)] = []
         
         // Power-up base (wave 1+)
         weightedTypes.append(("W", UIColor.purple, 2))  // Wave (doppio peso)
         weightedTypes.append(("B", UIColor.green, 1))   // Bullet
-        weightedTypes.append(("M", UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0), 5))  // Missile (alta probabilità per test)
         
         // Wave 2+: aggiungi Attack
         if currentWave >= 2 {
@@ -4812,6 +4812,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Wave 3+: aggiungi Gravity
         if currentWave >= 3 {
             weightedTypes.append(("G", UIColor.gray, 2))  // Gravity (doppio peso)
+        }
+        
+        // Wave 4+: aggiungi Missile
+        if currentWave >= 4 {
+            weightedTypes.append(("M", UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0), 2))  // Missile
         }
         
         // Calcola il totale dei pesi
