@@ -4793,16 +4793,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard roll < 25 else { return }
 
         // DISTRIBUZIONE PROGRESSIVA power-up per wave
-        // Wave 1: B (Bullet) - solo offensivo base
-        // Wave 2: B, A (Attack)
-        // Wave 3: B, A, G (Gravity)
-        // Wave 4: B, A, G, W (Wave)
-        // Wave 5+: B, A, G, W, M (Missile)
+        // Wave 1: V (Vulcan), B (Bullet) - offensivi base
+        // Wave 2: V, B, A (Attack)
+        // Wave 3: V, B, A, G (Gravity)
+        // Wave 4: V, B, A, G, W (Wave)
+        // Wave 5+: V, B, A, G, W, M (Missile)
         // TUTTI CON PESO 1 = PROBABILITÀ PARIFICATE
         
         var weightedTypes: [(String, UIColor, Int)] = []
         
         // Power-up base (wave 1+)
+        weightedTypes.append(("V", UIColor.orange, 1))  // Vulcan - sempre disponibile
         weightedTypes.append(("B", UIColor.green, 1))   // Bullet - sempre disponibile
         
         // Wave 2+: aggiungi Attack
