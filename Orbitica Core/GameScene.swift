@@ -3740,8 +3740,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             flashAtmosphere()
             
             // NUOVO: L'asteroide subisce danno come se fosse colpito da un proiettile
+            // MA NON VENGONO ASSEGNATI PUNTI (givePoints: false)
             if let asteroid = asteroid {
-                fragmentAsteroid(asteroid, damageMultiplier: 1.0)  // Danno da 1 colpo
+                fragmentAsteroid(asteroid, damageMultiplier: 1.0, givePoints: false)
             }
             
             // Effetto particellare al punto di contatto con colore random
@@ -4035,11 +4036,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let reflectedVelocityX = velocity.dx - 2 * dotProduct * normalX
         let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
         
-        // Rimbalzo più forte per gli asteroidi
-        // Durante debris cleanup, aumenta il rimbalzo del 50%
-        var bounceFactor: CGFloat = 1.5
+        // Rimbalzo molto più forte per gli asteroidi
+        // Durante debris cleanup, aumenta ulteriormente il rimbalzo
+        var bounceFactor: CGFloat = 2.5  // Aumentato da 1.5 a 2.5 per rimbalzo più energico
         if debrisCleanupActive {
-            bounceFactor *= 1.5  // +50% durante cleanup
+            bounceFactor *= 2.0  // Aumentato da 1.5x a 2.0x durante cleanup (totale 5.0x)
         }
         asteroidBody.velocity = CGVector(
             dx: reflectedVelocityX * bounceFactor,
@@ -4117,7 +4118,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.run(SKAction.sequence([wait, restore]))
     }
     
-    private func fragmentAsteroid(_ asteroid: SKShapeNode, damageMultiplier: CGFloat = 1.0) {
+    private func fragmentAsteroid(_ asteroid: SKShapeNode, damageMultiplier: CGFloat = 1.0, givePoints: Bool = true) {
         guard let sizeString = asteroid.name?.split(separator: "_").last,
               let sizeRaw = Int(String(sizeString)),
               let size = AsteroidSize(rawValue: sizeRaw) else { return }
@@ -4150,24 +4151,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             return  // Non frammentare ancora
         }
         
-        // Aggiungi punti in base alla dimensione (moltiplicati per danno)
-        let basePoints: Int
-        switch size {
-        case .large: basePoints = 20
-        case .medium: basePoints = 15
-        case .small: basePoints = 10
+        // Aggiungi punti SOLO se givePoints è true (non quando colpisce atmosfera)
+        if givePoints {
+            let basePoints: Int
+            switch size {
+            case .large: basePoints = 20
+            case .medium: basePoints = 15
+            case .small: basePoints = 10
+            }
+            
+            // SQUARE asteroids valgono IL DOPPIO
+            let isSquare = asteroid.name?.contains("square") ?? false
+            let typeMultiplier: CGFloat = isSquare ? 2.0 : 1.0
+            
+            let points = Int(CGFloat(basePoints) * damageMultiplier * typeMultiplier)
+            score += points
+            scoreLabel.text = "\(score)"
+            
+            // Mostra label con i punti accanto all'asteroide
+            showPointsLabel(points: points, at: asteroid.position)
         }
-        
-        // SQUARE asteroids valgono IL DOPPIO
-        let isSquare = asteroid.name?.contains("square") ?? false
-        let typeMultiplier: CGFloat = isSquare ? 2.0 : 1.0
-        
-        let points = Int(CGFloat(basePoints) * damageMultiplier * typeMultiplier)
-        score += points
-        scoreLabel.text = "\(score)"
-        
-        // Mostra label con i punti accanto all'asteroide
-        showPointsLabel(points: points, at: asteroid.position)
         
         let position = asteroid.position
         let velocity = asteroid.physicsBody?.velocity ?? .zero
@@ -5443,77 +5446,77 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         background.position = CGPoint.zero  // Centro della camera
         overlay.addChild(background)
         
-        // Testo GAME OVER
+        // Testo GAME OVER - dimensione ridotta
         let fontName = "AvenirNext-Bold"
         let gameOverLabel = SKLabelNode(fontNamed: fontName)
         gameOverLabel.text = "GAME OVER"
-        gameOverLabel.fontSize = 72
+        gameOverLabel.fontSize = 56  // Ridotto da 72
         gameOverLabel.fontColor = .red
         gameOverLabel.horizontalAlignmentMode = .center
-        gameOverLabel.position = CGPoint(x: 0, y: 50)  // Relativo al centro
+        gameOverLabel.position = CGPoint(x: 0, y: 70)  // Spostato più in alto
         overlay.addChild(gameOverLabel)
         
-        // Score finale
+        // Score finale - ridotto
         let finalScoreLabel = SKLabelNode(fontNamed: fontName)
         finalScoreLabel.text = "FINAL SCORE: \(score)"
-        finalScoreLabel.fontSize = 32
+        finalScoreLabel.fontSize = 28  // Ridotto da 32
         finalScoreLabel.fontColor = .white
         finalScoreLabel.horizontalAlignmentMode = .center
-        finalScoreLabel.position = CGPoint(x: 0, y: -30)  // Relativo al centro
+        finalScoreLabel.position = CGPoint(x: 0, y: 10)  // Relativo al centro
         overlay.addChild(finalScoreLabel)
         
-        // Wave raggiunta
+        // Wave raggiunta - ridotto
         let waveLabel = SKLabelNode(fontNamed: fontName)
         waveLabel.text = "WAVE \(currentWave)"
-        waveLabel.fontSize = 24
+        waveLabel.fontSize = 20  // Ridotto da 24
         waveLabel.fontColor = UIColor.white.withAlphaComponent(0.7)
         waveLabel.horizontalAlignmentMode = .center
-        waveLabel.position = CGPoint(x: 0, y: -70)  // Relativo al centro
+        waveLabel.position = CGPoint(x: 0, y: -20)  // Più vicino allo score
         overlay.addChild(waveLabel)
         
-        // Pulsante SAVE SCORE (giallo, in alto)
-        let saveScoreButton = SKShapeNode(rectOf: CGSize(width: 250, height: 60), cornerRadius: 10)
+        // Pulsante SAVE SCORE - ridotto
+        let saveScoreButton = SKShapeNode(rectOf: CGSize(width: 220, height: 50), cornerRadius: 10)
         saveScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.2)
         saveScoreButton.strokeColor = .yellow
         saveScoreButton.lineWidth = 3
-        saveScoreButton.position = CGPoint(x: 0, y: -130)  // Relativo al centro
+        saveScoreButton.position = CGPoint(x: 0, y: -75)  // Più vicino alle scritte
         saveScoreButton.name = "saveScoreButton"
         
         let saveScoreLabel = SKLabelNode(fontNamed: fontName)
         saveScoreLabel.text = "SAVE SCORE"
-        saveScoreLabel.fontSize = 24
+        saveScoreLabel.fontSize = 20  // Ridotto da 24
         saveScoreLabel.fontColor = .yellow
         saveScoreLabel.verticalAlignmentMode = .center
         saveScoreButton.addChild(saveScoreLabel)
         overlay.addChild(saveScoreButton)
         
-        // Pulsante RETRY
-        let retryButton = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 10)
+        // Pulsante RETRY - ridotto
+        let retryButton = SKShapeNode(rectOf: CGSize(width: 170, height: 50), cornerRadius: 10)
         retryButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         retryButton.strokeColor = .white
         retryButton.lineWidth = 3
-        retryButton.position = CGPoint(x: -110, y: -210)  // Relativo al centro
+        retryButton.position = CGPoint(x: -95, y: -145)  // Più vicini
         retryButton.name = "retryButton"
         
         let retryLabel = SKLabelNode(fontNamed: fontName)
         retryLabel.text = "RETRY"
-        retryLabel.fontSize = 24
+        retryLabel.fontSize = 20  // Ridotto da 24
         retryLabel.fontColor = .white
         retryLabel.verticalAlignmentMode = .center
         retryButton.addChild(retryLabel)
         overlay.addChild(retryButton)
         
-        // Pulsante MENU
-        let menuButton = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 10)
+        // Pulsante MENU - ridotto
+        let menuButton = SKShapeNode(rectOf: CGSize(width: 170, height: 50), cornerRadius: 10)
         menuButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         menuButton.strokeColor = .white
         menuButton.lineWidth = 3
-        menuButton.position = CGPoint(x: 110, y: -210)  // Relativo al centro
+        menuButton.position = CGPoint(x: 95, y: -145)  // Più vicini
         menuButton.name = "menuButton"
         
         let menuLabel = SKLabelNode(fontNamed: fontName)
         menuLabel.text = "MENU"
-        menuLabel.fontSize = 24
+        menuLabel.fontSize = 20  // Ridotto da 24
         menuLabel.fontColor = .white
         menuLabel.verticalAlignmentMode = .center
         menuButton.addChild(menuLabel)

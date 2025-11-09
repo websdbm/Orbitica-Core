@@ -228,7 +228,7 @@ class MainMenuScene: SKScene {
         playButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         playButton.strokeColor = .white
         playButton.lineWidth = 3
-        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20)  // Alzato per fare spazio
+        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 40)  // Più distante dal titolo
         playButton.zPosition = 10
         playButton.name = "playButton"
         addChild(playButton)
@@ -280,7 +280,7 @@ class MainMenuScene: SKScene {
         hiScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.1)
         hiScoreButton.strokeColor = .yellow
         hiScoreButton.lineWidth = 3
-        hiScoreButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 100)  // Sotto il PLAY, leggermente più vicino
+        hiScoreButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 130)  // Più distanziato dal PLAY
         hiScoreButton.zPosition = 10
         hiScoreButton.name = "hiScoreButton"
         addChild(hiScoreButton)

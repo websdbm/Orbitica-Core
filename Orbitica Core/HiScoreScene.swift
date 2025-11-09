@@ -221,7 +221,7 @@ class HiScoreScene: SKScene {
             return
         }
         
-        let startY = size.height - 200  // Aumentato da 180: tabella più in basso
+        let startY = size.height - 240  // Ulteriormente abbassato per più spazio dall'alto
         let lineHeight: CGFloat = 55  // Aumentato per più spazio
         
         // Header - con più spazio dall'alto
