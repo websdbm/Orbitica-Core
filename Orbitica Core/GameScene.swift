@@ -3116,17 +3116,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 targetY = planetCenter.y + sin(newAngle) * closestRingRadius
             }
             
-            // RIDOTTO: Interpola più dolcemente - NON fermare mai il player
-            // Per ellissi: interpolazione ancora più debole perché il percorso varia
-            let currentX = player.position.x
-            let currentY = player.position.y
-            let baseInterpolation = isEllipseRing ? 0.08 : 0.15  // Ellisse: metà della forza
-            let positionInterpolation = orbitalGrappleStrength * baseInterpolation
-            let newX = currentX + (targetX - currentX) * positionInterpolation
-            let newY = currentY + (targetY - currentY) * positionInterpolation
-            
-            player.position = CGPoint(x: newX, y: newY)
-            
             // Velocità tangenziale ponderata dalla forza di aggancio e moltiplicatore ellittico
             // Per ellisse: il raggio effettivo varia, quindi usiamo la distanza attuale
             let effectiveRadius = isEllipseRing ? sqrt(dx * dx + dy * dy) : closestRingRadius
@@ -3140,7 +3129,43 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Mescola velocità orbitale con velocità attuale
             let currentVx = playerBody.velocity.dx
             let currentVy = playerBody.velocity.dy
-            // RIDOTTO: forza di mescolamento velocità - da 0.3 a 0.15 per più controllo
+            
+            if isEllipseRing {
+                // ELLISSI: usa SOLO velocità, NO interpolazione posizione
+                // Forza centripeta MOLTO debole verso il percorso ellittico
+                let currentX = player.position.x
+                let currentY = player.position.y
+                let toTargetX = targetX - currentX
+                let toTargetY = targetY - currentY
+                let distanceToTarget = sqrt(toTargetX * toTargetX + toTargetY * toTargetY)
+                
+                // Applica forza centripeta se lontano dal percorso
+                if distanceToTarget > 5 {
+                    let centripetalForce: CGFloat = 30.0 * orbitalGrappleStrength
+                    let forceX = (toTargetX / distanceToTarget) * centripetalForce
+                    let forceY = (toTargetY / distanceToTarget) * centripetalForce
+                    playerBody.applyForce(CGVector(dx: forceX, dy: forceY))
+                }
+                
+                // Mescola velocità in modo più aggressivo per ellissi
+                let mixingStrength: CGFloat = 0.25 * orbitalGrappleStrength
+                let mixedVx = currentVx + (tangentialVx - currentVx) * mixingStrength
+                let mixedVy = currentVy + (tangentialVy - currentVy) * mixingStrength
+                
+                playerBody.velocity = CGVector(dx: mixedVx, dy: mixedVy)
+                return  // Salta il resto per ellissi
+            }
+            
+            // CERCHI: usa interpolazione posizione (sistema originale)
+            let currentX = player.position.x
+            let currentY = player.position.y
+            let positionInterpolation = orbitalGrappleStrength * 0.15
+            let newX = currentX + (targetX - currentX) * positionInterpolation
+            let newY = currentY + (targetY - currentY) * positionInterpolation
+            
+            player.position = CGPoint(x: newX, y: newY)
+            
+            // Mescola velocità per cerchi
             let mixedVx = currentVx + (tangentialVx - currentVx) * orbitalGrappleStrength * 0.15
             let mixedVy = currentVy + (tangentialVy - currentVy) * orbitalGrappleStrength * 0.15
             
