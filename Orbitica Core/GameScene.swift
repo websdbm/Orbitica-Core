@@ -159,6 +159,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Debug flag - imposta su true per abilitare i log
     private let debugMode: Bool = false
     
+    // Starting wave (per debug scene)
+    var startingWave: Int = 1
+    
     // Helper per log condizionali
     private func debugLog(_ message: String) {
         if debugMode {
@@ -374,8 +377,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupWaveLabel()
         setupPauseButton()
         
-        // Avvia Wave 1
-        startWave(1)
+        // Avvia la wave iniziale (1 o quella selezionata dal debug)
+        startWave(startingWave)
     }
     
     override func willMove(from view: SKView) {
@@ -1077,48 +1080,58 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
         
         // DISTRIBUZIONE PROGRESSIVA: ring sbloccati per wave
-        // Wave 1: solo ring 1 (interno)
-        // Wave 2: ring 1 + 2
-        // Wave 3+: tutti e 3
+        // Wave 1: nessun anello
+        // Wave 2: solo ring 1 (interno)
+        // Wave 3: ring 1 + 2
+        // Wave 4+: tutti e 3
         
         // ===== ANELLO 1 (interno) - Magenta/Rosa =====
-        // Sempre presente da wave 1
-        createGravityWellRing(
-            radius: orbitalRing1Radius,
-            ringNode: &orbitalRing1,
-            color: UIColor(red: 1.0, green: 0.3, blue: 0.7, alpha: 1.0),  // Magenta
-            velocity: orbitalBaseAngularVelocity,
-            centerPosition: centerPosition,
-            name: "orbitalRing1"
-        )
+        // Appare da wave 2
+        if currentWave >= 2 {
+            createGravityWellRing(
+                radius: orbitalRing1Radius,
+                ringNode: &orbitalRing1,
+                color: UIColor(red: 1.0, green: 0.3, blue: 0.7, alpha: 1.0),  // Magenta
+                velocity: orbitalBaseAngularVelocity,
+                centerPosition: centerPosition,
+                name: "orbitalRing1",
+                isEllipse: false,
+                ellipseRatio: 1.0
+            )
+        }
         
         // ===== ANELLO 2 (medio) - Cyan brillante =====
-        // Sbloccato da wave 2
-        if currentWave >= 2 {
+        // Appare da wave 3
+        if currentWave >= 3 {
             createGravityWellRing(
                 radius: orbitalRing2Radius,
                 ringNode: &orbitalRing2,
                 color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0),  // Cyan
                 velocity: orbitalBaseAngularVelocity * 1.33,
                 centerPosition: centerPosition,
-                name: "orbitalRing2"
+                name: "orbitalRing2",
+                isEllipse: false,
+                ellipseRatio: 1.0
             )
         }
         
         // ===== ANELLO 3 (esterno) - Viola/Lavanda =====
-        // Sbloccato da wave 3
-        if currentWave >= 3 {
+        // Appare da wave 4
+        if currentWave >= 4 {
+            let isEllipse = currentWave >= 5  // Diventa ellisse dalla wave 5
             createGravityWellRing(
                 radius: orbitalRing3Radius,
                 ringNode: &orbitalRing3,
                 color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0),  // Viola
                 velocity: orbitalBaseAngularVelocity * 1.77,
                 centerPosition: centerPosition,
-                name: "orbitalRing3"
+                name: "orbitalRing3",
+                isEllipse: isEllipse,
+                ellipseRatio: 1.5  // Ellisse orizzontale
             )
         }
         
-        let numRings = currentWave >= 3 ? 3 : (currentWave >= 2 ? 2 : 1)
+        let numRings = currentWave >= 4 ? 3 : (currentWave >= 3 ? 2 : (currentWave >= 2 ? 1 : 0))
         debugLog("✅ Gravity Well rings created: \(numRings) active (wave \(currentWave))")
     }
     
@@ -1126,43 +1139,116 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func updateOrbitalRingsForWave() {
         let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
         
-        // Aggiungi l'anello 2 se siamo alla wave 2+ e non esiste ancora
-        if currentWave >= 2 && orbitalRing2 == nil {
+        // Aggiungi l'anello 1 se siamo alla wave 2+ e non esiste ancora
+        if currentWave >= 2 && orbitalRing1 == nil {
+            createGravityWellRing(
+                radius: orbitalRing1Radius,
+                ringNode: &orbitalRing1,
+                color: UIColor(red: 1.0, green: 0.3, blue: 0.7, alpha: 1.0),  // Magenta
+                velocity: orbitalBaseAngularVelocity,
+                centerPosition: centerPosition,
+                name: "orbitalRing1",
+                isEllipse: false,
+                ellipseRatio: 1.0
+            )
+            
+            if let ring1Container = worldLayer.childNode(withName: "orbitalRing1") {
+                activateRingAnimations(for: ring1Container)
+            }
+            
+            debugLog("✨ Orbital ring 1 added and activated for wave \(currentWave)")
+        }
+        
+        // Aggiungi l'anello 2 se siamo alla wave 3+ e non esiste ancora
+        if currentWave >= 3 && orbitalRing2 == nil {
             createGravityWellRing(
                 radius: orbitalRing2Radius,
                 ringNode: &orbitalRing2,
                 color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0),  // Cyan
                 velocity: orbitalBaseAngularVelocity * 1.33,
                 centerPosition: centerPosition,
-                name: "orbitalRing2"
+                name: "orbitalRing2",
+                isEllipse: currentWave >= 6,  // Diventa ellisse dalla wave 6
+                ellipseRatio: 1.5
             )
-            debugLog("✨ Orbital ring 2 added for wave \(currentWave)")
+            
+            if let ring2Container = worldLayer.childNode(withName: "orbitalRing2") {
+                activateRingAnimations(for: ring2Container)
+            }
+            
+            debugLog("✨ Orbital ring 2 added and activated for wave \(currentWave)")
         }
         
-        // Aggiungi l'anello 3 se siamo alla wave 3+ e non esiste ancora
-        if currentWave >= 3 && orbitalRing3 == nil {
+        // Aggiungi l'anello 3 se siamo alla wave 4+ e non esiste ancora
+        if currentWave >= 4 && orbitalRing3 == nil {
             createGravityWellRing(
                 radius: orbitalRing3Radius,
                 ringNode: &orbitalRing3,
                 color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0),  // Viola
                 velocity: orbitalBaseAngularVelocity * 1.77,
                 centerPosition: centerPosition,
-                name: "orbitalRing3"
+                name: "orbitalRing3",
+                isEllipse: currentWave >= 5,  // Diventa ellisse dalla wave 5
+                ellipseRatio: 1.5
             )
-            debugLog("✨ Orbital ring 3 added for wave \(currentWave)")
+            
+            if let ring3Container = worldLayer.childNode(withName: "orbitalRing3") {
+                activateRingAnimations(for: ring3Container)
+            }
+            
+            debugLog("✨ Orbital ring 3 added and activated for wave \(currentWave)")
+        }
+        
+        // Trasforma gli anelli in ellissi quando necessario
+        if currentWave == 5 && orbitalRing3 != nil {
+            transformRingToEllipse(ringName: "orbitalRing3", radius: orbitalRing3Radius, color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0))
+        }
+        if currentWave == 6 && orbitalRing2 != nil {
+            transformRingToEllipse(ringName: "orbitalRing2", radius: orbitalRing2Radius, color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0))
+        }
+        if currentWave == 7 && orbitalRing1 != nil {
+            transformRingToEllipse(ringName: "orbitalRing1", radius: orbitalRing1Radius, color: UIColor(red: 1.0, green: 0.3, blue: 0.7, alpha: 1.0))
         }
     }
     
-    private func createGravityWellRing(radius: CGFloat, ringNode: inout SKShapeNode?, color: UIColor, velocity: CGFloat, centerPosition: CGPoint, name: String) {
+    // Trasforma un anello circolare in ellisse
+    private func transformRingToEllipse(ringName: String, radius: CGFloat, color: UIColor) {
+        guard let ringContainer = worldLayer.childNode(withName: ringName) else { return }
+        guard let mainRing = ringContainer.childNode(withName: "mainRing") as? SKShapeNode else { return }
+        
+        // Crea path ellittico
+        let ellipsePath = CGMutablePath()
+        ellipsePath.addEllipse(in: CGRect(x: -radius * 1.5, y: -radius, width: radius * 3.0, height: radius * 2.0))
+        
+        mainRing.path = ellipsePath
+        
+        debugLog("🔄 Ring \(ringName) transformed to ellipse")
+    }
+    
+    // Attiva tutte le animazioni di un anello orbitale
+    private func activateRingAnimations(for ringContainer: SKNode) {
+        ringContainer.isPaused = false
+        ringContainer.enumerateChildNodes(withName: "//*") { node, _ in
+            node.isPaused = false
+        }
+    }
+    
+    private func createGravityWellRing(radius: CGFloat, ringNode: inout SKShapeNode?, color: UIColor, velocity: CGFloat, centerPosition: CGPoint, name: String, isEllipse: Bool, ellipseRatio: CGFloat) {
         // Container per tutti gli elementi del ring
         let ringContainer = SKNode()
         ringContainer.position = centerPosition
         ringContainer.zPosition = 1
         ringContainer.name = name
         
-        // 1️⃣ ANELLO PRINCIPALE (sottile e semi-trasparente)
+        // 1️⃣ ANELLO PRINCIPALE (sottile e semi-trasparente) - Circolare o Ellittico
         let mainPath = CGMutablePath()
-        mainPath.addArc(center: .zero, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        if isEllipse {
+            // Ellisse orizzontale
+            mainPath.addEllipse(in: CGRect(x: -radius * ellipseRatio, y: -radius, width: radius * ellipseRatio * 2.0, height: radius * 2.0))
+        } else {
+            // Cerchio normale
+            mainPath.addArc(center: .zero, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        }
         
         let mainRingShape = SKShapeNode(path: mainPath)
         mainRingShape.strokeColor = color.withAlphaComponent(0.15)  // Molto più trasparente
@@ -1240,6 +1326,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         worldLayer.addChild(ringContainer)
         ringNode = mainRingShape  // Riferimento all'anello principale per interazioni
+        
+        // Salva il riferimento al container per poterlo controllare
+        ringContainer.userData = NSMutableDictionary()
+        ringContainer.userData?["ringContainer"] = true
     }
     
     private func createRadialPulse(at container: SKNode, radius: CGFloat, color: UIColor) {
@@ -2300,29 +2390,48 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let distanceFromCenter = sqrt(dx * dx + dy * dy)
             let currentAngle = atan2(dy, dx)
             
-            // Determina l'anello più vicino
-            let distanceFromRing1 = abs(distanceFromCenter - orbitalRing1Radius)
-            let distanceFromRing2 = abs(distanceFromCenter - orbitalRing2Radius)
-            let distanceFromRing3 = abs(distanceFromCenter - orbitalRing3Radius)
+            // Determina l'anello più vicino - SOLO TRA QUELLI ATTIVI
+            var availableRings: [(distance: CGFloat, ring: Int, radius: CGFloat, velocity: CGFloat)] = []
             
-            let minDistance = min(distanceFromRing1, distanceFromRing2, distanceFromRing3)
-            let closestRing: Int
-            let closestRingRadius: CGFloat
-            let closestRingVelocity: CGFloat
-            
-            if minDistance == distanceFromRing1 {
-                closestRing = 1
-                closestRingRadius = orbitalRing1Radius
-                closestRingVelocity = orbitalBaseAngularVelocity
-            } else if minDistance == distanceFromRing2 {
-                closestRing = 2
-                closestRingRadius = orbitalRing2Radius
-                closestRingVelocity = orbitalBaseAngularVelocity * 1.33
-            } else {
-                closestRing = 3
-                closestRingRadius = orbitalRing3Radius
-                closestRingVelocity = orbitalBaseAngularVelocity * 1.77
+            // Anello 1 disponibile dalla wave 2
+            if currentWave >= 2 {
+                availableRings.append((
+                    distance: abs(distanceFromCenter - orbitalRing1Radius),
+                    ring: 1,
+                    radius: orbitalRing1Radius,
+                    velocity: orbitalBaseAngularVelocity
+                ))
             }
+            
+            // Anello 2 dalla wave 3
+            if currentWave >= 3 {
+                availableRings.append((
+                    distance: abs(distanceFromCenter - orbitalRing2Radius),
+                    ring: 2,
+                    radius: orbitalRing2Radius,
+                    velocity: orbitalBaseAngularVelocity * 1.33
+                ))
+            }
+            
+            // Anello 3 dalla wave 4
+            if currentWave >= 4 {
+                availableRings.append((
+                    distance: abs(distanceFromCenter - orbitalRing3Radius),
+                    ring: 3,
+                    radius: orbitalRing3Radius,
+                    velocity: orbitalBaseAngularVelocity * 1.77
+                ))
+            }
+            
+            // Se non ci sono anelli disponibili, salta questo asteroide
+            guard !availableRings.isEmpty else { continue }
+            
+            // Trova il più vicino tra quelli disponibili
+            let closest = availableRings.min(by: { $0.distance < $1.distance })!
+            let minDistance = closest.distance
+            let closestRing = closest.ring
+            let closestRingRadius = closest.radius
+            let closestRingVelocity = closest.velocity
             
             // ===== CAPTURE: Tentativo probabilistico di cattura =====
             if !inSlingshot && minDistance < slingshotCaptureThreshold {
@@ -2625,33 +2734,52 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let dy = player.position.y - planetCenter.y
         let distanceFromCenter = sqrt(dx * dx + dy * dy)
         
-        // Trova l'anello più vicino
-        let distanceFromRing1 = abs(distanceFromCenter - orbitalRing1Radius)
-        let distanceFromRing2 = abs(distanceFromCenter - orbitalRing2Radius)
-        let distanceFromRing3 = abs(distanceFromCenter - orbitalRing3Radius)
+        // Trova l'anello più vicino - SOLO TRA QUELLI ATTIVI
+        var availableRings: [(distance: CGFloat, ring: Int, radius: CGFloat, velocity: CGFloat, node: SKShapeNode?)] = []
         
-        let minDistance = min(distanceFromRing1, distanceFromRing2, distanceFromRing3)
-        let closestRing: Int
-        let closestRingRadius: CGFloat
-        let closestRingVelocity: CGFloat
-        let closestRingNode: SKShapeNode?
-        
-        if minDistance == distanceFromRing1 {
-            closestRing = 1
-            closestRingRadius = orbitalRing1Radius
-            closestRingVelocity = orbitalBaseAngularVelocity
-            closestRingNode = orbitalRing1
-        } else if minDistance == distanceFromRing2 {
-            closestRing = 2
-            closestRingRadius = orbitalRing2Radius
-            closestRingVelocity = orbitalBaseAngularVelocity * 1.33
-            closestRingNode = orbitalRing2
-        } else {
-            closestRing = 3
-            closestRingRadius = orbitalRing3Radius
-            closestRingVelocity = orbitalBaseAngularVelocity * 1.77
-            closestRingNode = orbitalRing3
+        // Anello 1 disponibile dalla wave 2
+        if currentWave >= 2 {
+            availableRings.append((
+                distance: abs(distanceFromCenter - orbitalRing1Radius),
+                ring: 1,
+                radius: orbitalRing1Radius,
+                velocity: orbitalBaseAngularVelocity,
+                node: orbitalRing1
+            ))
         }
+        
+        // Anello 2 dalla wave 3
+        if currentWave >= 3 {
+            availableRings.append((
+                distance: abs(distanceFromCenter - orbitalRing2Radius),
+                ring: 2,
+                radius: orbitalRing2Radius,
+                velocity: orbitalBaseAngularVelocity * 1.33,
+                node: orbitalRing2
+            ))
+        }
+        
+        // Anello 3 dalla wave 4
+        if currentWave >= 4 {
+            availableRings.append((
+                distance: abs(distanceFromCenter - orbitalRing3Radius),
+                ring: 3,
+                radius: orbitalRing3Radius,
+                velocity: orbitalBaseAngularVelocity * 1.77,
+                node: orbitalRing3
+            ))
+        }
+        
+        // Se non ci sono anelli disponibili, esci
+        guard !availableRings.isEmpty else { return }
+        
+        // Trova il più vicino tra quelli disponibili
+        let closest = availableRings.min(by: { $0.distance < $1.distance })!
+        let minDistance = closest.distance
+        let closestRing = closest.ring
+        let closestRingRadius = closest.radius
+        let closestRingVelocity = closest.velocity
+        let closestRingNode = closest.node
         
         let distanceFromRing = minDistance
         

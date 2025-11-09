@@ -2,101 +2,122 @@
 //  DebugScene.swift
 //  Orbitica Core
 //
-//  Debug scene per testare animazioni e nuovi oggetti
+//  Debug scene per selezionare la wave di partenza
 //
 
 import SpriteKit
 
-class DebugScene: SKScene, SKPhysicsContactDelegate {
+class DebugScene: SKScene {
     
-    // Layer principale
-    private var worldLayer: SKNode!
-    
-    // Pianeta centrale
-    private var planet: SKShapeNode!
-    private let planetRadius: CGFloat = 30
-    
-    // Meteoriti quadrati in test
-    private var squareAsteroids: [SKShapeNode] = []
-    
-    // Gravità - AUMENTATA per tenere i cubi vicini al centro
-    private let gravitationalConstant: CGFloat = 150  // Era 80, aumentato quasi 2x
-    private let planetMass: CGFloat = 300  // Era 100, triplicato per attrazione forte
-    
-    // Texture per particelle
-    private var particleTexture: SKTexture?
-    
-    // HUD layer (immune allo zoom)
-    private var hudLayer: SKNode!
+    // Wave selector
+    private var selectedWave: Int = 1
+    private var waveLabel: SKLabelNode!
+    private var playButton: SKShapeNode!
     
     override func didMove(to view: SKView) {
         backgroundColor = .black
         
-        // Setup physics
-        physicsWorld.gravity = .zero
-        physicsWorld.contactDelegate = self
-        
-        // Crea layer
-        worldLayer = SKNode()
-        addChild(worldLayer)
-        
-        // Crea texture per particelle
-        particleTexture = createParticleTexture()
-        
-        // Setup camera (crea anche hudLayer)
-        setupCamera()
-        
-        // Crea pianeta
-        createPlanet()
-        
-        // Crea meteorite quadrato al centro
-        createSquareAsteroid(at: CGPoint(x: size.width / 2, y: size.height / 2 + 200), size: .large)
-        
-        // Pulsante chiudi
-        createCloseButton()
-        
         // Titolo
         let title = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        title.text = "DEBUG SCENE"
-        title.fontSize = 24
-        title.fontColor = .yellow
-        title.position = CGPoint(x: size.width / 2, y: size.height - 50)
-        title.zPosition = 1000
+        title.text = "WAVE SELECTOR"
+        title.fontSize = 32
+        title.fontColor = .cyan
+        title.position = CGPoint(x: size.width / 2, y: size.height - 100)
+        title.zPosition = 100
         addChild(title)
+        
+        // Istruzioni
+        let instructions = SKLabelNode(fontNamed: "Courier")
+        instructions.text = "Select starting wave"
+        instructions.fontSize = 18
+        instructions.fontColor = .white
+        instructions.alpha = 0.7
+        instructions.position = CGPoint(x: size.width / 2, y: size.height - 150)
+        instructions.zPosition = 100
+        addChild(instructions)
+        
+        // Wave selector UI
+        createWaveSelector()
+        
+        // Play button
+        createPlayButton()
+        
+        // Close button
+        createCloseButton()
     }
     
-    private func setupCamera() {
-        let cam = SKCameraNode()
-        cam.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        addChild(cam)
-        self.camera = cam
-        camera = cam
+    private func createWaveSelector() {
+        // Pulsante decrement (-) 
+        let decrementButton = SKShapeNode(rectOf: CGSize(width: 60, height: 60), cornerRadius: 10)
+        decrementButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+        decrementButton.strokeColor = .white
+        decrementButton.lineWidth = 2
+        decrementButton.position = CGPoint(x: size.width / 2 - 120, y: size.height / 2)
+        decrementButton.name = "decrement"
+        decrementButton.zPosition = 100
+        addChild(decrementButton)
         
-        // HUD layer attaccato alla camera (immune allo zoom)
-        hudLayer = SKNode()
-        cam.addChild(hudLayer)
+        let minusLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        minusLabel.text = "-"
+        minusLabel.fontSize = 36
+        minusLabel.fontColor = .white
+        minusLabel.verticalAlignmentMode = .center
+        decrementButton.addChild(minusLabel)
         
-        // ZOOM OUT del 50% (0.5 = metà = vedi il doppio dell'area)
-        cam.setScale(2.0)  // 2.0 = zoom indietro (vedi area 2x più grande)
+        // Wave number display
+        waveLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        waveLabel.text = "\(selectedWave)"
+        waveLabel.fontSize = 72
+        waveLabel.fontColor = .cyan
+        waveLabel.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        waveLabel.verticalAlignmentMode = .center
+        waveLabel.zPosition = 100
+        addChild(waveLabel)
+        
+        // Pulsante increment (+)
+        let incrementButton = SKShapeNode(rectOf: CGSize(width: 60, height: 60), cornerRadius: 10)
+        incrementButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+        incrementButton.strokeColor = .white
+        incrementButton.lineWidth = 2
+        incrementButton.position = CGPoint(x: size.width / 2 + 120, y: size.height / 2)
+        incrementButton.name = "increment"
+        incrementButton.zPosition = 100
+        addChild(incrementButton)
+        
+        let plusLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        plusLabel.text = "+"
+        plusLabel.fontSize = 36
+        plusLabel.fontColor = .white
+        plusLabel.verticalAlignmentMode = .center
+        incrementButton.addChild(plusLabel)
     }
     
-    private func createPlanet() {
-        planet = SKShapeNode(circleOfRadius: planetRadius)
-        planet.fillColor = UIColor(red: 0.2, green: 0.6, blue: 0.8, alpha: 1.0)
-        planet.strokeColor = UIColor(red: 0.1, green: 0.4, blue: 0.6, alpha: 1.0)
-        planet.lineWidth = 2
-        planet.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        planet.zPosition = 10
+    private func createPlayButton() {
+        playButton = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 15)
+        playButton.fillColor = UIColor.green.withAlphaComponent(0.3)
+        playButton.strokeColor = .green
+        playButton.lineWidth = 3
+        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 150)
+        playButton.name = "play"
+        playButton.zPosition = 100
+        addChild(playButton)
         
-        planet.physicsBody = SKPhysicsBody(circleOfRadius: planetRadius)
-        planet.physicsBody?.isDynamic = false
-        planet.physicsBody?.categoryBitMask = 1
-        planet.physicsBody?.collisionBitMask = 0
+        let playLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        playLabel.text = "PLAY"
+        playLabel.fontSize = 28
+        playLabel.fontColor = .green
+        playLabel.verticalAlignmentMode = .center
+        playButton.addChild(playLabel)
         
-        worldLayer.addChild(planet)
+        // Animazione pulse
+        let pulse = SKAction.sequence([
+            SKAction.scale(to: 1.05, duration: 0.6),
+            SKAction.scale(to: 1.0, duration: 0.6)
+        ])
+        playButton.run(SKAction.repeatForever(pulse))
     }
     
-    // MARK: - Square Asteroid
+    // MARK: - Close Button
     
     enum SquareAsteroidSize: Int {
         case large = 2
