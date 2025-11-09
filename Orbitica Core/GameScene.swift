@@ -1806,9 +1806,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Ruota il proiettile nella direzione di sparo
         projectile.zRotation = player.zRotation
         
-        // Salva il moltiplicatore di danno nel userData
+        // Salva il moltiplicatore di danno E la dimensione originale nel userData
         projectile.userData = NSMutableDictionary()
         projectile.userData?["damageMultiplier"] = projectileDamageMultiplier
+        projectile.userData?["originalSize"] = NSValue(cgSize: usedSize)
         
         // EFFETTO SCIA: Particelle che seguono il proiettile
         let trail = SKEmitterNode()
@@ -1855,7 +1856,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         debugLog("☄️ Projectile fired with trail")
         
         // Imposta velocità iniziale invece di usare SKAction
-        let speed: CGFloat = 500
+        let speed: CGFloat = 575  // Aumentato da 500 (+15%)
         let velocityX = cos(angle) * speed
         let velocityY = sin(angle) * speed
         projectile.physicsBody?.velocity = CGVector(dx: velocityX, dy: velocityY)

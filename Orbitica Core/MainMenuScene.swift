@@ -247,15 +247,16 @@ class MainMenuScene: SKScene {
             }
         }
         
-        // Bottone rettangolare con bordo - ulteriormente ridotto
-        let buttonWidth: CGFloat = 180  // Ridotto da 200 a 180
-        let buttonHeight: CGFloat = 48   // Ridotto da 56 a 48
+        // Bottone rettangolare con bordo - posizionato a SINISTRA
+        let buttonWidth: CGFloat = 180
+        let buttonHeight: CGFloat = 48
+        let spacing: CGFloat = 20  // Spazio tra i bottoni
         
         playButton = SKShapeNode(rectOf: CGSize(width: buttonWidth, height: buttonHeight), cornerRadius: 10)
         playButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         playButton.strokeColor = .white
         playButton.lineWidth = 3
-        playButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60)  // Ancora più distante dal titolo
+        playButton.position = CGPoint(x: size.width / 2 - buttonWidth / 2 - spacing / 2, y: size.height / 2 - 80)
         playButton.zPosition = 10
         playButton.name = "playButton"
         addChild(playButton)
@@ -299,15 +300,16 @@ class MainMenuScene: SKScene {
             }
         }
         
-        // Bottone HI-SCORE sotto PLAY - ulteriormente ridotto
-        let buttonWidth: CGFloat = 180  // Ridotto da 200 a 180
-        let buttonHeight: CGFloat = 48   // Ridotto da 56 a 48
+        // Bottone HI-SCORE a DESTRA del PLAY
+        let buttonWidth: CGFloat = 180
+        let buttonHeight: CGFloat = 48
+        let spacing: CGFloat = 20  // Spazio tra i bottoni
         
         hiScoreButton = SKShapeNode(rectOf: CGSize(width: buttonWidth, height: buttonHeight), cornerRadius: 10)
         hiScoreButton.fillColor = UIColor.yellow.withAlphaComponent(0.1)
         hiScoreButton.strokeColor = .yellow
         hiScoreButton.lineWidth = 3
-        hiScoreButton.position = CGPoint(x: size.width / 2, y: size.height / 2 - 140)  // Più distanziato dal PLAY
+        hiScoreButton.position = CGPoint(x: size.width / 2 + buttonWidth / 2 + spacing / 2, y: size.height / 2 - 80)
         hiScoreButton.zPosition = 10
         hiScoreButton.name = "hiScoreButton"
         addChild(hiScoreButton)
