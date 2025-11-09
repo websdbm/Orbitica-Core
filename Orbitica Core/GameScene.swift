@@ -345,8 +345,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         physicsWorld.speed = 1.0  // Velocità normale
         // Riduce le iterazioni fisiche per frame - migliora performance con molti oggetti
         // Default è spesso 10, riduciamo a 5 per performance migliori
-        if let view = view {
-            view.preferredFramesPerSecond = 60  // Target 60 FPS
+        if let sceneView = self.view {
+            sceneView.preferredFramesPerSecond = 60  // Target 60 FPS
         }
         
         debugLog("=== GRAVITY SHIELD ===")
