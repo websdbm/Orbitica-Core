@@ -1839,23 +1839,35 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func fireMissile() {
         playShootSound()
         
-        // Missile: largo come big ammo (4x), con bandina rossa pulsante dietro
-        let missileWidth = projectileBaseSize.width * 4.0
-        let missileHeight = projectileBaseSize.height * 2.0
+        // Missile: più affusolato e lungo (3x larghezza, 4x altezza)
+        let missileWidth = projectileBaseSize.width * 3.0
+        let missileHeight = projectileBaseSize.height * 4.0
         
         let missile = SKNode()
         missile.name = "missile"
         
-        // Corpo principale (rettangolo viola/grigio)
-        let body = SKShapeNode(rectOf: CGSize(width: missileWidth, height: missileHeight), cornerRadius: 1)
+        // Corpo principale affusolato (rettangolo viola/grigio con più corner radius)
+        let body = SKShapeNode(rectOf: CGSize(width: missileWidth, height: missileHeight), cornerRadius: 2)
         body.fillColor = UIColor(red: 0.5, green: 0.4, blue: 0.6, alpha: 1.0)
         body.strokeColor = UIColor(red: 0.6, green: 0.5, blue: 0.7, alpha: 1.0)
         body.lineWidth = 1
         missile.addChild(body)
         
+        // Punta affusolata davanti (triangolo)
+        let nosePath = CGMutablePath()
+        nosePath.move(to: CGPoint(x: 0, y: missileHeight/2))
+        nosePath.addLine(to: CGPoint(x: -missileWidth/2, y: missileHeight/2 - 4))
+        nosePath.addLine(to: CGPoint(x: missileWidth/2, y: missileHeight/2 - 4))
+        nosePath.closeSubpath()
+        
+        let nose = SKShapeNode(path: nosePath)
+        nose.fillColor = UIColor(red: 0.6, green: 0.5, blue: 0.7, alpha: 1.0)
+        nose.strokeColor = .clear
+        missile.addChild(nose)
+        
         // Bandina rossa pulsante (reattore) - posizionata dietro
-        let flagWidth: CGFloat = missileWidth * 0.6
-        let flagHeight: CGFloat = 4
+        let flagWidth: CGFloat = missileWidth * 0.7
+        let flagHeight: CGFloat = 5
         let flag = SKShapeNode(rectOf: CGSize(width: flagWidth, height: flagHeight))
         flag.fillColor = .red
         flag.strokeColor = .clear
@@ -1869,14 +1881,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let pulse = SKAction.sequence([pulseUp, pulseDown])
         flag.run(SKAction.repeatForever(pulse))
         
-        // Physics body
-        missile.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: missileWidth, height: missileHeight))
+        // Physics body più grande per collisioni migliori
+        let bodyRadius = max(missileWidth, missileHeight) / 2 * 1.2  // 20% più grande
+        missile.physicsBody = SKPhysicsBody(circleOfRadius: bodyRadius)
         missile.physicsBody?.isDynamic = true
         missile.physicsBody?.categoryBitMask = PhysicsCategory.projectile
         missile.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.asteroid
         missile.physicsBody?.collisionBitMask = 0
-        missile.physicsBody?.mass = 0.05  // Più pesante per inerzia
-        missile.physicsBody?.linearDamping = 0.1  // Damping leggero per fluidità
+        missile.physicsBody?.mass = 0.08  // Più pesante per inerzia maggiore
+        missile.physicsBody?.linearDamping = 0.15  // Più damping per meno velocità
         missile.physicsBody?.affectedByGravity = false
         
         // Posizione davanti alla nave
@@ -1893,8 +1906,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         missile.userData = NSMutableDictionary()
         missile.userData?["damageMultiplier"] = 2.0
         
-        // Velocità iniziale nella direzione di lancio
-        let initialSpeed: CGFloat = 300
+        // Velocità iniziale più lenta
+        let initialSpeed: CGFloat = 250  // Ridotta da 300
         missile.physicsBody?.velocity = CGVector(
             dx: cos(angle) * initialSpeed,
             dy: sin(angle) * initialSpeed
@@ -1963,8 +1976,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             let targetAngle = atan2(dy, dx)
             
-            // Forza di spinta del reattore (simile a player)
-            let thrustForce: CGFloat = 150
+            // Forza di spinta ridotta per controllo migliore
+            let thrustForce: CGFloat = 120  // Ridotta da 150
             let thrustX = cos(targetAngle) * thrustForce
             let thrustY = sin(targetAngle) * thrustForce
             
@@ -1974,8 +1987,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let velocityAngle = atan2(physicsBody.velocity.dy, physicsBody.velocity.dx)
             missile.zRotation = velocityAngle - .pi / 2  // Aggiusta per orientamento
             
-            // Limita velocità massima
-            let maxSpeed: CGFloat = 400
+            // Limita velocità massima (più lenta)
+            let maxSpeed: CGFloat = 320  // Ridotta da 400
             let currentSpeed = hypot(physicsBody.velocity.dx, physicsBody.velocity.dy)
             if currentSpeed > maxSpeed {
                 let scale = maxSpeed / currentSpeed
@@ -4579,59 +4592,109 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Raggio esplosione: metà del raggio del pianeta
         let explosionRadius = planetRadius / 2.0
         
-        // Effetto visivo esplosione viola/rosso
-        let emitter = SKEmitterNode()
-        emitter.position = position
-        emitter.particleTexture = particleTexture
-        emitter.particleBirthRate = 500
-        emitter.numParticlesToEmit = 80
-        emitter.particleLifetime = 1.0
-        emitter.emissionAngle = 0
-        emitter.emissionAngleRange = CGFloat.pi * 2
-        emitter.particleSpeed = 150
-        emitter.particleSpeedRange = 75
-        emitter.particleScale = 0.6
-        emitter.particleScaleRange = 0.3
-        emitter.particleScaleSpeed = -0.5
-        emitter.particleAlpha = 1.0
-        emitter.particleAlphaSpeed = -1.0
-        // Colore viola/rosso per missile
-        emitter.particleColor = UIColor(red: 0.8, green: 0.2, blue: 0.6, alpha: 1.0)
-        emitter.particleColorBlendFactor = 1.0
-        emitter.particleBlendMode = .add
-        emitter.zPosition = 100
+        // ESPLOSIONE SPETTACOLARE TIPO MINI-WAVE
         
-        worldLayer.addChild(emitter)
+        // 1. Nuvola di particelle MASSIVA (3 ondate successive)
+        for waveIndex in 0..<3 {
+            let delay = Double(waveIndex) * 0.08
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self else { return }
+                
+                let emitter = SKEmitterNode()
+                emitter.position = position
+                emitter.particleTexture = self.particleTexture
+                emitter.particleBirthRate = 1200  // Molto denso
+                emitter.numParticlesToEmit = 150  // Molte particelle
+                emitter.particleLifetime = 1.5
+                emitter.emissionAngle = 0
+                emitter.emissionAngleRange = CGFloat.pi * 2
+                emitter.particleSpeed = 180 + CGFloat(waveIndex * 40)  // Velocità crescente per ondate
+                emitter.particleSpeedRange = 90
+                emitter.particleScale = 0.8
+                emitter.particleScaleRange = 0.4
+                emitter.particleScaleSpeed = -0.6
+                emitter.particleAlpha = 1.0
+                emitter.particleAlphaSpeed = -0.8
+                
+                // Colori viola/rosso/magenta alternati
+                let colors: [UIColor] = [
+                    UIColor(red: 0.9, green: 0.2, blue: 0.7, alpha: 1.0),  // Magenta
+                    UIColor(red: 0.8, green: 0.1, blue: 0.5, alpha: 1.0),  // Rosa scuro
+                    UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0)   // Viola
+                ]
+                emitter.particleColor = colors[waveIndex % colors.count]
+                emitter.particleColorBlendFactor = 1.0
+                emitter.particleBlendMode = .add
+                emitter.zPosition = 100 + CGFloat(waveIndex)
+                
+                self.worldLayer.addChild(emitter)
+                
+                let waitAction = SKAction.wait(forDuration: 1.8)
+                let removeAction = SKAction.removeFromParent()
+                emitter.run(SKAction.sequence([waitAction, removeAction]))
+            }
+        }
         
-        let waitAction = SKAction.wait(forDuration: 1.2)
-        let removeAction = SKAction.removeFromParent()
-        emitter.run(SKAction.sequence([waitAction, removeAction]))
+        // 2. Cerchi concentrici multipli che si espandono (tipo wave blast)
+        for i in 0..<5 {
+            let delay = Double(i) * 0.05
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self else { return }
+                
+                let ring = SKShapeNode(circleOfRadius: 8)
+                ring.position = position
+                ring.strokeColor = UIColor(red: 0.9, green: 0.3, blue: 0.7, alpha: 0.9 - CGFloat(i) * 0.15)
+                ring.lineWidth = 4 - CGFloat(i) * 0.5
+                ring.fillColor = UIColor(red: 0.8, green: 0.2, blue: 0.6, alpha: 0.2 - CGFloat(i) * 0.03)
+                ring.glowWidth = 3
+                ring.zPosition = 98 - CGFloat(i)
+                
+                self.worldLayer.addChild(ring)
+                
+                let finalScale = explosionRadius / 8.0
+                let expandDuration = 0.5 + Double(i) * 0.08
+                let expandAction = SKAction.scale(to: finalScale, duration: expandDuration)
+                let fadeAction = SKAction.fadeOut(withDuration: expandDuration)
+                let group = SKAction.group([expandAction, fadeAction])
+                let removeAction = SKAction.removeFromParent()
+                ring.run(SKAction.sequence([group, removeAction]))
+            }
+        }
         
-        // Cerchio di esplosione che si espande
-        let explosionCircle = SKShapeNode(circleOfRadius: 5)
-        explosionCircle.position = position
-        explosionCircle.strokeColor = UIColor(red: 0.9, green: 0.3, blue: 0.7, alpha: 0.8)
-        explosionCircle.lineWidth = 3
-        explosionCircle.fillColor = .clear
-        explosionCircle.zPosition = 99
+        // 3. Flash centrale brillante
+        let flash = SKShapeNode(circleOfRadius: 12)
+        flash.position = position
+        flash.fillColor = UIColor(red: 1.0, green: 0.8, blue: 0.9, alpha: 1.0)
+        flash.strokeColor = .clear
+        flash.glowWidth = 15
+        flash.zPosition = 102
         
-        worldLayer.addChild(explosionCircle)
+        worldLayer.addChild(flash)
         
-        let expandAction = SKAction.scale(to: explosionRadius / 5.0, duration: 0.4)
-        let fadeAction = SKAction.fadeOut(withDuration: 0.4)
-        let group = SKAction.group([expandAction, fadeAction])
-        explosionCircle.run(SKAction.sequence([group, removeAction]))
+        let flashExpand = SKAction.scale(to: 3.0, duration: 0.15)
+        let flashFade = SKAction.fadeOut(withDuration: 0.15)
+        let flashGroup = SKAction.group([flashExpand, flashFade])
+        flash.run(SKAction.sequence([flashGroup, SKAction.removeFromParent()]))
         
-        // Danneggia tutti gli asteroidi nel raggio
+        // 4. Danneggia tutti gli asteroidi nel raggio con effetto particellare
         var hitCount = 0
         for child in worldLayer.children {
             if child.name?.starts(with: "asteroid") == true,
                let asteroid = child as? SKShapeNode {
                 let distance = hypot(asteroid.position.x - position.x, asteroid.position.y - position.y)
                 if distance <= explosionRadius {
-                    // Crea piccola esplosione su ogni asteroide colpito
-                    createExplosionParticles(at: asteroid.position, color: randomExplosionColor())
-                    fragmentAsteroid(asteroid, damageMultiplier: damageMultiplier)
+                    // Calcola ritardo basato sulla distanza (effetto onda)
+                    let delay = distance / explosionRadius * 0.15
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                        guard let self = self, asteroid.parent != nil else { return }
+                        // Esplosione colorata su ogni asteroide
+                        self.createExplosionParticles(at: asteroid.position, color: UIColor(red: 0.9, green: 0.3, blue: 0.7, alpha: 1.0))
+                        self.fragmentAsteroid(asteroid, damageMultiplier: damageMultiplier)
+                    }
+                    
                     hitCount += 1
                 }
             }
