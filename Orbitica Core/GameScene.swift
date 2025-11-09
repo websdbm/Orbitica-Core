@@ -1481,12 +1481,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             }
             
-            // I power-up continuano con gravità NORMALE verso il pianeta
-            worldLayer.enumerateChildNodes(withName: "powerup_*") { node, _ in
-                if let powerupBody = node.physicsBody {
-                    self.applyGravityToNode(node: node, body: powerupBody, multiplier: 1.0)
-                }
-            }
+            // POWER-UP: NO gravità (fluttuano liberamente)
         } else {
             // Gravità NORMALE verso il pianeta
             // Applica gravità al player (ridotta del 5%)
@@ -1517,12 +1512,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             }
             
-            // Applica gravità ai power-up (normale)
-            worldLayer.enumerateChildNodes(withName: "powerup_*") { node, _ in
-                if let powerupBody = node.physicsBody {
-                    self.applyGravityToNode(node: node, body: powerupBody, multiplier: 1.0)
-                }
-            }
+            // POWER-UP: NO gravità (fluttuano liberamente)
         }
     }
     
@@ -2127,7 +2117,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // NUOVO: Calcola componente RADIALE della spinta (proiezione verso centro/esterno)
             // DOPPIA SOGLIA: gas sufficiente E allineamento radiale
-            if forceMagnitude > 0.75 {  // Soglia gas aumentata: serve MOLTISSIMO gas per sganciare (era 0.6)
+            if forceMagnitude > 0.85 {  // Soglia gas MOLTO alta: serve gas quasi massimo (era 0.75)
                 // Normalizza direzione player rispetto al centro
                 let playerAngle = atan2(dy, dx)
                 let radialX = cos(playerAngle)  // Direzione verso esterno
@@ -2138,9 +2128,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let thrustNormY = thrustDirection.dy / forceMagnitude
                 let radialAlignment = abs(thrustNormX * radialX + thrustNormY * radialY)
                 
-                // Sgancio SOLO se la spinta è FORTEMENTE radiale (> 70% allineamento)
-                if radialAlignment > 0.7 {
-                    orbitalGrappleStrength -= 0.15  // Sgancio graduale - non fermare il player!
+                // Sgancio SOLO se la spinta è FORTEMENTE radiale (> 65% allineamento)
+                if radialAlignment > 0.65 {
+                    // SGANCIO VELOCISSIMO una volta avviato!
+                    orbitalGrappleStrength -= 0.5  // Era 0.15, ora 3x più veloce
                     
                     if orbitalGrappleStrength <= 0 {
                         isGrappledToOrbit = false
@@ -3260,7 +3251,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Power-up + Atmosphere (rimbalzo senza danni)
         else if collision == (PhysicsCategory.powerup | PhysicsCategory.atmosphere) {
             let powerupBody = contact.bodyA.categoryBitMask == PhysicsCategory.powerup ? contact.bodyA : contact.bodyB
-            if let powerupNode = powerupBody.node {
+            if let powerupNode = powerupBody.node, let powerupPhysics = powerupNode.physicsBody {
+                // Rimbalzo sull'atmosfera (come per il pianeta)
+                let dx = powerupNode.position.x - planet.position.x
+                let dy = powerupNode.position.y - planet.position.y
+                let distance = sqrt(dx * dx + dy * dy)
+                
+                guard distance > 0 else { return }
+                
+                let normalX = dx / distance
+                let normalY = dy / distance
+                
+                let velocity = powerupPhysics.velocity
+                let dotProduct = velocity.dx * normalX + velocity.dy * normalY
+                
+                guard dotProduct < 0 else { return }
+                
+                let reflectedVelocityX = velocity.dx - 2 * dotProduct * normalX
+                let reflectedVelocityY = velocity.dy - 2 * dotProduct * normalY
+                
+                // Rimbalzo forte
+                let bounceFactor: CGFloat = 6.5
+                powerupPhysics.velocity = CGVector(
+                    dx: reflectedVelocityX * bounceFactor,
+                    dy: reflectedVelocityY * bounceFactor
+                )
+                
                 // Flash leggero dell'atmosfera
                 let originalAlpha = atmosphere.strokeColor.withAlphaComponent(0.6)
                 atmosphere.strokeColor = .cyan
@@ -3270,6 +3286,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
                 atmosphere.run(SKAction.sequence([wait, restore]))
             }
+            debugLog("✨ Power-up bounced off atmosphere")
         }
         
         // Power-up + Planet (rimbalzo senza danni)
@@ -3557,6 +3574,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             explosionColor = randomExplosionColor()
         }
         createExplosionParticles(at: position, color: explosionColor)
+        
+        // Suono esplosione
+        playExplosionSound()
         
         // Rimuovi l'asteroide originale
         asteroid.removeFromParent()
