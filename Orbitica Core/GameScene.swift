@@ -4827,10 +4827,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard roll < 25 else { return }
 
         // DISTRIBUZIONE PROGRESSIVA power-up per wave
-        // Wave 1: V (Vulcan), B (Bullet), A (Atmosphere)
-        // Wave 2: V, B, A, G (Gravity)
-        // Wave 3: V, B, A, G, W (Wave)
-        // Wave 4+: V, B, A, G, W, M (Missile)
+        // Wave 1: V (Vulcan), B (Bullet)
+        // Wave 2: V, B, A (Atmosphere)
+        // Wave 3: V, B, A, G (Gravity)
+        // Wave 4+: V, B, A, G, W (Wave), M (Missile)
         // TUTTI CON PESO 1 = PROBABILITÀ PARIFICATE
         
         var weightedTypes: [(String, UIColor, Int)] = []
@@ -4838,25 +4838,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Power-up base (wave 1+) - sempre disponibili
         weightedTypes.append(("V", UIColor.orange, 1))  // Vulcan - fuoco rapido
         weightedTypes.append(("B", UIColor.green, 1))   // Bullet - munizioni potenziate
-        weightedTypes.append(("A", UIColor.cyan, 1))    // Atmosphere - ricarica atmosfera
         
-        // Wave 2+: aggiungi Gravity
+        // Wave 2+: aggiungi Atmosphere
         if currentWave >= 2 {
+            weightedTypes.append(("A", UIColor.cyan, 1))    // Atmosphere - ricarica atmosfera
+        }
+        
+        // Wave 3+: aggiungi Gravity
+        if currentWave >= 3 {
             weightedTypes.append(("G", UIColor.gray, 1))  // Gravity - attira asteroidi
         }
         
-        // Wave 3+: aggiungi Wave
-        if currentWave >= 3 {
-            weightedTypes.append(("W", UIColor.purple, 1))  // Wave - esplosione scudo
-        }
-        
-        // Wave 4+: aggiungi Missile
+        // Wave 4+: aggiungi Wave e Missile
         if currentWave >= 4 {
+            weightedTypes.append(("W", UIColor.purple, 1))  // Wave - esplosione scudo
             weightedTypes.append(("M", UIColor(red: 0.6, green: 0.0, blue: 0.8, alpha: 1.0), 1))  // Missile - homing ad area
         }
         
         // Calcola il totale dei pesi
-        let totalWeight = weightedTypes.reduce(0) { $0 + $1.2 }
+        let totalWeight = weightedTypes.reduce(0) { $0 + $1.2 }  // Somma tutti i pesi
         
         // Estrazione casuale pesata
         let randomValue = Int.random(in: 0..<totalWeight)
@@ -4879,6 +4879,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         powerup.position = position
         powerup.zPosition = 50
         powerup.name = "powerup_\(choice.0)"
+        
+        // Log per debug della distribuzione
+        let availableTypes = weightedTypes.map { $0.0 }.joined(separator: ", ")
+        debugLog("🎁 Power-up spawned: \(choice.0) (wave \(currentWave), available: [\(availableTypes)])")
 
         // Lettera al centro
         let letter = SKLabelNode(fontNamed: "AvenirNext-Bold")
