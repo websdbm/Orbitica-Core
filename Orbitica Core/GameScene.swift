@@ -190,6 +190,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let orbitalRing2Radius: CGFloat = 300  // +100px dal precedente (era 280)
     private let orbitalRing3Radius: CGFloat = 430  // +130px dal precedente (era 360) - molto più largo
     private let orbitalBaseAngularVelocity: CGFloat = 0.28  // Velocità bilanciata (più veloce del player ma non eccessiva)
+    private var orbitalRing1IsEllipse: Bool = false
+    private var orbitalRing2IsEllipse: Bool = false
+    private var orbitalRing3IsEllipse: Bool = false
+    private let ellipseRatio: CGFloat = 1.5  // Ratio dell'ellisse (larghezza/altezza)
     private let orbitalGrappleThreshold: CGFloat = 8    // distanza per aggancio
     private let orbitalDetachForce: CGFloat = 80        // forza necessaria per sganciarsi (ridotta da 200)
     private var isGrappledToOrbit: Bool = false
@@ -1200,14 +1204,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Trasforma gli anelli in ellissi quando necessario
-        if currentWave == 5 && orbitalRing3 != nil {
+        if currentWave == 5 && orbitalRing3 != nil && !orbitalRing3IsEllipse {
             transformRingToEllipse(ringName: "orbitalRing3", radius: orbitalRing3Radius, color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0))
+            orbitalRing3IsEllipse = true
         }
-        if currentWave == 6 && orbitalRing2 != nil {
+        if currentWave == 6 && orbitalRing2 != nil && !orbitalRing2IsEllipse {
             transformRingToEllipse(ringName: "orbitalRing2", radius: orbitalRing2Radius, color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0))
+            orbitalRing2IsEllipse = true
         }
-        if currentWave == 7 && orbitalRing1 != nil {
+        if currentWave == 7 && orbitalRing1 != nil && !orbitalRing1IsEllipse {
             transformRingToEllipse(ringName: "orbitalRing1", radius: orbitalRing1Radius, color: UIColor(red: 1.0, green: 0.3, blue: 0.7, alpha: 1.0))
+            orbitalRing1IsEllipse = true
         }
     }
     
@@ -1231,6 +1238,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ringContainer.enumerateChildNodes(withName: "//*") { node, _ in
             node.isPaused = false
         }
+    }
+    
+    // Calcola il moltiplicatore di velocità in base alla posizione sull'ellisse
+    // Ritorna 2.0 al perielio (raggio minimo) e 1.0 all'afelio (raggio massimo)
+    private func getEllipseSpeedMultiplier(angle: CGFloat, baseRadius: CGFloat, isEllipse: Bool) -> CGFloat {
+        guard isEllipse else { return 1.0 }
+        
+        // Per un'ellisse orizzontale con ratio 1.5:
+        // - semiasse maggiore (orizzontale) = radius * 1.5
+        // - semiasse minore (verticale) = radius
+        let a = baseRadius * ellipseRatio  // semiasse maggiore
+        let b = baseRadius                  // semiasse minore
+        
+        // Calcola il raggio effettivo a questo angolo (formula ellisse polare)
+        let cosA = cos(angle)
+        let sinA = sin(angle)
+        let r = (a * b) / sqrt((b * cosA) * (b * cosA) + (a * sinA) * (a * sinA))
+        
+        // Normalizza: raggio minimo = b, raggio massimo = a
+        // Velocità inversamente proporzionale al raggio
+        // Al perielio (r = b): velocità massima (2.0x)
+        // All'afelio (r = a): velocità base (1.0x)
+        let normalizedDistance = (r - b) / (a - b)  // 0 al perielio, 1 all'afelio
+        let speedMultiplier = 2.0 - normalizedDistance  // 2.0 al perielio, 1.0 all'afelio
+        
+        return speedMultiplier
     }
     
     private func createGravityWellRing(radius: CGFloat, ringNode: inout SKShapeNode?, color: UIColor, velocity: CGFloat, centerPosition: CGPoint, name: String, isEllipse: Bool, ellipseRatio: CGFloat) {
@@ -2507,7 +2540,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                                    slingshotRing == 2 ? orbitalBaseAngularVelocity * 1.33 :
                                    orbitalBaseAngularVelocity * 1.77
                 
-                let tangentialSpeed = ringVelocity * closestRingRadius
+                // Determina se l'anello è un'ellisse
+                let isEllipseRing = (slingshotRing == 1 && orbitalRing1IsEllipse) ||
+                                   (slingshotRing == 2 && orbitalRing2IsEllipse) ||
+                                   (slingshotRing == 3 && orbitalRing3IsEllipse)
+                
+                // Calcola il moltiplicatore di velocità per ellisse
+                let speedMultiplier = getEllipseSpeedMultiplier(angle: currentAngle, baseRadius: closestRingRadius, isEllipse: isEllipseRing)
+                
+                let tangentialSpeed = ringVelocity * closestRingRadius * speedMultiplier
                 let tangentialVx = -sin(currentAngle) * tangentialSpeed
                 let tangentialVy = cos(currentAngle) * tangentialSpeed
                 
@@ -2899,13 +2940,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Calcola l'angolo attuale del player rispetto al centro
             let currentAngle = atan2(dy, dx)
             
-            // Incrementa l'angolo in base alla velocità angolare dell'anello corrente e forza di aggancio
-            let angularSpeed = closestRingVelocity * CGFloat(1.0/60.0) * orbitalGrappleStrength
+            // Determina se l'anello corrente è un'ellisse
+            let isEllipseRing = (closestRing == 1 && orbitalRing1IsEllipse) ||
+                               (closestRing == 2 && orbitalRing2IsEllipse) ||
+                               (closestRing == 3 && orbitalRing3IsEllipse)
+            
+            // Calcola il moltiplicatore di velocità basato sulla posizione sull'ellisse
+            let speedMultiplier = getEllipseSpeedMultiplier(angle: currentAngle, baseRadius: closestRingRadius, isEllipse: isEllipseRing)
+            
+            // Incrementa l'angolo in base alla velocità angolare dell'anello corrente, forza di aggancio e moltiplicatore ellittico
+            let angularSpeed = closestRingVelocity * CGFloat(1.0/60.0) * orbitalGrappleStrength * speedMultiplier
             let newAngle = currentAngle + angularSpeed
             
-            // Posizione target sulla circonferenza dell'anello corrente
-            let targetX = planetCenter.x + cos(newAngle) * closestRingRadius
-            let targetY = planetCenter.y + sin(newAngle) * closestRingRadius
+            // Posizione target - per ellisse usa la formula parametrica
+            var targetX: CGFloat
+            var targetY: CGFloat
+            
+            if isEllipseRing {
+                // Per ellisse: usa formula parametrica
+                let a = closestRingRadius * ellipseRatio  // semiasse maggiore (orizzontale)
+                let b = closestRingRadius                  // semiasse minore (verticale)
+                targetX = planetCenter.x + cos(newAngle) * a
+                targetY = planetCenter.y + sin(newAngle) * b
+            } else {
+                // Per cerchio: usa circonferenza normale
+                targetX = planetCenter.x + cos(newAngle) * closestRingRadius
+                targetY = planetCenter.y + sin(newAngle) * closestRingRadius
+            }
             
             // RIDOTTO: Interpola più dolcemente - NON fermare mai il player
             let currentX = player.position.x
@@ -2916,8 +2977,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             player.position = CGPoint(x: newX, y: newY)
             
-            // Velocità tangenziale ponderata dalla forza di aggancio (usa la velocità dell'anello corrente)
-            let tangentialVelocity = closestRingVelocity * closestRingRadius * orbitalGrappleStrength
+            // Velocità tangenziale ponderata dalla forza di aggancio e moltiplicatore ellittico
+            // Per ellisse: il raggio effettivo varia, quindi usiamo la distanza attuale
+            let effectiveRadius = isEllipseRing ? sqrt(dx * dx + dy * dy) : closestRingRadius
+            let tangentialVelocity = closestRingVelocity * effectiveRadius * orbitalGrappleStrength * speedMultiplier
             let tangentialVx = -sin(newAngle) * tangentialVelocity
             let tangentialVy = cos(newAngle) * tangentialVelocity
             
