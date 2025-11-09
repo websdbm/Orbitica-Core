@@ -728,7 +728,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupOrbitalRing() {
         let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
         
+        // DISTRIBUZIONE PROGRESSIVA: ring sbloccati per wave
+        // Wave 1: solo ring 1 (interno)
+        // Wave 2: ring 1 + 2
+        // Wave 3+: tutti e 3
+        
         // ===== ANELLO 1 (interno) - Magenta/Rosa =====
+        // Sempre presente da wave 1
         createGravityWellRing(
             radius: orbitalRing1Radius,
             ringNode: &orbitalRing1,
@@ -739,26 +745,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         )
         
         // ===== ANELLO 2 (medio) - Cyan brillante =====
-        createGravityWellRing(
-            radius: orbitalRing2Radius,
-            ringNode: &orbitalRing2,
-            color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0),  // Cyan
-            velocity: orbitalBaseAngularVelocity * 1.33,
-            centerPosition: centerPosition,
-            name: "orbitalRing2"
-        )
+        // Sbloccato da wave 2
+        if currentWave >= 2 {
+            createGravityWellRing(
+                radius: orbitalRing2Radius,
+                ringNode: &orbitalRing2,
+                color: UIColor(red: 0.0, green: 0.8, blue: 1.0, alpha: 1.0),  // Cyan
+                velocity: orbitalBaseAngularVelocity * 1.33,
+                centerPosition: centerPosition,
+                name: "orbitalRing2"
+            )
+        }
         
         // ===== ANELLO 3 (esterno) - Viola/Lavanda =====
-        createGravityWellRing(
-            radius: orbitalRing3Radius,
-            ringNode: &orbitalRing3,
-            color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0),  // Viola
-            velocity: orbitalBaseAngularVelocity * 1.77,
-            centerPosition: centerPosition,
-            name: "orbitalRing3"
-        )
+        // Sbloccato da wave 3
+        if currentWave >= 3 {
+            createGravityWellRing(
+                radius: orbitalRing3Radius,
+                ringNode: &orbitalRing3,
+                color: UIColor(red: 0.7, green: 0.4, blue: 1.0, alpha: 1.0),  // Viola
+                velocity: orbitalBaseAngularVelocity * 1.77,
+                centerPosition: centerPosition,
+                name: "orbitalRing3"
+            )
+        }
         
-        debugLog("✅ Gravity Well rings created with concentric waves and orbiting crystals")
+        let numRings = currentWave >= 3 ? 3 : (currentWave >= 2 ? 2 : 1)
+        debugLog("✅ Gravity Well rings created: \(numRings) active (wave \(currentWave))")
     }
     
     private func createGravityWellRing(radius: CGFloat, ringNode: inout SKShapeNode?, color: UIColor, velocity: CGFloat, centerPosition: CGPoint, name: String) {
@@ -4102,15 +4115,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let roll = Int.random(in: 0..<100)
         guard roll < 25 else { return }
 
-        // Scegli tipo con probabilità pesate
-        // V, B, A hanno peso 1, G e W hanno peso 2 (doppia probabilità)
-        let weightedTypes: [(String, UIColor, Int)] = [
-            ("V", .red, 1),
-            ("B", UIColor.green, 1),
-            ("A", UIColor.cyan, 1),
-            ("G", UIColor.gray, 2),  // DOPPIA PROBABILITÀ (temporaneo per test)
-            ("W", UIColor.purple, 2)  // DOPPIA PROBABILITÀ (temporaneo per test)
-        ]
+        // DISTRIBUZIONE PROGRESSIVA power-up per wave
+        // Wave 1: W, B
+        // Wave 2: W, B, A
+        // Wave 3+: W, B, A, G (V rimosso - era velocità, non più presente)
+        
+        var weightedTypes: [(String, UIColor, Int)] = []
+        
+        // Power-up base (wave 1+)
+        weightedTypes.append(("W", UIColor.purple, 2))  // Wave (doppio peso)
+        weightedTypes.append(("B", UIColor.green, 1))   // Bullet
+        
+        // Wave 2+: aggiungi Attack
+        if currentWave >= 2 {
+            weightedTypes.append(("A", UIColor.cyan, 1))  // Attack
+        }
+        
+        // Wave 3+: aggiungi Gravity
+        if currentWave >= 3 {
+            weightedTypes.append(("G", UIColor.gray, 2))  // Gravity (doppio peso)
+        }
         
         // Calcola il totale dei pesi
         let totalWeight = weightedTypes.reduce(0) { $0 + $1.2 }

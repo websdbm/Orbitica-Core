@@ -353,16 +353,34 @@ class InitialEntryScene: SKScene {
     }
     
     private func showSuccess(rank: Int) {
+        // NASCONDI tutto il resto dell'UI
+        enumerateChildNodes(withName: "//*") { node, _ in
+            if node.name != "savingLabel" {
+                node.run(SKAction.fadeOut(withDuration: 0.3))
+            }
+        }
+        
+        // MESSAGGIO AL CENTRO dello schermo
         let successLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        successLabel.text = "RANK #\(rank)!"
-        successLabel.fontSize = 48
+        successLabel.text = "YOU RANKED #\(rank)!"
+        successLabel.fontSize = 56
         successLabel.fontColor = .green
-        successLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 150)
-        successLabel.zPosition = 15
+        successLabel.position = CGPoint(x: size.width / 2, y: size.height / 2)  // CENTRO
+        successLabel.zPosition = 200  // Sopra tutto
+        successLabel.alpha = 0
         addChild(successLabel)
         
-        // Transition to HiScore dopo 2 secondi
-        let wait = SKAction.wait(forDuration: 2.0)
+        // Fade in del messaggio
+        successLabel.run(SKAction.fadeIn(withDuration: 0.5))
+        
+        // Animazione pulsazione
+        let scaleUp = SKAction.scale(to: 1.1, duration: 0.6)
+        let scaleDown = SKAction.scale(to: 1.0, duration: 0.6)
+        let pulse = SKAction.sequence([scaleUp, scaleDown])
+        successLabel.run(SKAction.repeatForever(pulse))
+        
+        // Transition to HiScore dopo 2.5 secondi
+        let wait = SKAction.wait(forDuration: 2.5)
         let transition = SKAction.run { [weak self] in
             guard let self = self else { return }
             let hiScoreScene = HiScoreScene(size: self.size)

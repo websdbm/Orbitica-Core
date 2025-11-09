@@ -221,11 +221,11 @@ class HiScoreScene: SKScene {
             return
         }
         
-        let startY = size.height - 180
+        let startY = size.height - 200  // Aumentato da 180: tabella più in basso
         let lineHeight: CGFloat = 55  // Aumentato per più spazio
         
         // Header - con più spazio dall'alto
-        let headerY = startY + 40  // Più spazio
+        let headerY = startY + 50  // Aumentato da 40: più spazio dall'header
         let headerRank = createLabel(text: "#", x: size.width / 2 - 250, y: headerY, size: 18, color: .gray)
         let headerInitials = createLabel(text: "PILOT", x: size.width / 2 - 150, y: headerY, size: 18, color: .gray)
         let headerScore = createLabel(text: "SCORE", x: size.width / 2 + 50, y: headerY, size: 18, color: .gray)
