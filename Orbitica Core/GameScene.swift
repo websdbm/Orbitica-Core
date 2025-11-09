@@ -3135,11 +3135,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         else if collision == (PhysicsCategory.asteroid | PhysicsCategory.atmosphere) {
             handleAsteroidAtmosphereBounce(contact: contact)
             
-            // Calcola danno basato sul tipo di asteroide
+            // Identifica l'asteroide
             let asteroidBody = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA : contact.bodyB
+            let asteroid = asteroidBody.node as? SKShapeNode
+            
+            // Calcola danno basato sul tipo di asteroide
             var damageAmount: CGFloat = 1.96  // Danno base ridotto ulteriormente (2.3 * 0.85 = 1.955 ≈ 1.96)
             
-            if let asteroidNode = asteroidBody.node as? SKShapeNode,
+            if let asteroidNode = asteroid,
                let asteroidType = asteroidNode.userData?["type"] as? AsteroidType {
                 damageAmount *= asteroidType.atmosphereDamageMultiplier
             }
@@ -3147,10 +3150,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             damageAtmosphere(amount: damageAmount)
             flashAtmosphere()
             
+            // NUOVO: L'asteroide subisce danno come se fosse colpito da un proiettile
+            if let asteroid = asteroid {
+                fragmentAsteroid(asteroid, damageMultiplier: 1.0)  // Danno da 1 colpo
+            }
+            
             // Effetto particellare al punto di contatto con colore random
             createCollisionParticles(at: contact.contactPoint, color: randomExplosionColor())
             
-            debugLog("☄️ Asteroid hit atmosphere - bounce + \(damageAmount) damage")
+            debugLog("☄️ Asteroid hit atmosphere - bounce + \(damageAmount) atmosphere damage + fragment")
         }
         
         // Asteroid + Planet
@@ -3191,22 +3199,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 // Flash rosso sull'asteroide
                 flashAsteroid(asteroid)
                 
-                // Danneggia l'asteroide (frammenta se non è small)
-                if let sizeValue = asteroid.userData?["size"] as? Int,
-                   let size = AsteroidSize(rawValue: sizeValue) {
-                    if size == .small {
-                        // Small viene distrutto
-                        let position = asteroid.position
-                        createExplosionParticles(at: position, color: randomExplosionColor())
-                        asteroid.removeFromParent()
-                        asteroids.removeAll { $0 == asteroid }
-                        debugLog("💥 Small asteroid destroyed by planet impact")
-                    } else {
-                        // Large e medium si frammentano
-                        fragmentAsteroid(asteroid)
-                        debugLog("💥 Asteroid fragmented by planet impact")
-                    }
-                }
+                // NUOVO: L'asteroide subisce danno come se fosse colpito da un proiettile
+                // Questo frammenta large/medium e distrugge small
+                fragmentAsteroid(asteroid, damageMultiplier: 1.0)  // Danno da 1 colpo
+                debugLog("💥 Asteroid hit planet - bounce + fragment damage")
             }
         }
         
