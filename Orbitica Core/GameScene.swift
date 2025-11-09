@@ -195,6 +195,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var orbitalRing3IsEllipse: Bool = false
     private let ellipseRatio: CGFloat = 1.5  // Ratio dell'ellisse (larghezza/altezza)
     private let orbitalGrappleThreshold: CGFloat = 15    // distanza per aggancio (aumentata da 8 per ellissi)
+    private let orbitalDetachThreshold: CGFloat = 25     // distanza per sgancio (maggiore per isteresi)
     private let orbitalDetachForce: CGFloat = 80        // forza necessaria per sganciarsi (ridotta da 200)
     private var isGrappledToOrbit: Bool = false
     private var orbitalGrappleStrength: CGFloat = 0.0   // 0.0 = libero, 1.0 = completamente agganciato
@@ -2947,7 +2948,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                                playerBody.velocity.dy * playerBody.velocity.dy)
         let maxSpeedForGrapple: CGFloat = 150  // Velocità massima per permettere aggancio
         
-        if distanceFromRing < orbitalGrappleThreshold && currentSpeed < maxSpeedForGrapple {
+        // AGGANCIO: usa soglia di aggancio per nuovi agganci, soglia più alta per mantenere
+        let effectiveThreshold = isGrappledToOrbit ? orbitalDetachThreshold : orbitalGrappleThreshold
+        
+        if distanceFromRing < effectiveThreshold && currentSpeed < maxSpeedForGrapple {
             if !isGrappledToOrbit || currentOrbitalRing != closestRing {
                 isGrappledToOrbit = true
                 currentOrbitalRing = closestRing
@@ -2963,7 +2967,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Aumenta gradualmente la forza di aggancio solo se NON sta spingendo
             if !isThrusting {
-                let targetStrength: CGFloat = 1.0 - (distanceFromRing / orbitalGrappleThreshold)
+                // Normalizza rispetto alla soglia corrente
+                let normalizedDistance = min(1.0, distanceFromRing / orbitalGrappleThreshold)
+                let targetStrength: CGFloat = 1.0 - normalizedDistance
                 let transitionSpeed: CGFloat = 0.05  // Ridotto da 0.08 - aggancio più lento
                 orbitalGrappleStrength += (targetStrength - orbitalGrappleStrength) * transitionSpeed
             }
@@ -2990,8 +2996,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             
         } else if isGrappledToOrbit {
-            // Troppo lontano: diminuisci la forza gradualmente
+            // Oltre la soglia di sgancio: diminuisci la forza gradualmente
             orbitalGrappleStrength -= 0.05
+            
+            debugLog("⚠️ Distance \(Int(distanceFromRing)) > threshold \(Int(orbitalDetachThreshold)), reducing grapple strength to \(String(format: "%.2f", orbitalGrappleStrength))")
             
             if orbitalGrappleStrength <= 0 {
                 // Sgancio completo - CONSERVA la velocità orbitale
