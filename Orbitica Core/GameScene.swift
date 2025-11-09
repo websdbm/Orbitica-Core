@@ -273,6 +273,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastAsteroidSpawnTime: TimeInterval = 0
     private let asteroidSpawnInterval: TimeInterval = 3.0  // Ogni 3 secondi
     
+    // OTTIMIZZAZIONE: Limite detriti per performance
+    private let maxSmallDebris: Int = 25  // Max 25 detriti small contemporaneamente
+    
     // Wave system
     private var currentWave: Int = 0
     private var isWaveActive: Bool = false
@@ -337,6 +340,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // FISICA: Configura la fisica della scena
         physicsWorld.gravity = .zero  // Niente gravità di default, la applichiamo manualmente
         physicsWorld.contactDelegate = self
+        
+        // OTTIMIZZAZIONE: Riduci la precisione fisica per migliorare le performance
+        physicsWorld.speed = 1.0  // Velocità normale
+        // Riduce le iterazioni fisiche per frame - migliora performance con molti oggetti
+        // Default è spesso 10, riduciamo a 5 per performance migliori
+        if let view = view {
+            view.preferredFramesPerSecond = 60  // Target 60 FPS
+        }
         
         debugLog("=== GRAVITY SHIELD ===")
         debugLog("Scene size: \(size)")
@@ -2051,11 +2062,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Gravity System
     private func applyGravity() {
+        // OTTIMIZZAZIONE: Calcola gravità solo per oggetti vicini al pianeta o al player
+        let planetPos = planet.position
+        let maxGravityDistance: CGFloat = 1500  // Oltre questa distanza, niente gravità
+        
         // Se Gravity power-up è attivo, applica gravità VERSO IL PLAYER (5x più forte)
         if gravityActive {
             // NESSUNA gravità sul player verso il pianeta
             // Applica forte gravità verso il player SOLO per asteroidi (NON power-up)
+            let playerPos = player.position
             for asteroid in asteroids {
+                // OTTIMIZZAZIONE: Skip se troppo lontano dal player
+                let dx = asteroid.position.x - playerPos.x
+                let dy = asteroid.position.y - playerPos.y
+                let distanceSquared = dx * dx + dy * dy
+                if distanceSquared > maxGravityDistance * maxGravityDistance {
+                    continue
+                }
+                
                 if let asteroidBody = asteroid.physicsBody {
                     applyGravityToPlayer(node: asteroid, body: asteroidBody, multiplier: 5.0)
                 }
@@ -2075,6 +2099,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Applica gravità agli asteroidi (aumenta del 5% per ogni wave)
             // Se debris cleanup attivo, tripla gravità per detriti small
             for asteroid in asteroids {
+                // OTTIMIZZAZIONE: Skip se troppo lontano dal pianeta
+                let dx = asteroid.position.x - planetPos.x
+                let dy = asteroid.position.y - planetPos.y
+                let distanceSquared = dx * dx + dy * dy
+                if distanceSquared > maxGravityDistance * maxGravityDistance {
+                    continue
+                }
+                
                 if let asteroidBody = asteroid.physicsBody {
                     var multiplier = asteroidGravityMultiplier
                     
@@ -3095,6 +3127,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Physics body - rettangolare per square, circolare per gli altri
+        // OTTIMIZZAZIONE: Per detriti small, usa physics body più semplice
         if case .square = asteroidType {
             let sideLength = asteroidSize.radius * 2.0
             asteroid.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: sideLength, height: sideLength))
@@ -3105,6 +3138,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.physicsBody?.mass = asteroidSize.mass
         asteroid.physicsBody?.linearDamping = 0
         asteroid.physicsBody?.angularDamping = 0
+        
+        // OTTIMIZZAZIONE: Per detriti small, riduci la precisione fisica
+        if asteroidSize == .small {
+            asteroid.physicsBody?.usesPreciseCollisionDetection = false  // Meno preciso ma più veloce
+        }
+        
         asteroid.physicsBody?.categoryBitMask = PhysicsCategory.asteroid
         asteroid.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.planet | PhysicsCategory.projectile
         asteroid.physicsBody?.collisionBitMask = 0
@@ -4240,8 +4279,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 fragmentCount = Int.random(in: 2...3)
             }
             
-            for i in 0..<fragmentCount {
-                let angle = (CGFloat(i) / CGFloat(fragmentCount)) * 2 * .pi + CGFloat.random(in: -0.3...0.3)
+            // OTTIMIZZAZIONE: Limita il numero di detriti small
+            let smallDebrisCount = asteroids.filter { asteroid in
+                if let sizeString = asteroid.name?.split(separator: "_").last,
+                   let sizeRaw = Int(String(sizeString)),
+                   let asteroidSize = AsteroidSize(rawValue: sizeRaw) {
+                    return asteroidSize == .small
+                }
+                return false
+            }.count
+            
+            // Se nextSize è small e abbiamo già troppi detriti, riduci i frammenti
+            var actualFragmentCount = fragmentCount
+            if nextSize == .small && smallDebrisCount >= maxSmallDebris {
+                actualFragmentCount = max(1, fragmentCount - 1)  // Riduci di 1, minimo 1
+                debugLog("⚠️ Debris limit reached (\(smallDebrisCount)/\(maxSmallDebris)), reducing fragments to \(actualFragmentCount)")
+            }
+            
+            for i in 0..<actualFragmentCount {
+                let angle = (CGFloat(i) / CGFloat(actualFragmentCount)) * 2 * .pi + CGFloat.random(in: -0.3...0.3)
                 
                 // Posizione offset dal centro
                 let offset = CGPoint(
@@ -4253,6 +4309,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     x: position.x + offset.x,
                     y: position.y + offset.y
                 )
+                
+                // OTTIMIZZAZIONE: Se siamo al limite, salta la creazione di detriti small
+                if nextSize == .small && smallDebrisCount + i >= maxSmallDebris {
+                    debugLog("⚠️ Skipping fragment creation - debris limit reached")
+                    break
+                }
                 
                 // Spawna il frammento con il tipo ereditato
                 spawnAsteroid(type: fragmentType, at: fragmentPosition)
