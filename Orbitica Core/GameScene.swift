@@ -199,6 +199,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var isGrappledToOrbit: Bool = false
     private var orbitalGrappleStrength: CGFloat = 0.0   // 0.0 = libero, 1.0 = completamente agganciato
     private var currentOrbitalRing: Int = 0  // 1, 2, o 3 - quale anello è agganciato
+    private var lastOrbitalVelocity: CGVector = .zero    // Ultima velocità orbitale calcolata (per conservazione moto allo sgancio)
     // Player slingshot state
     private var playerSlingshotOrbits: Int = 0
     private var playerSlingshotStartAngle: CGFloat = 0.0
@@ -2874,10 +2875,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             orbitalGrappleStrength -= 0.05
             
             if orbitalGrappleStrength <= 0 {
-                // Sgancio completo
+                // Sgancio completo - CONSERVA la velocità orbitale
+                guard let playerBody = player.physicsBody else { return }
+                
+                // Applica la velocità orbitale memorizzata per conservazione del moto
+                playerBody.velocity = lastOrbitalVelocity
+                
                 isGrappledToOrbit = false
                 orbitalGrappleStrength = 0
                 currentOrbitalRing = 0
+                lastOrbitalVelocity = .zero
                 
                 // Ripristina tutti gli anelli (con safe unwrapping)
                 orbitalRing1?.strokeColor = UIColor.white.withAlphaComponent(0.25)
@@ -2887,7 +2894,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 orbitalRing3?.strokeColor = UIColor.white.withAlphaComponent(0.25)
                 orbitalRing3?.lineWidth = 1
                 
-                debugLog("🔓 Detached from orbital ring (distance)")
+                debugLog("🔓 Detached from orbital ring (distance) - velocity conserved: \(lastOrbitalVelocity)")
                 return
             }
         }
@@ -2916,9 +2923,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     orbitalGrappleStrength -= 0.5  // Era 0.15, ora 3x più veloce
                     
                     if orbitalGrappleStrength <= 0 {
+                        // Sgancio manuale - CONSERVA la velocità orbitale
+                        
+                        // Applica la velocità orbitale memorizzata per conservazione del moto
+                        playerBody.velocity = lastOrbitalVelocity
+                        
                         isGrappledToOrbit = false
                         orbitalGrappleStrength = 0
                         currentOrbitalRing = 0
+                        
+                        let detachSpeed = sqrt(lastOrbitalVelocity.dx * lastOrbitalVelocity.dx + 
+                                              lastOrbitalVelocity.dy * lastOrbitalVelocity.dy)
+                        lastOrbitalVelocity = .zero
                         
                         // Ripristina tutti gli anelli (con safe unwrapping)
                         orbitalRing1?.strokeColor = UIColor.white.withAlphaComponent(0.25)
@@ -2928,7 +2944,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                         orbitalRing3?.strokeColor = UIColor.white.withAlphaComponent(0.25)
                         orbitalRing3?.lineWidth = 1
                         
-                        debugLog("🔓 Detached from orbital ring (radial thrust)")
+                        debugLog("🔓 Detached from orbital ring (radial thrust) - velocity conserved: \(detachSpeed)")
                         return
                     }
                 }
@@ -2980,9 +2996,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Velocità tangenziale ponderata dalla forza di aggancio e moltiplicatore ellittico
             // Per ellisse: il raggio effettivo varia, quindi usiamo la distanza attuale
             let effectiveRadius = isEllipseRing ? sqrt(dx * dx + dy * dy) : closestRingRadius
-            let tangentialVelocity = closestRingVelocity * effectiveRadius * orbitalGrappleStrength * speedMultiplier
+            let tangentialVelocity = closestRingVelocity * effectiveRadius * speedMultiplier
             let tangentialVx = -sin(newAngle) * tangentialVelocity
             let tangentialVy = cos(newAngle) * tangentialVelocity
+            
+            // MEMORIZZA la velocità orbitale pura per conservazione del moto allo sgancio
+            lastOrbitalVelocity = CGVector(dx: tangentialVx, dy: tangentialVy)
             
             // Mescola velocità orbitale con velocità attuale
             let currentVx = playerBody.velocity.dx
@@ -2991,8 +3010,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let mixedVx = currentVx + (tangentialVx - currentVx) * orbitalGrappleStrength * 0.15
             let mixedVy = currentVy + (tangentialVy - currentVy) * orbitalGrappleStrength * 0.15
             
-            // LIMITA la velocità del player: non può superare la velocità dell'anello (meteoriti)
-            let maxOrbitalSpeed = tangentialVelocity * 0.85  // 85% della velocità orbitale massima (ridotto)
+            // LIMITA la velocità del player durante l'aggancio
+            // Per ellissi, aumenta il limite proporzionalmente al moltiplicatore di velocità
+            let maxOrbitalSpeed = tangentialVelocity * (isEllipseRing ? 1.0 : 0.85)
             let currentSpeed = sqrt(mixedVx * mixedVx + mixedVy * mixedVy)
             
             if currentSpeed > maxOrbitalSpeed {
