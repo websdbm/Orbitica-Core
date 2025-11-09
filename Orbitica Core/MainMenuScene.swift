@@ -454,6 +454,15 @@ class MainMenuScene: SKScene {
     // MARK: - Musica
     
     private func setupBackgroundMusic() {
+        // STOPPA QUALSIASI MUSICA PRECEDENTE (sicurezza contro sovrapposizioni)
+        // Questo ferma eventuali player residui da GameScene
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("⚠️ Could not reset audio session: \(error)")
+        }
+        
         guard let url = Bundle.main.url(forResource: "temp2", withExtension: "m4a") else {
             print("⚠️ Menu music file not found: temp2.m4a")
             return
@@ -465,6 +474,8 @@ class MainMenuScene: SKScene {
             musicPlayer?.volume = 0.0
             musicPlayer?.prepareToPlay()
             musicPlayer?.play()
+            
+            print("🎵 Menu music started (previous audio cleaned)")
             
             // Fade in veloce
             fadeInMusic()

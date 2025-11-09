@@ -195,8 +195,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var orbitalRing3IsEllipse: Bool = false
     private let ellipseRatio: CGFloat = 1.5  // Ratio dell'ellisse (larghezza/altezza)
     private let orbitalGrappleThreshold: CGFloat = 15    // distanza per aggancio (aumentata da 8 per ellissi)
-    private let orbitalDetachThreshold: CGFloat = 25     // distanza per sgancio (maggiore per isteresi)
-    private let orbitalDetachForce: CGFloat = 80        // forza necessaria per sganciarsi (ridotta da 200)
+    private let orbitalDetachThreshold: CGFloat = 18     // distanza per sgancio (ridotto per facilitare)
+    private let orbitalDetachForce: CGFloat = 50        // forza necessaria per sganciarsi (ulteriormente ridotta)
     private var isGrappledToOrbit: Bool = false
     private var orbitalGrappleStrength: CGFloat = 0.0   // 0.0 = libero, 1.0 = completamente agganciato
     private var currentOrbitalRing: Int = 0  // 1, 2, o 3 - quale anello è agganciato
@@ -1274,46 +1274,71 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
-    // Calcola la distanza minima di un punto da un'ellisse
-    private func distanceFromEllipse(point: CGPoint, center: CGPoint, baseRadius: CGFloat, isEllipse: Bool) -> CGFloat {
+    // Calcola punto più vicino su ellisse e relativa distanza
+    // Ritorna: (distanza, angolo parametrico del punto più vicino)
+    private func closestPointOnEllipse(point: CGPoint, center: CGPoint, baseRadius: CGFloat, isEllipse: Bool) -> (distance: CGFloat, angle: CGFloat) {
         guard isEllipse else {
-            // Per cerchi: distanza standard
+            // Per cerchi: calcolo semplice
             let dx = point.x - center.x
             let dy = point.y - center.y
+            let angle = atan2(dy, dx)
             let distanceFromCenter = sqrt(dx * dx + dy * dy)
-            return abs(distanceFromCenter - baseRadius)
+            return (abs(distanceFromCenter - baseRadius), angle)
         }
         
-        // Per ellisse: approssimazione con campionamento angolare
-        // Testa 36 punti sull'ellisse (ogni 10 gradi) e trova il più vicino
+        // Per ellisse: algoritmo iterativo Newton-Raphson semplificato
+        // Basato su "Distance from a Point to an Ellipse" - migliore dei 36 campioni
         let a = baseRadius * ellipseRatio  // semiasse maggiore (orizzontale)
         let b = baseRadius                  // semiasse minore (verticale)
         
-        var minDistance: CGFloat = .infinity
-        let samples = 36  // 36 campioni = ogni 10 gradi
+        let px = point.x - center.x
+        let py = point.y - center.y
         
-        for i in 0..<samples {
-            let angle = (CGFloat(i) / CGFloat(samples)) * 2 * .pi
+        // Guess iniziale: angolo polare
+        var theta = atan2(py, px)
+        
+        // Iterazioni Newton-Raphson (5 iterazioni sufficienti)
+        for _ in 0..<5 {
+            let cosT = cos(theta)
+            let sinT = sin(theta)
             
             // Punto sull'ellisse
-            let ellipseX = center.x + cos(angle) * a
-            let ellipseY = center.y + sin(angle) * b
+            let ex = a * cosT
+            let ey = b * sinT
             
-            // Distanza da questo punto
-            let dx = point.x - ellipseX
-            let dy = point.y - ellipseY
-            let distance = sqrt(dx * dx + dy * dy)
+            // Vettore dal punto all'ellisse
+            let dx = ex - px
+            let dy = ey - py
             
-            if distance < minDistance {
-                minDistance = distance
+            // Derivata della funzione distanza
+            let fx = -a * sinT * dx + b * cosT * dy
+            
+            // Derivata seconda (per Newton-Raphson)
+            let dfx = -a * cosT * dx - a * sinT * (-a * sinT) - b * sinT * dy + b * cosT * (b * cosT)
+            
+            if abs(dfx) > 0.0001 {
+                theta = theta - fx / dfx
             }
         }
         
-        return minDistance
+        // Calcola punto finale e distanza
+        let finalX = center.x + a * cos(theta)
+        let finalY = center.y + b * sin(theta)
+        let dx = point.x - finalX
+        let dy = point.y - finalY
+        let distance = sqrt(dx * dx + dy * dy)
+        
+        return (distance, theta)
     }
     
-    // Calcola il moltiplicatore di velocità in base alla posizione sull'ellisse
-    // Ritorna 2.0 al perielio (raggio minimo) e 1.0 all'afelio (raggio massimo)
+    // Wrapper per compatibilità
+    private func distanceFromEllipse(point: CGPoint, center: CGPoint, baseRadius: CGFloat, isEllipse: Bool) -> CGFloat {
+        return closestPointOnEllipse(point: point, center: center, baseRadius: baseRadius, isEllipse: isEllipse).distance
+    }
+    
+    // Calcola il moltiplicatore di velocità in base alla distanza dal centro del pianeta
+    // Segue le leggi di Keplero: velocità inversamente proporzionale alla distanza
+    // Ritorna 4.0 al perielio (più vicino) e 1.0 all'afelio (più lontano)
     private func getEllipseSpeedMultiplier(angle: CGFloat, baseRadius: CGFloat, isEllipse: Bool) -> CGFloat {
         guard isEllipse else { return 1.0 }
         
@@ -1323,17 +1348,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let a = baseRadius * ellipseRatio  // semiasse maggiore
         let b = baseRadius                  // semiasse minore
         
-        // Calcola il raggio effettivo a questo angolo (formula ellisse polare)
-        let cosA = cos(angle)
-        let sinA = sin(angle)
-        let r = (a * b) / sqrt((b * cosA) * (b * cosA) + (a * sinA) * (a * sinA))
+        // Calcola la distanza effettiva dal centro a questo punto dell'ellisse
+        // Usa coordinate parametriche dell'ellisse
+        let x = a * cos(angle)
+        let y = b * sin(angle)
+        let distanceFromCenter = sqrt(x * x + y * y)
         
-        // Normalizza: raggio minimo = b, raggio massimo = a
-        // Velocità inversamente proporzionale al raggio
-        // Al perielio (r = b): velocità massima (2.0x)
-        // All'afelio (r = a): velocità base (1.0x)
-        let normalizedDistance = (r - b) / (a - b)  // 0 al perielio, 1 all'afelio
-        let speedMultiplier = 2.0 - normalizedDistance  // 2.0 al perielio, 1.0 all'afelio
+        // Distanza minima (perielio): quando θ = ±90° (lati corti dell'ellisse) = b
+        // Distanza massima (afelio): quando θ = 0° o 180° (lati lunghi dell'ellisse) = a
+        let minDistance = b  // più vicino al pianeta
+        let maxDistance = a  // più lontano dal pianeta
+        
+        // Normalizza la distanza: 0 = più vicino, 1 = più lontano
+        let normalizedDistance = (distanceFromCenter - minDistance) / (maxDistance - minDistance)
+        
+        // Velocità inversamente proporzionale alla distanza (leggi di Keplero)
+        // Più vicino = più veloce: 2.5x al perielio, 1.0x all'afelio (bilanciato per stabilità)
+        let speedMultiplier = 2.5 - (normalizedDistance * 1.5)
+        
+        // Debug ogni tanto
+        let angleDeg = Int(angle * 180 / .pi)
+        if angleDeg % 45 == 0 {
+            debugLog("📊 SpeedMult: θ=\(angleDeg)°, dist=\(Int(distanceFromCenter)), norm=\(String(format: "%.2f", normalizedDistance)), mult=\(String(format: "%.2f", speedMultiplier))")
+        }
         
         return speedMultiplier
     }
@@ -2942,14 +2979,35 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         let distanceFromRing = minDistance
         
+        // Determina se l'anello più vicino è un'ellisse
+        let isClosestEllipse = (closestRing == 1 && orbitalRing1IsEllipse) ||
+                              (closestRing == 2 && orbitalRing2IsEllipse) ||
+                              (closestRing == 3 && orbitalRing3IsEllipse)
+        
         // AGGANCIO GRADUALE: più sei vicino, più sei attratto
-        // NUOVO: Controlla velocità del player - se troppo veloce NON agganciare
+        // Per ellissi: threshold e velocità più tolleranti (per gestire accelerazione)
+        // Ring 3 (esterno): ancora più tollerante perché ha velocità base maggiore
         let currentSpeed = sqrt(playerBody.velocity.dx * playerBody.velocity.dx + 
                                playerBody.velocity.dy * playerBody.velocity.dy)
-        let maxSpeedForGrapple: CGFloat = 150  // Velocità massima per permettere aggancio
         
-        // AGGANCIO: usa soglia di aggancio per nuovi agganci, soglia più alta per mantenere
-        let effectiveThreshold = isGrappledToOrbit ? orbitalDetachThreshold : orbitalGrappleThreshold
+        // Velocità massima per aggancio - Ring 3 ellisse è il più veloce
+        let maxSpeedForGrapple: CGFloat
+        if isClosestEllipse && closestRing == 3 {
+            maxSpeedForGrapple = 600  // Ring 3 ellisse: molto tollerante
+        } else if isClosestEllipse {
+            maxSpeedForGrapple = 400  // Ring 1-2 ellisse: tollerante
+        } else {
+            maxSpeedForGrapple = 150  // Cerchi: normale
+        }
+        
+        // Threshold diversi per ellissi vs cerchi
+        // Ring 3 ellisse ha threshold maggiorati
+        let grappleMultiplier: CGFloat = (isClosestEllipse && closestRing == 3) ? 2.0 : (isClosestEllipse ? 1.5 : 1.0)
+        let detachMultiplier: CGFloat = (isClosestEllipse && closestRing == 3) ? 3.0 : (isClosestEllipse ? 2.0 : 1.0)
+        
+        let grappleThreshold = orbitalGrappleThreshold * grappleMultiplier
+        let detachThreshold = orbitalDetachThreshold * detachMultiplier
+        let effectiveThreshold = isGrappledToOrbit ? detachThreshold : grappleThreshold
         
         if distanceFromRing < effectiveThreshold && currentSpeed < maxSpeedForGrapple {
             if !isGrappledToOrbit || currentOrbitalRing != closestRing {
@@ -3117,47 +3175,58 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             
             if isEllipseRing {
-                // ELLISSI: BINARIO RIGIDO - la navicella segue esattamente il percorso ellittico
-                // Trova il punto più vicino sull'ellisse rispetto alla posizione corrente
+                // APPROCCIO B: Rail following con algoritmo Newton-Raphson preciso
                 let a = closestRingRadius * ellipseRatio  // semiasse maggiore
                 let b = closestRingRadius                  // semiasse minore
                 
-                // Calcola l'angolo parametrico per il punto più vicino
-                // Usiamo l'angolo attuale come approssimazione
-                let playerAngle = atan2(dy, dx)
+                // 1. Trova punto più vicino sull'ellisse con algoritmo preciso
+                let (_, theta) = closestPointOnEllipse(
+                    point: player.position,
+                    center: planetCenter,
+                    baseRadius: closestRingRadius,
+                    isEllipse: true
+                )
                 
-                // FORZA la posizione esattamente sul binario ellittico
-                let ellipseX = planetCenter.x + cos(playerAngle) * a
-                let ellipseY = planetCenter.y + sin(playerAngle) * b
+                // 2. FORZA posizione esattamente sul binario ellittico
+                let railX = planetCenter.x + a * cos(theta)
+                let railY = planetCenter.y + b * sin(theta)
+                player.position = CGPoint(x: railX, y: railY)
                 
-                // Interpolazione FORTE per seguire il binario
-                let currentX = player.position.x
-                let currentY = player.position.y
-                let trackingStrength = orbitalGrappleStrength * 0.4  // Più forte per tenere sul binario
-                let newX = currentX + (ellipseX - currentX) * trackingStrength
-                let newY = currentY + (ellipseY - currentY) * trackingStrength
+                // 3. Calcola velocità tangenziale esatta (derivata parametrica dell'ellisse)
+                // Tangente: (-a*sin(θ), b*cos(θ))
+                let tangentDx = -a * sin(theta)
+                let tangentDy = b * cos(theta)
+                let tangentLength = sqrt(tangentDx * tangentDx + tangentDy * tangentDy)
                 
-                player.position = CGPoint(x: newX, y: newY)
+                let normalizedTangentDx = tangentDx / tangentLength
+                let normalizedTangentDy = tangentDy / tangentLength
                 
-                // Velocità tangenziale basata sul moltiplicatore ellittico
-                let effectiveRadius = sqrt(dx * dx + dy * dy)
-                let speedMultiplier = getEllipseSpeedMultiplier(angle: playerAngle, baseRadius: closestRingRadius, isEllipse: true)
-                let tangentialVelocity = closestRingVelocity * effectiveRadius * speedMultiplier
-                let tangentialVx = -sin(playerAngle) * tangentialVelocity
-                let tangentialVy = cos(playerAngle) * tangentialVelocity
+                // 4. Applica moltiplicatore di velocità (4x al perielio, 1x all'afelio)
+                let speedMultiplier = getEllipseSpeedMultiplier(angle: theta, baseRadius: closestRingRadius, isEllipse: true)
+                let baseSpeed = closestRingVelocity * closestRingRadius
+                let finalSpeed = baseSpeed * speedMultiplier
                 
-                // MEMORIZZA la velocità orbitale
+                // Debug: mostra velocità corrente
+                let currentSpeed = sqrt(playerBody.velocity.dx * playerBody.velocity.dx + playerBody.velocity.dy * playerBody.velocity.dy)
+                if Int(theta * 180 / .pi) % 30 == 0 {  // Log ogni 30 gradi
+                    debugLog("🔵 Ellipse: θ=\(Int(theta * 180 / .pi))°, mult=\(String(format: "%.2f", speedMultiplier)), speed=\(Int(finalSpeed)) (was \(Int(currentSpeed)))")
+                }
+                
+                // 5. Imposta velocità tangenziale diretta (no mixing, no grapple strength!)
+                let tangentialVx = normalizedTangentDx * finalSpeed
+                let tangentialVy = normalizedTangentDy * finalSpeed
+                
+                playerBody.velocity = CGVector(dx: tangentialVx, dy: tangentialVy)
+                
+                // 6. MEMORIZZA velocità per conservazione del moto allo sgancio
                 lastOrbitalVelocity = CGVector(dx: tangentialVx, dy: tangentialVy)
                 
-                // Applica velocità tangenziale con mixing forte
-                let currentVx = playerBody.velocity.dx
-                let currentVy = playerBody.velocity.dy
-                let velocityMixing: CGFloat = 0.3 * orbitalGrappleStrength
-                let mixedVx = currentVx + (tangentialVx - currentVx) * velocityMixing
-                let mixedVy = currentVy + (tangentialVy - currentVy) * velocityMixing
+                // 7. Blocca rotazione per movimento fluido
+                playerBody.angularVelocity = 0
+                playerBody.angularDamping = 0
+                playerBody.linearDamping = 0
                 
-                playerBody.velocity = CGVector(dx: mixedVx, dy: mixedVy)
-                return  // Salta il resto
+                return  // Skip resto del codice (cerchi)
             }
             
             // CERCHI: sistema originale
@@ -3210,75 +3279,134 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func configureWave(_ wave: Int) -> WaveConfig {
         switch wave {
         case 1:
-            // WAVE 1 - Solo meteoriti normali
+            // WAVE 1 - Solo meteoriti normali (facile)
             return WaveConfig(
                 waveNumber: 1,
                 asteroidSpawns: [
-                    (.normal(.large), 7)       // 7 normali
+                    (.normal(.large), 8),      // 8 normali
+                    (.normal(.medium), 2)      // 2 medium
                 ],
                 spawnInterval: 3.0
             )
             
         case 2:
-            // WAVE 2 - Introduzione medium, fast, heavy (verde) e armored (grigio) (+20%)
+            // WAVE 2 - Introduzione varietà (70% normali, 30% difficili)
             return WaveConfig(
                 waveNumber: 2,
                 asteroidSpawns: [
-                    (.normal(.large), 4),      // +1 da 3
-                    (.normal(.medium), 2),
-                    (.fast(.large), 1),
-                    (.heavy(.large), 2),       // Verdi: 4x danno
-                    (.armored(.large), 2)      // Grigi: 2x vita (stessa quantità dei verdi)
+                    (.normal(.large), 5),      // 50%
+                    (.normal(.medium), 2),     // 20%
+                    (.fast(.large), 1),        // 10%
+                    (.heavy(.large), 1),       // 10%
+                    (.armored(.large), 1)      // 10%
                 ],
                 spawnInterval: 2.8
             )
             
         case 3:
-            // WAVE 3 - Introduzione SQUARE (arancioni quadrati con jet random) + mix completo
+            // WAVE 3 - Introduzione SQUARE (50% normali, 50% difficili)
             return WaveConfig(
                 waveNumber: 3,
                 asteroidSpawns: [
-                    (.normal(.large), 3),
-                    (.fast(.large), 2),
-                    (.armored(.large), 2),     // Grigi: 2x vita
-                    (.heavy(.large), 2),       // Verdi: 4x danno
-                    (.square(.large), 3),      // SQUARE: 2x vita, 2x danno, 4 frammenti
-                    (.normal(.medium), 2)
+                    (.normal(.large), 4),      // 30%
+                    (.normal(.medium), 2),     // 15%
+                    (.fast(.large), 2),        // 15%
+                    (.heavy(.large), 2),       // 15%
+                    (.armored(.large), 2),     // 15%
+                    (.square(.large), 2)       // 15% - SQUARE introdotti
                 ],
                 spawnInterval: 2.5
             )
             
         case 4:
-            // WAVE 4 - Introduzione REPULSOR (viola con particelle, respinge il player)
+            // WAVE 4 - Introduzione REPULSOR (40% normali, 60% difficili)
             return WaveConfig(
                 waveNumber: 4,
                 asteroidSpawns: [
-                    (.normal(.large), 3),
-                    (.fast(.large), 2),
-                    (.armored(.large), 1),
-                    (.heavy(.large), 1),
-                    (.square(.large), 2),
-                    (.repulsor(.large), 2),    // REPULSOR: 2x vita, respinge player, 3-4 frammenti
-                    (.normal(.medium), 2)
+                    (.normal(.large), 3),      // 23%
+                    (.normal(.medium), 1),     // 8%
+                    (.fast(.large), 2),        // 15%
+                    (.heavy(.large), 2),       // 15%
+                    (.armored(.large), 2),     // 15%
+                    (.square(.large), 2),      // 15%
+                    (.repulsor(.large), 2)     // 15% - REPULSOR introdotti
                 ],
                 spawnInterval: 2.3
             )
             
+        case 5:
+            // WAVE 5 - Bilanciamento (30% normali, 70% difficili)
+            return WaveConfig(
+                waveNumber: 5,
+                asteroidSpawns: [
+                    (.normal(.large), 2),      // 15%
+                    (.normal(.medium), 2),     // 15%
+                    (.fast(.large), 2),        // 15%
+                    (.heavy(.large), 2),       // 15%
+                    (.armored(.large), 2),     // 15%
+                    (.square(.large), 3),      // 20%
+                    (.repulsor(.large), 2)     // 15%
+                ],
+                spawnInterval: 2.0
+            )
+            
+        case 6:
+            // WAVE 6 - Difficoltà crescente (20% normali, 80% difficili)
+            return WaveConfig(
+                waveNumber: 6,
+                asteroidSpawns: [
+                    (.normal(.large), 1),      // 7%
+                    (.normal(.medium), 2),     // 13%
+                    (.fast(.large), 2),        // 13%
+                    (.heavy(.large), 3),       // 20%
+                    (.armored(.large), 3),     // 20%
+                    (.square(.large), 2),      // 13%
+                    (.repulsor(.large), 2)     // 13%
+                ],
+                spawnInterval: 1.8
+            )
+            
+        case 7:
+            // WAVE 7 - Molto difficile (10% normali, 90% difficili)
+            return WaveConfig(
+                waveNumber: 7,
+                asteroidSpawns: [
+                    (.normal(.medium), 1),     // 7%
+                    (.fast(.large), 2),        // 13%
+                    (.heavy(.large), 3),       // 20%
+                    (.armored(.large), 3),     // 20%
+                    (.square(.large), 3),      // 20%
+                    (.repulsor(.large), 3)     // 20%
+                ],
+                spawnInterval: 1.6
+            )
+            
+        case 8:
+            // WAVE 8 - Inferno (0% normali, 100% difficili)
+            return WaveConfig(
+                waveNumber: 8,
+                asteroidSpawns: [
+                    (.fast(.large), 2),        // 13%
+                    (.heavy(.large), 4),       // 27%
+                    (.armored(.large), 3),     // 20%
+                    (.square(.large), 3),      // 20%
+                    (.repulsor(.large), 3)     // 20%
+                ],
+                spawnInterval: 1.5
+            )
+            
         default:
-            // WAVE 5+ - Progressione automatica con TUTTI i tipi incluso repulsor
-            let baseCount = 12 + (wave - 1) * 2  // +20% da 10 -> 12
+            // WAVE 9+ - Solo difficili, mix variabile
             return WaveConfig(
                 waveNumber: wave,
                 asteroidSpawns: [
-                    (.normal(.large), baseCount / 4),
-                    (.fast(.large), baseCount / 4),
-                    (.armored(.large), baseCount / 6),   // Grigi: 2x vita
-                    (.heavy(.large), baseCount / 6),     // Verdi: 4x danno
-                    (.square(.large), baseCount / 6),    // Square: 2x vita, 2x danno
-                    (.repulsor(.large), baseCount / 6),  // Repulsor: 2x vita, respinge
-                    (.normal(.medium), baseCount / 5)
+                    (.fast(.large), 2),
+                    (.heavy(.large), 4),
+                    (.armored(.large), 3),
+                    (.square(.large), 3),
+                    (.repulsor(.large), 3)
                 ],
-                spawnInterval: max(1.5, 3.0 - CGFloat(wave) * 0.2)
+                spawnInterval: max(1.2, 2.0 - CGFloat(wave - 8) * 0.1)
             )
         }
     }
@@ -5650,9 +5778,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Pausa la fisica
         physicsWorld.speed = 0
         
-        // PAUSA LA MUSICA
-        musicPlayerCurrent?.pause()
-        musicPlayerNext?.pause()
+        // STOPPA LA MUSICA (non pause, ma stop completo)
+        musicPlayerCurrent?.stop()
+        musicPlayerNext?.stop()
+        
+        debugLog("⏸️ Music stopped on pause")
         
         // Crea overlay scuro (coordinate relative alla camera)
         let overlay = SKNode()
@@ -5723,9 +5853,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Ripristina la fisica
         physicsWorld.speed = 1
         
-        // RIPRENDI LA MUSICA
-        musicPlayerCurrent?.play()
-        musicPlayerNext?.play()
+        // RIAVVIA LA MUSICA DA CAPO (re-inizializza)
+        if musicPlayerCurrent != nil {
+            // Riparte la musica del wave corrente
+            playWaveMusic()
+        }
+        
+        debugLog("▶️ Music restarted on resume")
         
         // Rimuovi overlay con animazione
         if let overlay = pauseOverlay {
@@ -5743,36 +5877,58 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // FERMA TUTTA LA MUSICA prima di uscire
         crossfadeTimer?.invalidate()
         crossfadeTimer = nil
+        
+        // Stop completo e rimozione player
         musicPlayerCurrent?.stop()
         musicPlayerCurrent = nil
         musicPlayerNext?.stop()
         musicPlayerNext = nil
         
-        // Transizione al menu principale
-        let transition = SKTransition.fade(withDuration: 0.5)
-        let menuScene = MainMenuScene(size: size)
-        menuScene.scaleMode = scaleMode
-        view?.presentScene(menuScene, transition: transition)
+        // RIMUOVI tutti gli audio node dalla scena (fix sovrapposizione)
+        self.removeAllActions()
+        self.removeAllChildren()
         
-        debugLog("🏠 Returning to main menu (music stopped)")
+        debugLog("🏠 Returning to main menu (all music stopped)")
+        
+        // Piccolo delay per assicurare che la musica sia completamente fermata
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self else { return }
+            
+            // Transizione al menu principale
+            let transition = SKTransition.fade(withDuration: 0.5)
+            let menuScene = MainMenuScene(size: self.size)
+            menuScene.scaleMode = self.scaleMode
+            self.view?.presentScene(menuScene, transition: transition)
+        }
     }
     
     private func retryGame() {
         // FERMA TUTTA LA MUSICA prima di riavviare
         crossfadeTimer?.invalidate()
         crossfadeTimer = nil
+        
+        // Stop completo e rimozione player
         musicPlayerCurrent?.stop()
         musicPlayerCurrent = nil
         musicPlayerNext?.stop()
         musicPlayerNext = nil
         
-        // Riavvia il gioco
-        let newGame = GameScene(size: size)
-        newGame.scaleMode = scaleMode
-        let transition = SKTransition.fade(withDuration: 0.5)
-        view?.presentScene(newGame, transition: transition)
+        // RIMUOVI tutti gli audio node dalla scena (fix sovrapposizione)
+        self.removeAllActions()
+        self.removeAllChildren()
         
-        debugLog("🔄 Restarting game (music stopped)")
+        debugLog("🔄 Restarting game (all music stopped)")
+        
+        // Piccolo delay per assicurare che la musica sia completamente fermata
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self else { return }
+            
+            // Riavvia il gioco
+            let newGame = GameScene(size: self.size)
+            newGame.scaleMode = self.scaleMode
+            let transition = SKTransition.fade(withDuration: 0.5)
+            self.view?.presentScene(newGame, transition: transition)
+        }
     }
     
     // MARK: - Planet Health System
