@@ -132,6 +132,13 @@ struct WaveConfig {
 
 // MARK: - Space Environments
 enum SpaceEnvironment: CaseIterable {
+    // NUOVI AMBIENTI ENHANCED (Priorità per release)
+    case cosmicNebula       // Nebulosa Cosmica con nebula02 ⭐ NUOVO
+    case animatedCosmos     // Sistemi solari animati + galassie rotanti ⭐ NUOVO
+    case deepSpaceEnhanced  // Deep Space con starfield dinamico multi-layer
+    case nebulaGalaxy       // Galassie/Nebulose animate con particelle dust ⭐ NUOVO
+    
+    // AMBIENTI ORIGINALI (da mantenere per ora)
     case deepSpace      // Nero profondo con stelle twinkle e colorate
     case nebula         // Nebulose colorate (blu/viola/rosa) con sfumature
     case voidSpace      // Gradiente nero-blu con stelle luminose
@@ -147,6 +154,10 @@ enum SpaceEnvironment: CaseIterable {
     
     var name: String {
         switch self {
+        case .cosmicNebula: return "Cosmic Nebula ★"  // NUOVO - Primo (nebula02)
+        case .animatedCosmos: return "Animated Cosmos ★"  // NUOVO
+        case .deepSpaceEnhanced: return "Deep Space ★"  // Stella per indicare versione enhanced
+        case .nebulaGalaxy: return "Nebula Galaxy ★"  // NUOVO (nebula01)
         case .deepSpace: return "Deep Space"
         case .nebula: return "Nebula"
         case .voidSpace: return "Void Space"
@@ -188,6 +199,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Planet & Atmosphere
     private var planet: SKShapeNode!
     private var atmosphere: SKShapeNode!
+    private var planetOriginalColor: UIColor = .white  // Memorizza il colore originale del pianeta
     private var atmosphereRadius: CGFloat = 96  // Aumentato del 20% (80 * 1.2)
     private let maxAtmosphereRadius: CGFloat = 96  // Aumentato del 20% (80 * 1.2)
     private let minAtmosphereRadius: CGFloat = 40
@@ -462,9 +474,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupParallaxBackground() {
         // Sequenza fissa basata sulla wave corrente (ciclo attraverso tutti i 12 ambienti)
         let environments: [SpaceEnvironment] = [
-            .deepSpace,          // Wave 1
-            .nebula,             // Wave 2
-            .voidSpace,          // Wave 3
+            .cosmicNebula,       // Wave 1 - Nebulosa Cosmica (nebula02) ⭐ PRIMO TEST
+            .nebulaGalaxy,       // Wave 2 - Galassie/Nebulose (nebula01) ⭐
+            .animatedCosmos,     // Wave 3 - Sistema Solare Animato ⭐
+            .voidSpace,          // Wave 4
             .redGiant,           // Wave 4
             .asteroidBelt,       // Wave 5
             .binaryStars,        // Wave 6
@@ -493,7 +506,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         starsLayer3?.removeFromParent()
         nebulaLayer?.removeFromParent()
         
+        // Rimuovi anche starfield dinamico se presente
+        childNode(withName: "dynamicStarfield")?.removeFromParent()
+        
         switch environment {
+        case .cosmicNebula:
+            setupCosmicNebulaEnvironment()
+        case .deepSpaceEnhanced:
+            setupDeepSpaceEnhancedEnvironment()
+        case .animatedCosmos:
+            setupAnimatedCosmosEnvironment()
+        case .nebulaGalaxy:
+            setupNebulaGalaxyEnvironment()
         case .deepSpace:
             setupDeepSpaceEnvironment()
         case .nebula:
@@ -522,6 +546,686 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         currentEnvironment = environment
     }
+    
+    // MARK: - Enhanced Environment Setup
+    
+    private func setupDeepSpaceEnhancedEnvironment() {
+        // Background nero profondo
+        backgroundColor = .black
+        
+        print("🔍 Creating discrete parallax starfield in worldLayer")
+        
+        // Starfield discreto nel worldLayer - parte del mondo di gioco
+        let starfieldContainer = SKNode()
+        starfieldContainer.name = "parallaxStarfield"
+        starfieldContainer.zPosition = -1000  // DIETRO a tutto
+        starfieldContainer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        
+        // Layer 1: stelle lontane - piccole, lente
+        let distantLayer = makeParallaxStarEmitter(
+            speed: 8,   // Lente per sfondo discreto
+            scale: 0.10,  // Piccole ma visibili
+            birthRate: 1.0,
+            color: UIColor.white.withAlphaComponent(0.5)
+        )
+        starfieldContainer.addChild(distantLayer)
+        
+        // Layer 2: stelle medie
+        let midLayer = makeParallaxStarEmitter(
+            speed: 15,  // Medie
+            scale: 0.14,  // Medie
+            birthRate: 1.5,
+            color: UIColor.white.withAlphaComponent(0.6)
+        )
+        starfieldContainer.addChild(midLayer)
+        
+        // Layer 3: stelle vicine - più grandi per effetto parallasse
+        let nearLayer = makeParallaxStarEmitter(
+            speed: 25,  // Più veloci
+            scale: 0.18,  // Più visibili
+            birthRate: 2.0,
+            color: UIColor.cyan.withAlphaComponent(0.5)
+        )
+        starfieldContainer.addChild(nearLayer)
+        
+        // AGGIUNGI AL WORLD LAYER - fa parte del mondo di gioco
+        worldLayer.addChild(starfieldContainer)
+        
+        print("⭐ Discrete parallax starfield created in worldLayer")
+        print("   - Container position: \(starfieldContainer.position)")
+        print("   - Container zPosition: \(starfieldContainer.zPosition)")
+        print("   - Parent: worldLayer")
+        print("   - 3 layers - speeds: 8, 15, 25 px/s")
+        print("   - Scales: 0.10, 0.14, 0.18 (small but visible)")
+        print("   - Alpha: 0.5-0.6 (faint but visible)")
+        
+        debugLog("⭐ Discrete parallax starfield (world-based)")
+    }
+    
+    // Emitter specifico per parallasse scrolling - stelle discrete ma visibili
+    func makeParallaxStarEmitter(speed: CGFloat, scale: CGFloat, birthRate: CGFloat, color: UIColor) -> SKEmitterNode {
+        let texture = createStarParticleTexture()
+        
+        let emitter = SKEmitterNode()
+        emitter.particleTexture = texture
+        emitter.particleBirthRate = birthRate
+        emitter.particleColor = color
+        
+        // Lifetime lungo per coprire area ampia del mondo
+        let playAreaWidth = size.width * playFieldMultiplier
+        emitter.particleLifetime = playAreaWidth / speed
+        emitter.particleSpeed = speed
+        emitter.particleScale = scale
+        emitter.particleColorBlendFactor = 1
+        emitter.particleScaleRange = scale * 0.3
+        
+        // Spawn in AREA AMPIA intorno al mondo di gioco
+        let playAreaHeight = size.height * playFieldMultiplier
+        emitter.position = CGPoint(x: playAreaWidth / 2, y: 0)
+        emitter.particlePositionRange = CGVector(dx: playAreaWidth, dy: playAreaHeight)
+        emitter.particleSpeedRange = 0  // Velocità costante per parallasse pulito
+        
+        // Emissione verso SINISTRA (da destra a sinistra)
+        emitter.emissionAngle = .pi  // 180 gradi
+        emitter.emissionAngleRange = 0
+        
+        // Alpha moderato - visibile ma discreto
+        emitter.particleAlpha = 0.6
+        emitter.particleAlphaRange = 0.3
+        emitter.particleBlendMode = .alpha
+        
+        print("   🔹 Parallax layer: speed=\(speed), scale=\(scale), alpha=0.6, area=\(Int(playAreaWidth))x\(Int(playAreaHeight))")
+        
+        return emitter
+    }
+    
+    // MARK: - Animated Cosmos Environment (Solar Systems + Galaxies)
+    
+    private func setupAnimatedCosmosEnvironment() {
+        // Background nero profondo
+        backgroundColor = .black
+        
+        print("🌌 Creating Spectacular Animated Solar System")
+        
+        let playAreaWidth = size.width * playFieldMultiplier
+        let playAreaHeight = size.height * playFieldMultiplier
+        
+        // 1. STELLE DI SFONDO (discrete e statiche)
+        let backgroundStars = SKNode()
+        backgroundStars.name = "backgroundStars"
+        backgroundStars.zPosition = -1000
+        backgroundStars.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        
+        for _ in 0..<120 {
+            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.4...1.2))
+            star.fillColor = .white
+            star.strokeColor = .clear
+            star.alpha = CGFloat.random(in: 0.25...0.5)
+            star.position = CGPoint(
+                x: CGFloat.random(in: -playAreaWidth/2...playAreaWidth/2),
+                y: CGFloat.random(in: -playAreaHeight/2...playAreaHeight/2)
+            )
+            backgroundStars.addChild(star)
+        }
+        worldLayer.addChild(backgroundStars)
+        
+        // 2. NEBULOSA DISTANTE (sfondo elegante)
+        let nebula = SKShapeNode(circleOfRadius: 450)
+        nebula.fillColor = UIColor(red: 0.35, green: 0.25, blue: 0.65, alpha: 0.08)
+        nebula.strokeColor = .clear
+        nebula.glowWidth = 120
+        nebula.zPosition = -950
+        nebula.position = CGPoint(
+            x: size.width/2 - 400,
+            y: size.height/2 + 300
+        )
+        worldLayer.addChild(nebula)
+        
+        // Rotazione lentissima nebulosa
+        let nebulaRotate = SKAction.rotate(byAngle: .pi * 2, duration: 180)
+        nebula.run(SKAction.repeatForever(nebulaRotate))
+        
+        // 3. SISTEMA SOLARE SPETTACOLARE - UN SOLO GRANDE SISTEMA AL CENTRO
+        createRealisticSolarSystem()
+        
+        print("✨ Spectacular Solar System created - realistic orbits and speeds")
+        debugLog("🌌 Animated Cosmos environment complete")
+    }
+    
+    // Crea un sistema solare realistico con orbite ellittiche e velocità diverse
+    private func createRealisticSolarSystem() {
+        let systemNode = SKNode()
+        systemNode.name = "mainSolarSystem"
+        systemNode.zPosition = -800
+        
+        // POSIZIONE RANDOM ma LONTANA dal centro (evita sovrapposizione con pianeta)
+        let playAreaWidth = size.width * playFieldMultiplier
+        let playAreaHeight = size.height * playFieldMultiplier
+        
+        // Scegli un quadrante random (angoli del mondo)
+        let quadrants: [(x: CGFloat, y: CGFloat)] = [
+            (size.width * 0.20, size.height * 0.75),  // Alto sinistra
+            (size.width * 0.80, size.height * 0.75),  // Alto destra
+            (size.width * 0.20, size.height * 0.25),  // Basso sinistra
+            (size.width * 0.80, size.height * 0.25)   // Basso destra
+        ]
+        
+        let chosenQuadrant = quadrants.randomElement()!
+        systemNode.position = CGPoint(x: chosenQuadrant.x, y: chosenQuadrant.y)
+        
+        // SCALA ENORME - IL DOPPIO (5x invece di 2.5x)
+        systemNode.setScale(5.0)
+        
+        // OPACITÀ 100% - colori scuri faranno da silhouette
+        systemNode.alpha = 1.0
+        
+        // STELLA CENTRALE - Silhouette visibile ma elegante
+        let sunSize: CGFloat = 35
+        let sun = SKShapeNode(circleOfRadius: sunSize)
+        sun.fillColor = UIColor(red: 0.22, green: 0.18, blue: 0.12, alpha: 1.0)  // Marrone più chiaro
+        sun.strokeColor = UIColor(red: 0.28, green: 0.22, blue: 0.15, alpha: 0.6)
+        sun.lineWidth = 2
+        sun.glowWidth = sunSize * 0.3
+        systemNode.addChild(sun)
+        
+        // Alone solare (corona) - più visibile
+        let corona = SKShapeNode(circleOfRadius: sunSize * 1.3)
+        corona.fillColor = UIColor(red: 0.18, green: 0.15, blue: 0.12, alpha: 0.3)
+        corona.strokeColor = .clear
+        corona.glowWidth = 8
+        systemNode.addChild(corona)
+        
+        // Pulsazione sole (PIÙ LENTA - raddoppiata)
+        let sunPulse = SKAction.sequence([
+            SKAction.group([
+                SKAction.scale(to: 1.08, duration: 7.0),  // Era 3.5s -> 7.0s
+                SKAction.fadeAlpha(to: 0.85, duration: 7.0)
+            ]),
+            SKAction.group([
+                SKAction.scale(to: 1.0, duration: 7.0),
+                SKAction.fadeAlpha(to: 1.0, duration: 7.0)
+            ])
+        ])
+        sun.run(SKAction.repeatForever(sunPulse))
+        corona.run(SKAction.repeatForever(sunPulse))
+        
+        // PIANETI CON CARATTERISTICHE REALISTICHE - COLORI SILHOUETTE PIÙ VISIBILI
+        // Ogni pianeta ha: distanza, dimensione, colore, velocità orbitale (RALLENTATA +50%), angolo iniziale
+        let planets: [(name: String, distance: CGFloat, size: CGFloat, color: UIColor, speed: Double, hasRings: Bool, hasMoon: Bool, startAngle: CGFloat)] = [
+            // Mercurio - grigio (30 -> 45s)
+            ("Mercury", 80, 4, UIColor(red: 0.18, green: 0.17, blue: 0.16, alpha: 1.0), 45, false, false, 0),
+            // Venere - beige (44 -> 66s)
+            ("Venus", 120, 6, UIColor(red: 0.22, green: 0.20, blue: 0.16, alpha: 1.0), 66, false, false, .pi / 3),
+            // Terra - blu (60 -> 90s)
+            ("Earth", 170, 6.5, UIColor(red: 0.12, green: 0.15, blue: 0.20, alpha: 1.0), 90, false, true, .pi * 2 / 3),
+            // Marte - rosso (84 -> 126s)
+            ("Mars", 220, 5, UIColor(red: 0.20, green: 0.12, blue: 0.10, alpha: 1.0), 126, false, false, .pi),
+            // Giove - marrone (130 -> 195s)
+            ("Jupiter", 300, 14, UIColor(red: 0.19, green: 0.17, blue: 0.15, alpha: 1.0), 195, false, false, .pi * 4 / 3),
+            // Saturno - giallo pallido (170 -> 255s)
+            ("Saturn", 380, 12, UIColor(red: 0.20, green: 0.19, blue: 0.15, alpha: 1.0), 255, true, false, .pi * 5 / 3)
+        ]
+        
+        for (index, planet) in planets.enumerated() {
+            // Container per ogni pianeta (ruota per l'orbita)
+            let orbitContainer = SKNode()
+            orbitContainer.name = "\(planet.name)Orbit"
+            
+            // SFASAMENTO INIZIALE - ogni pianeta parte da un angolo diverso
+            orbitContainer.zRotation = planet.startAngle
+            
+            systemNode.addChild(orbitContainer)
+            
+            // ORBITA CIRCOLARE - più visibile
+            let orbitCircle = SKShapeNode(circleOfRadius: planet.distance)
+            orbitCircle.strokeColor = UIColor(red: 0.18, green: 0.18, blue: 0.18, alpha: 0.35)
+            orbitCircle.lineWidth = 0.8
+            orbitCircle.fillColor = .clear
+            orbitCircle.glowWidth = 0.3
+            systemNode.addChild(orbitCircle)
+            
+            // Pianeta - silhouette scura
+            let planetNode = SKShapeNode(circleOfRadius: planet.size)
+            planetNode.fillColor = planet.color
+            planetNode.strokeColor = planet.color.withAlphaComponent(0.4)
+            planetNode.lineWidth = 0.5
+            planetNode.glowWidth = planet.size * 0.1  // Quasi nessun glow
+            planetNode.position = CGPoint(x: planet.distance, y: 0)
+            orbitContainer.addChild(planetNode)
+            
+            // Anelli (Saturno)
+            if planet.hasRings {
+                let ringRadius = planet.size * 2.2
+                let ring = SKShapeNode(circleOfRadius: ringRadius)
+                ring.strokeColor = planet.color.withAlphaComponent(0.5)
+                ring.lineWidth = planet.size * 0.6
+                ring.fillColor = .clear
+                ring.glowWidth = 2
+                planetNode.addChild(ring)
+                
+                // Anello interno
+                let innerRing = SKShapeNode(circleOfRadius: ringRadius * 0.75)
+                innerRing.strokeColor = planet.color.withAlphaComponent(0.3)
+                innerRing.lineWidth = planet.size * 0.3
+                innerRing.fillColor = .clear
+                planetNode.addChild(innerRing)
+            }
+            
+            // Luna (Terra) - grigio visibile
+            if planet.hasMoon {
+                let moonContainer = SKNode()
+                planetNode.addChild(moonContainer)
+                
+                let moon = SKShapeNode(circleOfRadius: planet.size * 0.35)
+                moon.fillColor = UIColor(red: 0.16, green: 0.16, blue: 0.16, alpha: 1.0)  // Grigio più chiaro
+                moon.strokeColor = .clear
+                moon.position = CGPoint(x: planet.size * 2.5, y: 0)
+                moonContainer.addChild(moon)
+                
+                // Orbita luna (rallentata anche questa)
+                let moonOrbit = SKAction.rotate(byAngle: .pi * 2, duration: planet.speed / 10)
+                moonContainer.run(SKAction.repeatForever(moonOrbit))
+            }
+            
+            // Rotazione orbitale (velocità diverse, realistiche)
+            // Pianeti più distanti vanno più lenti (legge di Keplero approssimata)
+            let orbitRotation = SKAction.rotate(byAngle: .pi * 2, duration: planet.speed)
+            orbitContainer.run(SKAction.repeatForever(orbitRotation))
+            
+            // Auto-rotazione pianeta (molto più veloce dell'orbita)
+            let planetRotation = SKAction.rotate(byAngle: .pi * 2, duration: planet.speed / 20)
+            planetNode.run(SKAction.repeatForever(planetRotation))
+            
+            print("   🪐 \(planet.name): orbit=\(Int(planet.distance))px, size=\(planet.size), period=\(Int(planet.speed))s")
+        }
+        
+        worldLayer.addChild(systemNode)
+        print("   ⭐ Main solar system created with 6 planets (realistic speeds)")
+    }
+    
+    // Helper: crea path ellittico
+    private func createEllipsePath(radiusX: CGFloat, radiusY: CGFloat, segments: Int) -> CGPath {
+        let path = CGMutablePath()
+        let angleStep = (2.0 * .pi) / CGFloat(segments)
+        
+        for i in 0...segments {
+            let angle = angleStep * CGFloat(i)
+            let x = radiusX * cos(angle)
+            let y = radiusY * sin(angle)
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+    
+    // MARK: - Cosmic Nebula Environment (nebula02 + particelle)
+    
+    private func setupCosmicNebulaEnvironment() {
+        backgroundColor = .black
+        
+        print("🌌 Creating Cosmic Nebula environment with animated sprites")
+        
+        let playAreaWidth = size.width * playFieldMultiplier
+        let playAreaHeight = size.height * playFieldMultiplier
+        
+        // 1. STELLE DI SFONDO statiche
+        let backgroundStars = SKNode()
+        backgroundStars.name = "backgroundStars"
+        backgroundStars.zPosition = -1000
+        backgroundStars.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        
+        for _ in 0..<100 {
+            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.4...1.2))
+            star.fillColor = .white
+            star.strokeColor = .clear
+            star.alpha = CGFloat.random(in: 0.2...0.5)
+            star.position = CGPoint(
+                x: CGFloat.random(in: -playAreaWidth/2...playAreaWidth/2),
+                y: CGFloat.random(in: -playAreaHeight/2...playAreaHeight/2)
+            )
+            backgroundStars.addChild(star)
+        }
+        worldLayer.addChild(backgroundStars)
+        
+        // 2. NEBULOSA GRANDE ANIMATA (usando nebula02.png)
+        print("🔍 DEBUG: Tentativo caricamento nebula02.png")
+        if let imagePath = Bundle.main.path(forResource: "nebula02", ofType: "png") {
+            print("✅ DEBUG: PNG trovato al path: \(imagePath)")
+        } else {
+            print("❌ DEBUG: nebula02.png NON trovata nel bundle")
+        }
+        
+        let nebulaTexture = SKTexture(imageNamed: "nebula02")
+        print("🔍 DEBUG: Texture size: \(nebulaTexture.size())")
+        let nebula = SKSpriteNode(texture: nebulaTexture)
+        nebula.name = "cosmicNebula"
+        nebula.zPosition = -900
+        
+        // Posizione random nel mondo (non al centro)
+        let positions: [(x: CGFloat, y: CGFloat)] = [
+            (size.width * 0.30, size.height * 0.70),
+            (size.width * 0.70, size.height * 0.30),
+            (size.width * 0.25, size.height * 0.40),
+            (size.width * 0.75, size.height * 0.60)
+        ]
+        let chosenPos = positions.randomElement()!
+        nebula.position = CGPoint(x: chosenPos.x, y: chosenPos.y)
+        
+        // Scala grande
+        let nebulaScale = CGFloat.random(in: 2.5...3.5)
+        nebula.setScale(nebulaScale)
+        
+        // Opacità bassa per sfondo elegante
+        nebula.alpha = 0.25
+        
+        // Blend mode per effetto nebulosa
+        nebula.blendMode = .add
+        
+        worldLayer.addChild(nebula)
+        
+        // ROTAZIONE MOLTO LENTA (120-180 secondi per giro completo)
+        let rotationDuration = Double.random(in: 120...180)
+        let rotationDirection: CGFloat = Bool.random() ? 1 : -1
+        let rotate = SKAction.rotate(byAngle: .pi * 2 * rotationDirection, duration: rotationDuration)
+        nebula.run(SKAction.repeatForever(rotate))
+        
+        // Pulsazione leggera dell'alpha
+        let pulse = SKAction.sequence([
+            SKAction.fadeAlpha(to: 0.18, duration: Double.random(in: 8...12)),
+            SKAction.fadeAlpha(to: 0.32, duration: Double.random(in: 8...12))
+        ])
+        nebula.run(SKAction.repeatForever(pulse))
+        
+        print("   🌫️ Cosmic Nebula sprite loaded: scale=\(nebulaScale), rotation=\(Int(rotationDuration))s")
+        
+        // 3. PARTICELLE DUST LEGGERE (2 emitter) - specifiche per Cosmic Nebula
+        createCosmicNebulaDustEmitters()
+        
+        print("✨ Cosmic Nebula created with sprite + dust particles")
+        debugLog("🌌 Cosmic Nebula environment complete")
+    }
+    
+    // MARK: - Nebula Galaxy Environment (Galassie animate + particelle)
+    
+    private func setupNebulaGalaxyEnvironment() {
+        backgroundColor = .black
+        
+        print("🌌 Creating Nebula Galaxy environment with animated sprites")
+        
+        let playAreaWidth = size.width * playFieldMultiplier
+        let playAreaHeight = size.height * playFieldMultiplier
+        
+        // 1. STELLE DI SFONDO statiche
+        let backgroundStars = SKNode()
+        backgroundStars.name = "backgroundStars"
+        backgroundStars.zPosition = -1000
+        backgroundStars.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        
+        for _ in 0..<100 {
+            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.4...1.2))
+            star.fillColor = .white
+            star.strokeColor = .clear
+            star.alpha = CGFloat.random(in: 0.2...0.5)
+            star.position = CGPoint(
+                x: CGFloat.random(in: -playAreaWidth/2...playAreaWidth/2),
+                y: CGFloat.random(in: -playAreaHeight/2...playAreaHeight/2)
+            )
+            backgroundStars.addChild(star)
+        }
+        worldLayer.addChild(backgroundStars)
+        
+        // 2. NEBULOSA GRANDE ANIMATA (usando nebula01.png)
+        // Debug: verifica caricamento immagine
+        print("🔍 DEBUG: Tentativo caricamento nebula01.png")
+        if let imagePath = Bundle.main.path(forResource: "nebula01", ofType: "png") {
+            print("✅ DEBUG: PNG trovato al path: \(imagePath)")
+        } else {
+            print("❌ DEBUG: nebula01.png NON trovata nel bundle")
+            print("📦 DEBUG: Risorse disponibili nel bundle:")
+            if let resourcePath = Bundle.main.resourcePath {
+                let fileManager = FileManager.default
+                if let files = try? fileManager.contentsOfDirectory(atPath: resourcePath) {
+                    let imageFiles = files.filter { $0.hasSuffix(".jpg") || $0.hasSuffix(".png") }
+                    print("   Immagini trovate: \(imageFiles)")
+                }
+            }
+        }
+        
+        let nebulaTexture = SKTexture(imageNamed: "nebula01")
+        print("🔍 DEBUG: Texture size: \(nebulaTexture.size())")
+        let nebula = SKSpriteNode(texture: nebulaTexture)
+        nebula.name = "mainNebula"
+        nebula.zPosition = -900
+        
+        // Posizione random nel mondo (non al centro)
+        let positions: [(x: CGFloat, y: CGFloat)] = [
+            (size.width * 0.30, size.height * 0.70),
+            (size.width * 0.70, size.height * 0.30),
+            (size.width * 0.25, size.height * 0.40),
+            (size.width * 0.75, size.height * 0.60)
+        ]
+        let chosenPos = positions.randomElement()!
+        nebula.position = CGPoint(x: chosenPos.x, y: chosenPos.y)
+        
+        // Scala grande
+        let nebulaScale = CGFloat.random(in: 2.5...3.5)
+        nebula.setScale(nebulaScale)
+        
+        // Opacità bassa per sfondo elegante
+        nebula.alpha = 0.25
+        
+        // Blend mode per effetto nebulosa
+        nebula.blendMode = .add
+        
+        worldLayer.addChild(nebula)
+        
+        // ROTAZIONE MOLTO LENTA (120-180 secondi per giro completo)
+        let rotationDuration = Double.random(in: 120...180)
+        let rotationDirection: CGFloat = Bool.random() ? 1 : -1
+        let rotate = SKAction.rotate(byAngle: .pi * 2 * rotationDirection, duration: rotationDuration)
+        nebula.run(SKAction.repeatForever(rotate))
+        
+        // Pulsazione leggera dell'alpha
+        let pulse = SKAction.sequence([
+            SKAction.fadeAlpha(to: 0.18, duration: Double.random(in: 8...12)),
+            SKAction.fadeAlpha(to: 0.32, duration: Double.random(in: 8...12))
+        ])
+        nebula.run(SKAction.repeatForever(pulse))
+        
+        print("   🌫️ Nebula sprite loaded: scale=\(nebulaScale), rotation=\(Int(rotationDuration))s")
+        
+        // 3. PARTICELLE DUST LEGGERE (2 emitter) - specifiche per Nebula Galaxy
+        createNebulaGalaxyDustEmitters()
+        
+        print("✨ Nebula Galaxy created with sprite + dust particles")
+        debugLog("🌌 Nebula Galaxy environment complete")
+    }
+    
+    // Crea emitter di particelle "dust" per Cosmic Nebula (nebula02)
+    private func createCosmicNebulaDustEmitters() {
+        let playAreaWidth = size.width * playFieldMultiplier
+        let playAreaHeight = size.height * playFieldMultiplier
+        
+        // Emitter 1: Dust rosa-viola
+        let dustEmitter1 = SKEmitterNode()
+        dustEmitter1.name = "cosmicDustEmitter1"
+        dustEmitter1.particleTexture = createDustTexture()
+        dustEmitter1.particleBirthRate = 0.8
+        dustEmitter1.particleLifetime = 60
+        dustEmitter1.particleLifetimeRange = 20
+        dustEmitter1.particleSpeed = 5
+        dustEmitter1.particleSpeedRange = 3
+        dustEmitter1.particleScale = 0.3
+        dustEmitter1.particleScaleRange = 0.15
+        dustEmitter1.particleScaleSpeed = -0.002
+        dustEmitter1.particleAlpha = 0.4
+        dustEmitter1.particleAlphaRange = 0.2
+        dustEmitter1.particleAlphaSpeed = -0.005
+        dustEmitter1.particleColor = UIColor(red: 0.7, green: 0.3, blue: 0.6, alpha: 1.0)
+        dustEmitter1.particleColorBlendFactor = 0.8
+        dustEmitter1.particleBlendMode = .add
+        dustEmitter1.emissionAngle = 0
+        dustEmitter1.emissionAngleRange = .pi / 4
+        dustEmitter1.particlePositionRange = CGVector(dx: playAreaWidth, dy: playAreaHeight * 0.5)
+        dustEmitter1.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        dustEmitter1.zPosition = -850
+        dustEmitter1.targetNode = worldLayer
+        
+        worldLayer.addChild(dustEmitter1)
+        
+        let moveRight = SKAction.moveBy(x: 80, y: 20, duration: 40)
+        let moveLeft = SKAction.moveBy(x: -80, y: -20, duration: 40)
+        dustEmitter1.run(SKAction.repeatForever(SKAction.sequence([moveRight, moveLeft])))
+        
+        // Emitter 2: Dust blu-cyan
+        let dustEmitter2 = SKEmitterNode()
+        dustEmitter2.name = "cosmicDustEmitter2"
+        dustEmitter2.particleTexture = createDustTexture()
+        dustEmitter2.particleBirthRate = 0.6
+        dustEmitter2.particleLifetime = 50
+        dustEmitter2.particleLifetimeRange = 15
+        dustEmitter2.particleSpeed = 8
+        dustEmitter2.particleSpeedRange = 4
+        dustEmitter2.particleScale = 0.25
+        dustEmitter2.particleScaleRange = 0.12
+        dustEmitter2.particleScaleSpeed = -0.003
+        dustEmitter2.particleAlpha = 0.35
+        dustEmitter2.particleAlphaRange = 0.15
+        dustEmitter2.particleAlphaSpeed = -0.006
+        dustEmitter2.particleColor = UIColor(red: 0.3, green: 0.6, blue: 0.8, alpha: 1.0)
+        dustEmitter2.particleColorBlendFactor = 0.7
+        dustEmitter2.particleBlendMode = .add
+        dustEmitter2.emissionAngle = .pi / 2
+        dustEmitter2.emissionAngleRange = .pi / 3
+        dustEmitter2.particlePositionRange = CGVector(dx: playAreaWidth * 0.6, dy: playAreaHeight * 0.3)
+        dustEmitter2.position = CGPoint(x: size.width * 0.7, y: size.height * 0.3)
+        dustEmitter2.zPosition = -860
+        dustEmitter2.targetNode = worldLayer
+        
+        worldLayer.addChild(dustEmitter2)
+        
+        let circlePath = CGMutablePath()
+        circlePath.addArc(center: dustEmitter2.position, radius: 60, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        let circleMove = SKAction.follow(circlePath, asOffset: false, orientToPath: false, duration: 50)
+        dustEmitter2.run(SKAction.repeatForever(circleMove))
+        
+        print("   ✨ Cosmic Nebula: 2 dust emitters created")
+    }
+    
+    // Crea emitter di particelle "dust" per Nebula Galaxy (nebula01)
+    private func createNebulaGalaxyDustEmitters() {
+        let playAreaWidth = size.width * playFieldMultiplier
+        let playAreaHeight = size.height * playFieldMultiplier
+        
+        // Emitter 1: Dust rosa-viola
+        let dustEmitter1 = SKEmitterNode()
+        dustEmitter1.name = "dustEmitter1"
+        dustEmitter1.particleTexture = createDustTexture()
+        dustEmitter1.particleBirthRate = 0.8  // MOLTO BASSA
+        dustEmitter1.particleLifetime = 60  // Lunga vita
+        dustEmitter1.particleLifetimeRange = 20
+        dustEmitter1.particleSpeed = 5  // Lente
+        dustEmitter1.particleSpeedRange = 3
+        dustEmitter1.particleScale = 0.3
+        dustEmitter1.particleScaleRange = 0.15
+        dustEmitter1.particleScaleSpeed = -0.002  // Diminuiscono lentamente
+        dustEmitter1.particleAlpha = 0.4
+        dustEmitter1.particleAlphaRange = 0.2
+        dustEmitter1.particleAlphaSpeed = -0.005
+        dustEmitter1.particleColor = UIColor(red: 0.7, green: 0.3, blue: 0.6, alpha: 1.0)  // Rosa-viola
+        dustEmitter1.particleColorBlendFactor = 0.8
+        dustEmitter1.particleBlendMode = .add
+        dustEmitter1.emissionAngle = 0  // Orizzontale
+        dustEmitter1.emissionAngleRange = .pi / 4
+        dustEmitter1.particlePositionRange = CGVector(dx: playAreaWidth, dy: playAreaHeight * 0.5)
+        dustEmitter1.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        dustEmitter1.zPosition = -850
+        dustEmitter1.targetNode = worldLayer
+        
+        worldLayer.addChild(dustEmitter1)
+        
+        // Movimento lento dell'emitter (sinistra-destra)
+        let moveRight = SKAction.moveBy(x: 80, y: 20, duration: 40)
+        let moveLeft = SKAction.moveBy(x: -80, y: -20, duration: 40)
+        let moveSequence = SKAction.sequence([moveRight, moveLeft])
+        dustEmitter1.run(SKAction.repeatForever(moveSequence))
+        
+        // Emitter 2: Dust blu-cyan
+        let dustEmitter2 = SKEmitterNode()
+        dustEmitter2.name = "dustEmitter2"
+        dustEmitter2.particleTexture = createDustTexture()
+        dustEmitter2.particleBirthRate = 0.6
+        dustEmitter2.particleLifetime = 50
+        dustEmitter2.particleLifetimeRange = 15
+        dustEmitter2.particleSpeed = 8
+        dustEmitter2.particleSpeedRange = 4
+        dustEmitter2.particleScale = 0.25
+        dustEmitter2.particleScaleRange = 0.12
+        dustEmitter2.particleScaleSpeed = -0.003
+        dustEmitter2.particleAlpha = 0.35
+        dustEmitter2.particleAlphaRange = 0.15
+        dustEmitter2.particleAlphaSpeed = -0.006
+        dustEmitter2.particleColor = UIColor(red: 0.3, green: 0.6, blue: 0.8, alpha: 1.0)  // Blu-cyan
+        dustEmitter2.particleColorBlendFactor = 0.7
+        dustEmitter2.particleBlendMode = .add
+        dustEmitter2.emissionAngle = .pi / 2  // Verso l'alto
+        dustEmitter2.emissionAngleRange = .pi / 3
+        dustEmitter2.particlePositionRange = CGVector(dx: playAreaWidth * 0.6, dy: playAreaHeight * 0.3)
+        dustEmitter2.position = CGPoint(x: size.width * 0.7, y: size.height * 0.3)
+        dustEmitter2.zPosition = -860
+        dustEmitter2.targetNode = worldLayer
+        
+        worldLayer.addChild(dustEmitter2)
+        
+        // Movimento circolare lento
+        let circlePath = CGMutablePath()
+        circlePath.addArc(center: dustEmitter2.position, radius: 60, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        let circleMove = SKAction.follow(circlePath, asOffset: false, orientToPath: false, duration: 50)
+        dustEmitter2.run(SKAction.repeatForever(circleMove))
+        
+        print("   ✨ Nebula Galaxy: 2 dust emitters created")
+    }
+    
+    // Crea texture per particelle dust (soft glow)
+    private func createDustTexture() -> SKTexture {
+        let size: CGFloat = 128
+        UIGraphicsBeginImageContextWithOptions(CGSize(width: size, height: size), false, 0)
+        defer { UIGraphicsEndImageContext() }
+        
+        guard let context = UIGraphicsGetCurrentContext() else {
+            return SKTexture()
+        }
+        
+        let center = CGPoint(x: size / 2, y: size / 2)
+        
+        // Gradiente radiale soft per effetto "dust"
+        let colors = [
+            UIColor.white.withAlphaComponent(0.8).cgColor,
+            UIColor.white.withAlphaComponent(0.4).cgColor,
+            UIColor.white.withAlphaComponent(0.0).cgColor
+        ] as CFArray
+        
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0.0, 0.5, 1.0])!
+        
+        context.drawRadialGradient(gradient,
+                                   startCenter: center, startRadius: 0,
+                                   endCenter: center, endRadius: size / 2,
+                                   options: [])
+        
+        if let image = UIGraphicsGetImageFromCurrentImageContext() {
+            return SKTexture(image: image)
+        }
+        
+        return SKTexture()
+    }
+    
+    // MARK: - Original Environment Setups
     
     private func setupDeepSpaceEnvironment() {
         // Background nero profondo
@@ -1484,6 +2188,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let planetPath = createIrregularPlanetPath(radius: planetRadius)
         planet = SKShapeNode(path: planetPath)
         planet.fillColor = .white
+        planetOriginalColor = .white  // Memorizza il colore originale
         planet.strokeColor = .clear
         planet.name = "planet"
         planet.zPosition = 1
@@ -6417,12 +7122,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func flashPlanet() {
         // Effetto flash rosso sul pianeta quando viene colpito
-        let originalColor = planet.fillColor
         planet.fillColor = .red
         
         let wait = SKAction.wait(forDuration: 0.1)
         let restore = SKAction.run { [weak self] in
-            self?.planet.fillColor = originalColor
+            guard let self = self else { return }
+            self.planet.fillColor = self.planetOriginalColor  // Usa il colore originale memorizzato
         }
         planet.run(SKAction.sequence([wait, restore]))
     }
@@ -6845,6 +7550,66 @@ extension CGVector {
     static func * (lhs: CGVector, rhs: CGVector) -> CGFloat {
         return lhs.dx * rhs.dx + lhs.dy * rhs.dy
     }
+}
+
+// MARK: - Enhanced Background System (New)
+
+extension GameScene {
+    
+    /// Crea un emitter di stelle dinamico per starfield multi-layer
+    /// Versione semplificata senza texture custom
+    // Helper per creare texture particella stella
+    func createStarParticleTexture() -> SKTexture {
+        // Usa SKShapeNode per creare la texture - più affidabile in SpriteKit
+        let size: CGFloat = 64
+        let star = SKShapeNode(circleOfRadius: size / 4)
+        star.fillColor = .white
+        star.strokeColor = .clear
+        star.glowWidth = size / 8  // Glow per effetto stella
+        
+        // Crea texture dalla view se disponibile, altrimenti fallback
+        if let view = self.view {
+            let texture = view.texture(from: star)
+            texture?.filteringMode = .linear
+            print("   🎨 Texture created from view: size=\(texture?.size() ?? .zero)")
+            return texture ?? createFallbackTexture()
+        } else {
+            print("   ⚠️ View not available, using fallback texture")
+            return createFallbackTexture()
+        }
+    }
+    
+    // Fallback texture se la view non è disponibile
+    func createFallbackTexture() -> SKTexture {
+        let size: CGFloat = 64
+        UIGraphicsBeginImageContextWithOptions(CGSize(width: size, height: size), false, 0)
+        defer { UIGraphicsEndImageContext() }
+        
+        guard let context = UIGraphicsGetCurrentContext() else {
+            print("   ❌ Failed to create graphics context")
+            return SKTexture()
+        }
+        
+        // Cerchio bianco
+        let center = CGPoint(x: size / 2, y: size / 2)
+        let radius = size / 4
+        
+        context.setFillColor(UIColor.white.cgColor)
+        context.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, 
+                                       width: radius * 2, height: radius * 2))
+        
+        if let image = UIGraphicsGetImageFromCurrentImageContext() {
+            let texture = SKTexture(image: image)
+            texture.filteringMode = .linear
+            print("   🎨 Fallback texture created: size=\(texture.size())")
+            return texture
+        }
+        
+        print("   ❌ Failed to create fallback texture")
+        return SKTexture()
+    }
+    
+
 }
 
 // MARK: - PROJECTILE REFLECTION FEATURE (DISABLED - WIP)

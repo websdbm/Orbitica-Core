@@ -63,108 +63,120 @@ class DebugScene: SKScene {
     }
     
     private func createWaveSelector() {
-        // Pulsante decrement (-)
-        let decrementButton = SKShapeNode(rectOf: CGSize(width: 60, height: 60), cornerRadius: 10)
+        // Titolo WAVE
+        let waveTitle = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        waveTitle.text = "WAVE"
+        waveTitle.fontSize = 18
+        waveTitle.fontColor = .cyan
+        waveTitle.position = CGPoint(x: size.width / 4, y: size.height - 200)
+        waveTitle.zPosition = 100
+        addChild(waveTitle)
+        
+        // Pulsante decrement (-) - LATO SINISTRO
+        let decrementButton = SKShapeNode(rectOf: CGSize(width: 45, height: 45), cornerRadius: 8)
         decrementButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         decrementButton.strokeColor = .white
         decrementButton.lineWidth = 2
-        decrementButton.position = CGPoint(x: size.width / 2 - 120, y: size.height - 250)
+        decrementButton.position = CGPoint(x: size.width / 4 - 70, y: size.height - 260)
         decrementButton.name = "decrement"
         decrementButton.zPosition = 100
         addChild(decrementButton)
         
         let minusLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         minusLabel.text = "-"
-        minusLabel.fontSize = 36
+        minusLabel.fontSize = 28
         minusLabel.fontColor = .white
         minusLabel.verticalAlignmentMode = .center
         decrementButton.addChild(minusLabel)
         
-        // Wave number display
+        // Wave number display - LATO SINISTRO
         waveLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         waveLabel.text = "\(selectedWave)"
-        waveLabel.fontSize = 72
+        waveLabel.fontSize = 48
         waveLabel.fontColor = .cyan
-        waveLabel.position = CGPoint(x: size.width / 2, y: size.height - 250)
+        waveLabel.position = CGPoint(x: size.width / 4, y: size.height - 260)
         waveLabel.verticalAlignmentMode = .center
         waveLabel.zPosition = 100
         addChild(waveLabel)
         
-        // Pulsante increment (+)
-        let incrementButton = SKShapeNode(rectOf: CGSize(width: 60, height: 60), cornerRadius: 10)
+        // Pulsante increment (+) - LATO SINISTRO
+        let incrementButton = SKShapeNode(rectOf: CGSize(width: 45, height: 45), cornerRadius: 8)
         incrementButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         incrementButton.strokeColor = .white
         incrementButton.lineWidth = 2
-        incrementButton.position = CGPoint(x: size.width / 2 + 120, y: size.height - 250)
+        incrementButton.position = CGPoint(x: size.width / 4 + 70, y: size.height - 260)
         incrementButton.name = "increment"
         incrementButton.zPosition = 100
         addChild(incrementButton)
         
         let plusLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         plusLabel.text = "+"
-        plusLabel.fontSize = 36
+        plusLabel.fontSize = 28
         plusLabel.fontColor = .white
         plusLabel.verticalAlignmentMode = .center
         incrementButton.addChild(plusLabel)
     }
     
     private func createBackgroundSelector() {
-        // Inizializza array di ambienti
+        // Inizializza array di ambienti - NUOVI ENHANCED PRIMA
         allEnvironments = [
+            .cosmicNebula, .nebulaGalaxy, .animatedCosmos, .deepSpaceEnhanced,  // ⭐ NUOVI ENHANCED
             .deepSpace, .nebula, .voidSpace, .redGiant,
             .asteroidBelt, .binaryStars, .ionStorm, .pulsarField,
             .planetarySystem, .cometTrail, .darkMatterCloud, .supernovaRemnant
         ]
         
-        // Titolo sezione background
+        // Titolo sezione background - LATO DESTRO
         let bgTitle = SKLabelNode(fontNamed: "AvenirNext-Bold")
         bgTitle.text = "BACKGROUND"
-        bgTitle.fontSize = 20
+        bgTitle.fontSize = 18
         bgTitle.fontColor = .yellow
-        bgTitle.position = CGPoint(x: size.width / 2, y: size.height - 370)
+        bgTitle.position = CGPoint(x: size.width * 3/4, y: size.height - 200)
         bgTitle.zPosition = 100
         addChild(bgTitle)
         
-        // Pulsante decrement (◄)
-        let prevButton = SKShapeNode(rectOf: CGSize(width: 50, height: 50), cornerRadius: 8)
+        // Pulsante decrement (◄) - LATO DESTRO
+        let prevButton = SKShapeNode(rectOf: CGSize(width: 45, height: 45), cornerRadius: 8)
         prevButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         prevButton.strokeColor = .yellow
         prevButton.lineWidth = 2
-        prevButton.position = CGPoint(x: size.width / 2 - 150, y: size.height - 430)
+        prevButton.position = CGPoint(x: size.width * 3/4 - 80, y: size.height - 260)
         prevButton.name = "bg_prev"
         prevButton.zPosition = 100
         addChild(prevButton)
         
         let prevLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         prevLabel.text = "◄"
-        prevLabel.fontSize = 28
+        prevLabel.fontSize = 24
         prevLabel.fontColor = .yellow
         prevLabel.verticalAlignmentMode = .center
         prevButton.addChild(prevLabel)
         
-        // Label ambiente corrente
+        // Label ambiente corrente - LATO DESTRO
         backgroundLabel = SKLabelNode(fontNamed: "Courier")
         backgroundLabel.text = allEnvironments[selectedBackgroundIndex].name
-        backgroundLabel.fontSize = 16
+        backgroundLabel.fontSize = 12
         backgroundLabel.fontColor = .white
-        backgroundLabel.position = CGPoint(x: size.width / 2, y: size.height - 430)
+        backgroundLabel.position = CGPoint(x: size.width * 3/4, y: size.height - 260)
         backgroundLabel.verticalAlignmentMode = .center
+        backgroundLabel.preferredMaxLayoutWidth = 100
+        backgroundLabel.numberOfLines = 2
         backgroundLabel.zPosition = 100
         addChild(backgroundLabel)
         
-        // Pulsante increment (►)
-        let nextButton = SKShapeNode(rectOf: CGSize(width: 50, height: 50), cornerRadius: 8)
+        // Pulsante increment (►) - LATO DESTRO
+        let nextButton = SKShapeNode(rectOf: CGSize(width: 45, height: 45), cornerRadius: 8)
         nextButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         nextButton.strokeColor = .yellow
         nextButton.lineWidth = 2
-        nextButton.position = CGPoint(x: size.width / 2 + 150, y: size.height - 430)
+        nextButton.position = CGPoint(x: size.width * 3/4 + 80, y: size.height - 260)
         nextButton.name = "bg_next"
         nextButton.zPosition = 100
         addChild(nextButton)
         
         let nextLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         nextLabel.text = "►"
-        nextLabel.fontSize = 28
+        nextLabel.fontSize = 24
         nextLabel.fontColor = .yellow
         nextLabel.verticalAlignmentMode = .center
         nextButton.addChild(nextLabel)
@@ -307,6 +319,14 @@ class DebugScene: SKScene {
         // copiando la logica da GameScene
         
         switch environment {
+        case .cosmicNebula:
+            applyCosmicNebula()
+        case .animatedCosmos:
+            applyAnimatedCosmos()
+        case .deepSpaceEnhanced:
+            applyDeepSpaceEnhanced()
+        case .nebulaGalaxy:
+            applyNebulaGalaxy()
         case .deepSpace:
             applyDeepSpace()
         case .nebula:
@@ -334,7 +354,330 @@ class DebugScene: SKScene {
         }
     }
     
-    // Helper rapido: applica solo background color e stelle base per preview
+    // NUOVO: Animated Cosmos preview - Sistema solare realistico
+    private func applyAnimatedCosmos() {
+        backgroundColor = .black
+        
+        // Stelle di sfondo
+        addSimpleStars(count: 80, colorRange: [.white])
+        
+        // Nebulosa distante
+        let nebula = SKShapeNode(circleOfRadius: 180)
+        nebula.fillColor = UIColor(red: 0.35, green: 0.25, blue: 0.65, alpha: 0.1)
+        nebula.strokeColor = .clear
+        nebula.glowWidth = 60
+        nebula.position = CGPoint(x: size.width * 0.25, y: size.height * 0.75)
+        nebula.zPosition = -60
+        addChild(nebula)
+        
+        let nebulaRotate = SKAction.rotate(byAngle: .pi * 2, duration: 120)
+        nebula.run(SKAction.repeatForever(nebulaRotate))
+        
+        // SISTEMA SOLARE REALISTICO (versione preview)
+        createRealisticPreviewSolarSystem()
+        
+        // Indicatore "NEW"
+        let label = SKLabelNode(fontNamed: "Courier-Bold")
+        label.text = "★ REALISTIC SOLAR SYSTEM ★"
+        label.fontSize = 11
+        label.fontColor = .yellow
+        label.alpha = 0.7
+        label.position = CGPoint(x: size.width / 2, y: 50)
+        label.zPosition = 100
+        addChild(label)
+    }
+    
+    private func createRealisticPreviewSolarSystem() {
+        let systemNode = SKNode()
+        
+        // POSIZIONE RANDOM come nel gioco
+        let quadrants: [(x: CGFloat, y: CGFloat)] = [
+            (size.width * 0.20, size.height * 0.75),
+            (size.width * 0.80, size.height * 0.75),
+            (size.width * 0.20, size.height * 0.25),
+            (size.width * 0.80, size.height * 0.25)
+        ]
+        let chosenQuadrant = quadrants.randomElement()!
+        systemNode.position = CGPoint(x: chosenQuadrant.x, y: chosenQuadrant.y)
+        
+        systemNode.zPosition = -50
+        systemNode.setScale(2.0)  // Grande
+        systemNode.alpha = 1.0    // Opacità piena, colori scuri
+        
+        // Sole centrale - silhouette visibile
+        let sunSize: CGFloat = 18
+        let sun = SKShapeNode(circleOfRadius: sunSize)
+        sun.fillColor = UIColor(red: 0.22, green: 0.18, blue: 0.12, alpha: 1.0)
+        sun.strokeColor = UIColor(red: 0.28, green: 0.22, blue: 0.15, alpha: 0.6)
+        sun.lineWidth = 1.5
+        sun.glowWidth = sunSize * 0.3
+        systemNode.addChild(sun)
+        
+        // Corona solare
+        let corona = SKShapeNode(circleOfRadius: sunSize * 1.3)
+        corona.fillColor = UIColor(red: 0.18, green: 0.15, blue: 0.12, alpha: 0.3)
+        corona.strokeColor = .clear
+        corona.glowWidth = 5
+        systemNode.addChild(corona)
+        
+        // Pulsazione sole LENTA
+        let sunPulse = SKAction.sequence([
+            SKAction.scale(to: 1.08, duration: 5.0),
+            SKAction.scale(to: 1.0, duration: 5.0)
+        ])
+        sun.run(SKAction.repeatForever(sunPulse))
+        corona.run(SKAction.repeatForever(sunPulse))
+        
+        // Pianeti con velocità RALLENTATE e colori SCURI come nel gioco
+        let planets: [(distance: CGFloat, size: CGFloat, color: UIColor, speed: Double, hasRings: Bool, startAngle: CGFloat)] = [
+            (45, 2.5, UIColor(red: 0.18, green: 0.17, blue: 0.16, alpha: 1.0), 30, false, 0),              // Mercurio
+            (65, 3.5, UIColor(red: 0.22, green: 0.20, blue: 0.16, alpha: 1.0), 44, false, .pi / 3),        // Venere
+            (90, 4, UIColor(red: 0.12, green: 0.15, blue: 0.20, alpha: 1.0), 60, false, .pi * 2 / 3),      // Terra
+            (115, 3, UIColor(red: 0.20, green: 0.12, blue: 0.10, alpha: 1.0), 84, false, .pi),             // Marte
+            (150, 8, UIColor(red: 0.19, green: 0.17, blue: 0.15, alpha: 1.0), 130, false, .pi * 4 / 3),    // Giove
+            (190, 7, UIColor(red: 0.20, green: 0.19, blue: 0.15, alpha: 1.0), 170, true, .pi * 5 / 3)      // Saturno
+        ]
+        
+        for planet in planets {
+            // Container orbita con SFASAMENTO INIZIALE
+            let orbitContainer = SKNode()
+            orbitContainer.zRotation = planet.startAngle
+            systemNode.addChild(orbitContainer)
+            
+            // Orbita circolare PIÙ VISIBILE
+            let orbitCircle = SKShapeNode(circleOfRadius: planet.distance)
+            orbitCircle.strokeColor = UIColor(red: 0.18, green: 0.18, blue: 0.18, alpha: 0.35)
+            orbitCircle.lineWidth = 0.6
+            orbitCircle.fillColor = .clear
+            orbitCircle.glowWidth = 0.2
+            systemNode.addChild(orbitCircle)
+            
+            // Pianeta - silhouette scura
+            let planetNode = SKShapeNode(circleOfRadius: planet.size)
+            planetNode.fillColor = planet.color
+            planetNode.strokeColor = planet.color.withAlphaComponent(0.4)
+            planetNode.lineWidth = 0.3
+            planetNode.glowWidth = planet.size * 0.1
+            planetNode.position = CGPoint(x: planet.distance, y: 0)
+            orbitContainer.addChild(planetNode)
+            
+            // Anelli (Saturno) - scuri
+            if planet.hasRings {
+                let ring = SKShapeNode(circleOfRadius: planet.size * 2)
+                ring.strokeColor = planet.color.withAlphaComponent(0.4)
+                ring.lineWidth = planet.size * 0.4
+                ring.fillColor = .clear
+                planetNode.addChild(ring)
+                
+                // Anello interno
+                let innerRing = SKShapeNode(circleOfRadius: planet.size * 1.5)
+                innerRing.strokeColor = planet.color.withAlphaComponent(0.25)
+                innerRing.lineWidth = planet.size * 0.25
+                innerRing.fillColor = .clear
+                planetNode.addChild(innerRing)
+            }
+            
+            // Orbita RALLENTATA
+            let orbit = SKAction.rotate(byAngle: .pi * 2, duration: planet.speed)
+            orbitContainer.run(SKAction.repeatForever(orbit))
+            
+            // Auto-rotazione
+            let rotation = SKAction.rotate(byAngle: .pi * 2, duration: planet.speed / 20)
+            planetNode.run(SKAction.repeatForever(rotation))
+        }
+        
+        addChild(systemNode)
+    }
+    
+    private func createDebugEllipsePath(radiusX: CGFloat, radiusY: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        let segments = 48
+        let angleStep = (2.0 * .pi) / CGFloat(segments)
+        
+        for i in 0...segments {
+            let angle = angleStep * CGFloat(i)
+            let x = radiusX * cos(angle)
+            let y = radiusY * sin(angle)
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+    
+    // Cosmic Nebula con sprite nebula02 + particelle
+    private func applyCosmicNebula() {
+        backgroundColor = .black
+        
+        // Stelle di sfondo
+        addSimpleStars(count: 80, colorRange: [.white])
+        
+        // Nebulosa sprite (nebula02)
+        print("🔍 [DebugScene] Tentativo caricamento nebula02.png")
+        if let imagePath = Bundle.main.path(forResource: "nebula02", ofType: "png") {
+            print("✅ [DebugScene] PNG trovato: \(imagePath)")
+        } else {
+            print("❌ [DebugScene] nebula02.png NON trovata")
+        }
+        
+        let nebulaTexture = SKTexture(imageNamed: "nebula02")
+        print("🔍 [DebugScene] Texture size: \(nebulaTexture.size())")
+        let nebula = SKSpriteNode(texture: nebulaTexture)
+        nebula.position = CGPoint(x: size.width * 0.6, y: size.height * 0.5)
+        nebula.setScale(1.5)
+        nebula.alpha = 0.3
+        nebula.blendMode = .add
+        nebula.zPosition = -60
+        addChild(nebula)
+        
+        // Rotazione lenta
+        let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 90)
+        nebula.run(SKAction.repeatForever(rotate))
+        
+        // Particelle dust (semplificate per preview)
+        for _ in 0..<20 {
+            let dust = SKShapeNode(circleOfRadius: CGFloat.random(in: 2...4))
+            dust.fillColor = UIColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 0.3)
+            dust.strokeColor = .clear
+            dust.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            dust.zPosition = -50
+            addChild(dust)
+            
+            // Movimento lento
+            let duration = Double.random(in: 20...30)
+            let moveBy = CGVector(dx: CGFloat.random(in: -50...50), dy: CGFloat.random(in: -50...50))
+            let move = SKAction.move(by: moveBy, duration: duration)
+            let moveBack = move.reversed()
+            dust.run(SKAction.repeatForever(SKAction.sequence([move, moveBack])))
+        }
+        
+        // Indicatore
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = "COSMIC NEBULA"
+        label.fontSize = 16
+        label.fontColor = UIColor(red: 0.8, green: 0.6, blue: 0.9, alpha: 1.0)
+        label.position = CGPoint(x: size.width/2, y: 30)
+        label.zPosition = 200
+        addChild(label)
+    }
+    
+    // Nebula Galaxy con sprite nebula01 + particelle
+    private func applyNebulaGalaxy() {
+        backgroundColor = .black
+        
+        // Stelle di sfondo
+        addSimpleStars(count: 80, colorRange: [.white])
+        
+        // Nebulosa sprite
+        print("🔍 [DebugScene] Tentativo caricamento nebula01.png")
+        if let imagePath = Bundle.main.path(forResource: "nebula01", ofType: "png") {
+            print("✅ [DebugScene] PNG trovato: \(imagePath)")
+        } else {
+            print("❌ [DebugScene] nebula01.png NON trovata")
+        }
+        
+        let nebulaTexture = SKTexture(imageNamed: "nebula01")
+        print("🔍 [DebugScene] Texture size: \(nebulaTexture.size())")
+        let nebula = SKSpriteNode(texture: nebulaTexture)
+        nebula.position = CGPoint(x: size.width * 0.6, y: size.height * 0.5)
+        nebula.setScale(1.5)
+        nebula.alpha = 0.3
+        nebula.blendMode = .add
+        nebula.zPosition = -60
+        addChild(nebula)
+        
+        // Rotazione lenta
+        let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 90)
+        nebula.run(SKAction.repeatForever(rotate))
+        
+        // Particelle dust (semplificate per preview)
+        for _ in 0..<20 {
+            let dust = SKShapeNode(circleOfRadius: CGFloat.random(in: 2...4))
+            dust.fillColor = UIColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 0.3)
+            dust.strokeColor = .clear
+            dust.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            dust.zPosition = -55
+            addChild(dust)
+            
+            // Movimento lento
+            let moveX = CGFloat.random(in: -30...30)
+            let moveY = CGFloat.random(in: -30...30)
+            let move = SKAction.moveBy(x: moveX, y: moveY, duration: Double.random(in: 20...30))
+            let moveBack = move.reversed()
+            dust.run(SKAction.repeatForever(SKAction.sequence([move, moveBack])))
+        }
+        
+        // Indicatore
+        let label = SKLabelNode(fontNamed: "Courier-Bold")
+        label.text = "★ NEBULA + PARTICLES ★"
+        label.fontSize = 11
+        label.fontColor = UIColor(red: 0.8, green: 0.5, blue: 0.9, alpha: 1.0)
+        label.alpha = 0.7
+        label.position = CGPoint(x: size.width / 2, y: 50)
+        label.zPosition = 100
+        addChild(label)
+    }
+    
+    // Deep Space Enhanced con stelle parallax animate
+    private func applyDeepSpaceEnhanced() {
+        backgroundColor = .black
+        
+        // Stelle di sfondo statiche
+        addSimpleStars(count: 100, colorRange: [.white])
+        
+        // PARALLAX STARS ANIMATE (semplificato per debug)
+        createDebugParallaxStars()
+        
+        // Indicatore
+        let label = SKLabelNode(fontNamed: "Courier")
+        label.text = "★ PARALLAX STARS ★"
+        label.fontSize = 12
+        label.fontColor = .cyan
+        label.alpha = 0.5
+        label.position = CGPoint(x: size.width / 2, y: 50)
+        label.zPosition = 100
+        addChild(label)
+    }
+    
+    private func createDebugParallaxStars() {
+        // 3 layer di stelle che si muovono a velocità diverse (da destra a sinistra)
+        let speeds: [CGFloat] = [30, 60, 100]  // Pixel per secondo
+        let scales: [CGFloat] = [1.0, 1.5, 2.0]
+        let counts: [Int] = [15, 10, 7]
+        
+        for i in 0..<3 {
+            for _ in 0..<counts[i] {
+                let star = SKShapeNode(circleOfRadius: scales[i])
+                star.fillColor = i == 2 ? UIColor.cyan.withAlphaComponent(0.6) : UIColor.white.withAlphaComponent(0.5)
+                star.strokeColor = .clear
+                star.position = CGPoint(
+                    x: CGFloat.random(in: 0...size.width),
+                    y: CGFloat.random(in: 0...size.height)
+                )
+                star.zPosition = CGFloat(-80 + i * 10)
+                
+                // Movimento orizzontale continuo (da destra a sinistra)
+                let duration = size.width / speeds[i]
+                let moveLeft = SKAction.moveBy(x: -size.width - 100, y: 0, duration: TimeInterval(duration))
+                let resetPosition = SKAction.moveBy(x: size.width + 100, y: 0, duration: 0)
+                let sequence = SKAction.sequence([moveLeft, resetPosition])
+                star.run(SKAction.repeatForever(sequence))
+                
+                addChild(star)
+            }
+        }
+    }
+    
     private func applyDeepSpace() {
         backgroundColor = .black
         addSimpleStars(count: 100, colorRange: [.white, .cyan, .yellow])

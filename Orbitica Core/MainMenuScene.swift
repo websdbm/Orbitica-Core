@@ -374,26 +374,10 @@ class MainMenuScene: SKScene {
     private func setupDeepSpaceBackground() {
         backgroundColor = UIColor(red: 0.01, green: 0.01, blue: 0.03, alpha: 1.0)
         
-        // Stelle abbondanti
-        for _ in 0..<120 {
-            let starSize = CGFloat.random(in: 0.8...2.5)
-            let star = SKShapeNode(circleOfRadius: starSize)
-            star.fillColor = UIColor(white: CGFloat.random(in: 0.7...1.0), alpha: CGFloat.random(in: 0.4...0.9))
-            star.strokeColor = .clear
-            star.position = CGPoint(
-                x: CGFloat.random(in: 0...size.width),
-                y: CGFloat.random(in: 0...size.height)
-            )
-            star.zPosition = -40
-            addChild(star)
-            
-            if Bool.random() {
-                let fadeOut = SKAction.fadeAlpha(to: 0.2, duration: Double.random(in: 1...2.5))
-                let fadeIn = SKAction.fadeAlpha(to: star.alpha, duration: Double.random(in: 1...2.5))
-                let twinkle = SKAction.sequence([fadeOut, fadeIn])
-                star.run(SKAction.repeatForever(twinkle))
-            }
-        }
+        // SISTEMA MULTI-LAYER con effetto PARALLASSE
+        createStarLayers()
+        
+        print("🌌 Deep Space background with parallax starfield initialized")
     }
     
     private func setupNebulaBackground() {
@@ -449,6 +433,146 @@ class MainMenuScene: SKScene {
             star.zPosition = -40
             addChild(star)
         }
+    }
+    
+    // Helper per creare texture particella stella
+    private func createStarParticleTexture() -> SKTexture {
+        // Usa SKShapeNode per creare la texture - più affidabile in SpriteKit
+        let size: CGFloat = 64
+        let star = SKShapeNode(circleOfRadius: size / 4)
+        star.fillColor = .white
+        star.strokeColor = .clear
+        star.glowWidth = size / 8  // Glow per effetto stella
+        
+        // Crea texture dalla view se disponibile, altrimenti fallback
+        if let view = self.view {
+            let texture = view.texture(from: star)
+            texture?.filteringMode = .linear
+            print("   🎨 Menu texture created from view: size=\(texture?.size() ?? .zero)")
+            return texture ?? createFallbackTexture()
+        } else {
+            print("   ⚠️ View not available in menu, using fallback texture")
+            return createFallbackTexture()
+        }
+    }
+    
+    // Fallback texture se la view non è disponibile
+    private func createFallbackTexture() -> SKTexture {
+        let size: CGFloat = 64
+        UIGraphicsBeginImageContextWithOptions(CGSize(width: size, height: size), false, 0)
+        defer { UIGraphicsEndImageContext() }
+        
+        guard let context = UIGraphicsGetCurrentContext() else {
+            print("   ❌ Failed to create graphics context in menu")
+            return SKTexture()
+        }
+        
+        // Cerchio bianco
+        let center = CGPoint(x: size / 2, y: size / 2)
+        let radius = size / 4
+        
+        context.setFillColor(UIColor.white.cgColor)
+        context.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, 
+                                       width: radius * 2, height: radius * 2))
+        
+        if let image = UIGraphicsGetImageFromCurrentImageContext() {
+            let texture = SKTexture(image: image)
+            texture.filteringMode = .linear
+            print("   🎨 Menu fallback texture created: size=\(texture.size())")
+            return texture
+        }
+        
+        print("   ❌ Failed to create menu fallback texture")
+        return SKTexture()
+    }
+    
+    // Crea un emitter per starfield con parametri personalizzati - STELLE STATICHE
+    private func makeStarfieldEmitter(speed: CGFloat,
+                                      lifetime: CGFloat,
+                                      scale: CGFloat,
+                                      birthRate: CGFloat,
+                                      color: UIColor) -> SKEmitterNode {
+        
+        let texture = createStarParticleTexture()
+        
+        let emitter = SKEmitterNode()
+        emitter.particleTexture = texture
+        emitter.particleBirthRate = birthRate
+        emitter.particleColor = color
+        emitter.particleLifetime = lifetime
+        emitter.particleSpeed = 0  // STELLE STATICHE nel menu
+        emitter.particleScale = scale
+        emitter.particleColorBlendFactor = 1
+        emitter.particleScaleRange = scale * 0.3
+        
+        // Spawn distribuito su TUTTO lo schermo
+        emitter.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        emitter.particlePositionRange = CGVector(dx: size.width * 1.2, dy: size.height * 1.2)
+        emitter.particleSpeedRange = 0  // Nessun movimento
+        
+        // Nessun angolo di emissione (stelle statiche)
+        emitter.emissionAngle = 0
+        emitter.emissionAngleRange = 0
+        
+        // Alpha per stelle discrete
+        emitter.particleAlpha = 0.7
+        emitter.particleAlphaRange = 0.3
+        emitter.particleBlendMode = .alpha
+        
+        // IMPORTANTE: imposta targetNode per rendering corretto
+        emitter.targetNode = self
+        
+        return emitter
+    }
+    
+    // Crea stelle STATICHE eleganti (non usa emitter che generano all'infinito)
+    private func createStarLayers() {
+        let starfieldContainer = SKNode()
+        starfieldContainer.zPosition = -100  // Dietro a tutto
+        
+        // Genera 150 stelle statiche di dimensioni variate
+        for _ in 0..<150 {
+            let starSize = CGFloat.random(in: 0.5...2.0)
+            let star = SKShapeNode(circleOfRadius: starSize)
+            
+            // Colori variati: bianco, bianco-blu, bianco-giallo
+            let colorChoice = Int.random(in: 0...2)
+            switch colorChoice {
+            case 0:
+                star.fillColor = UIColor.white.withAlphaComponent(CGFloat.random(in: 0.4...0.7))
+            case 1:
+                star.fillColor = UIColor(red: 0.9, green: 0.95, blue: 1.0, alpha: CGFloat.random(in: 0.4...0.7))
+            default:
+                star.fillColor = UIColor(red: 1.0, green: 0.98, blue: 0.9, alpha: CGFloat.random(in: 0.4...0.7))
+            }
+            
+            star.strokeColor = .clear
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            
+            // Twinkle individuale casuale
+            if Bool.random() {
+                let randomDelay = Double.random(in: 0...2)
+                let twinkle = SKAction.sequence([
+                    SKAction.wait(forDuration: randomDelay),
+                    SKAction.repeatForever(SKAction.sequence([
+                        SKAction.fadeAlpha(to: 0.2, duration: Double.random(in: 1.5...3.0)),
+                        SKAction.fadeAlpha(to: star.alpha, duration: Double.random(in: 1.5...3.0))
+                    ]))
+                ])
+                star.run(twinkle)
+            }
+            
+            starfieldContainer.addChild(star)
+        }
+        
+        addChild(starfieldContainer)
+        
+        print("⭐ Static starfield created for menu")
+        print("   - 150 static stars with individual twinkle")
+        print("   - Sizes: 0.5-2.0px, Alpha: 0.4-0.7")
     }
     
     // MARK: - Musica
