@@ -353,12 +353,8 @@ class InitialEntryScene: SKScene {
     }
     
     private func showSuccess(rank: Int) {
-        // NASCONDI tutto il resto dell'UI
-        enumerateChildNodes(withName: "//*") { node, _ in
-            if node.name != "savingLabel" {
-                node.run(SKAction.fadeOut(withDuration: 0.3))
-            }
-        }
+        // RIMUOVI completamente tutto il resto dell'UI
+        removeAllChildren()
         
         // MESSAGGIO AL CENTRO dello schermo
         let successLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")

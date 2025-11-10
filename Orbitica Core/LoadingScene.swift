@@ -52,8 +52,8 @@ class LoadingScene: SKScene {
             
             let asteroid = SKShapeNode(circleOfRadius: asteroidSize)
             asteroid.path = createIrregularPolygonPath(radius: asteroidSize, sides: sides)
-            asteroid.fillColor = UIColor(white: 0.15, alpha: CGFloat.random(in: 0.15...0.3))
-            asteroid.strokeColor = UIColor(white: 0.25, alpha: 0.2)
+            asteroid.fillColor = UIColor(white: 0.15, alpha: CGFloat.random(in: 0.4...0.6))  // Aumentato da 0.15-0.3
+            asteroid.strokeColor = UIColor(white: 0.25, alpha: 0.5)  // Aumentato da 0.2
             asteroid.lineWidth = 1
             asteroid.position = CGPoint(
                 x: CGFloat.random(in: -50...size.width + 50),
@@ -81,11 +81,11 @@ class LoadingScene: SKScene {
             asteroid.run(SKAction.repeatForever(moveSequence))
         }
         
-        // Stelle bianco-grigie opache
+        // Stelle bianco-grigie più visibili
         for _ in 0..<30 {
             let starSize = CGFloat.random(in: 1...2.5)
             let star = SKShapeNode(circleOfRadius: starSize)
-            star.fillColor = UIColor(white: CGFloat.random(in: 0.6...0.8), alpha: CGFloat.random(in: 0.15...0.25))
+            star.fillColor = UIColor(white: CGFloat.random(in: 0.6...0.8), alpha: CGFloat.random(in: 0.3...0.5))  // Aumentato da 0.15-0.25
             star.strokeColor = .clear
             star.position = CGPoint(
                 x: CGFloat.random(in: 0...size.width),

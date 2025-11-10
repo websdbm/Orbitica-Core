@@ -132,13 +132,18 @@ struct WaveConfig {
 
 // MARK: - Space Environments
 enum SpaceEnvironment: CaseIterable {
-    case deepSpace   // Nero profondo con stelle twinkle e colorate
-    case nebula      // Nebulose colorate (blu/viola/rosa) con sfumature
-    case voidSpace   // Gradiente nero-blu con stelle luminose
-    case redGiant    // Stella rossa gigante con atmosfera calda
-    case asteroidBelt // Campo di asteroidi distanti
-    case binaryStars // Sistema binario con due stelle
-    case ionStorm    // Tempesta di ioni elettrica
+    case deepSpace      // Nero profondo con stelle twinkle e colorate
+    case nebula         // Nebulose colorate (blu/viola/rosa) con sfumature
+    case voidSpace      // Gradiente nero-blu con stelle luminose
+    case redGiant       // Stella rossa gigante con atmosfera calda
+    case asteroidBelt   // Campo di asteroidi distanti
+    case binaryStars    // Sistema binario con due stelle
+    case ionStorm       // Tempesta di ioni elettrica
+    case pulsarField    // Stella pulsar con onde radio pulsanti
+    case planetarySystem // Sistema planetario con pianeti in orbita
+    case cometTrail     // Comete con scie luminose
+    case darkMatterCloud // Nuvole di materia oscura con particelle
+    case supernovaRemnant // Espansione gas da esplosione stellare
     
     var name: String {
         switch self {
@@ -149,6 +154,11 @@ enum SpaceEnvironment: CaseIterable {
         case .asteroidBelt: return "Asteroid Belt"
         case .binaryStars: return "Binary Stars"
         case .ionStorm: return "Ion Storm"
+        case .pulsarField: return "Pulsar Field"
+        case .planetarySystem: return "Planetary System"
+        case .cometTrail: return "Comet Trail"
+        case .darkMatterCloud: return "Dark Matter Cloud"
+        case .supernovaRemnant: return "Supernova Remnant"
         }
     }
 }
@@ -450,11 +460,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupParallaxBackground() {
-        // Inizia con un ambiente random
-        currentEnvironment = SpaceEnvironment.allCases.randomElement() ?? .deepSpace
+        // Sequenza fissa basata sulla wave corrente (ciclo attraverso tutti i 12 ambienti)
+        let environments: [SpaceEnvironment] = [
+            .deepSpace,          // Wave 1
+            .nebula,             // Wave 2
+            .voidSpace,          // Wave 3
+            .redGiant,           // Wave 4
+            .asteroidBelt,       // Wave 5
+            .binaryStars,        // Wave 6
+            .ionStorm,           // Wave 7
+            .pulsarField,        // Wave 8
+            .planetarySystem,    // Wave 9
+            .cometTrail,         // Wave 10
+            .darkMatterCloud,    // Wave 11
+            .supernovaRemnant    // Wave 12
+        ]
+        
+        // Usa modulo per ciclare attraverso gli ambienti - FIX: gestisci wave 0
+        let safeWave = max(1, currentWave)  // Minimo wave 1
+        let environmentIndex = (safeWave - 1) % environments.count
+        currentEnvironment = environments[environmentIndex]
+        
         applyEnvironment(currentEnvironment)
         
-        debugLog("✅ Parallax background created - Environment: \(currentEnvironment.name)")
+        debugLog("✅ Parallax background created - Wave \(currentWave) - Environment: \(currentEnvironment.name)")
     }
     
     private func applyEnvironment(_ environment: SpaceEnvironment) {
@@ -479,6 +508,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             setupBinaryStarsEnvironment()
         case .ionStorm:
             setupIonStormEnvironment()
+        case .pulsarField:
+            setupPulsarFieldEnvironment()
+        case .planetarySystem:
+            setupPlanetarySystemEnvironment()
+        case .cometTrail:
+            setupCometTrailEnvironment()
+        case .darkMatterCloud:
+            setupDarkMatterCloudEnvironment()
+        case .supernovaRemnant:
+            setupSupernovaRemnantEnvironment()
         }
         
         currentEnvironment = environment
@@ -816,6 +855,430 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if let layer1 = starsLayer1 { addChild(layer1) }
         if let layer2 = starsLayer2 { addChild(layer2) }
         if let layer3 = starsLayer3 { addChild(layer3) }
+    }
+    
+    // MARK: - NEW ENVIRONMENTS
+    
+    private func setupPulsarFieldEnvironment() {
+        // Background nero con lieve sfumatura blu
+        backgroundColor = UIColor(red: 0.0, green: 0.02, blue: 0.08, alpha: 1.0)
+        
+        let fieldWidth = size.width * playFieldMultiplier
+        let fieldHeight = size.height * playFieldMultiplier
+        
+        // Pulsar centrale (fuori schermo, solo effetti visibili)
+        let pulsarLayer = SKNode()
+        pulsarLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        pulsarLayer.zPosition = -35
+        
+        // Onde radio pulsanti - 4 anelli concentrici
+        for i in 0..<4 {
+            let radius = CGFloat(100 + i * 80)
+            let ring = SKShapeNode(circleOfRadius: radius)
+            ring.strokeColor = UIColor(red: 0.3, green: 0.6, blue: 1.0, alpha: 0.3)
+            ring.fillColor = .clear
+            ring.lineWidth = 2
+            ring.glowWidth = 8
+            
+            // Pulsazione con delay diverso per ogni anello
+            let delay = SKAction.wait(forDuration: Double(i) * 0.3)
+            let fadeOut = SKAction.fadeAlpha(to: 0.0, duration: 1.0)
+            let fadeIn = SKAction.fadeAlpha(to: 0.6, duration: 0.2)
+            let scaleUp = SKAction.scale(to: 1.3, duration: 1.0)
+            let scaleReset = SKAction.scale(to: 1.0, duration: 0.0)
+            let pulse = SKAction.sequence([fadeIn, SKAction.group([fadeOut, scaleUp]), scaleReset, delay])
+            ring.run(SKAction.repeatForever(pulse))
+            
+            pulsarLayer.addChild(ring)
+        }
+        worldLayer.addChild(pulsarLayer)
+        
+        // Particelle energetiche che orbitano velocemente
+        for _ in 0..<40 {
+            let distance = CGFloat.random(in: 150...400)
+            let angle = CGFloat.random(in: 0...(2 * .pi))
+            let x = cos(angle) * distance
+            let y = sin(angle) * distance
+            
+            let particle = SKShapeNode(circleOfRadius: CGFloat.random(in: 1.5...3))
+            particle.fillColor = UIColor(red: 0.5, green: 0.8, blue: 1.0, alpha: 0.8)
+            particle.strokeColor = .clear
+            particle.position = CGPoint(x: x, y: y)
+            particle.glowWidth = 6
+            
+            // Orbita veloce
+            let orbit = SKAction.rotate(byAngle: .pi * 2, duration: Double.random(in: 3...6))
+            particle.run(SKAction.repeatForever(orbit))
+            
+            pulsarLayer.addChild(particle)
+        }
+        
+        // Lampi periodici (gestiti nell'update se necessario)
+        
+        // Stelle di background
+        starsLayer1 = createDeepSpaceStars(starCount: 50, zPosition: -30, sizeRange: 0.8...1.5, alphaRange: 0.2...0.4)
+        starsLayer2 = createDeepSpaceStars(starCount: 30, zPosition: -20, sizeRange: 1.5...2.5, alphaRange: 0.3...0.5)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+    }
+    
+    private func setupPlanetarySystemEnvironment() {
+        // Background nero profondo
+        backgroundColor = .black
+        
+        let planetaryLayer = SKNode()
+        planetaryLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        planetaryLayer.zPosition = -35
+        
+        // Definizione pianeti: (raggio orbita, dimensione pianeta, colore, velocità orbitale, ha anelli)
+        let planets: [(orbit: CGFloat, size: CGFloat, color: UIColor, speed: Double, hasRing: Bool)] = [
+            (150, 12, UIColor(red: 0.9, green: 0.6, blue: 0.3, alpha: 1.0), 15.0, false),  // Pianeta rosso-arancio piccolo
+            (250, 25, UIColor(red: 0.3, green: 0.5, blue: 0.9, alpha: 1.0), 25.0, false),  // Pianeta blu medio
+            (380, 35, UIColor(red: 0.8, green: 0.7, blue: 0.5, alpha: 1.0), 40.0, true),   // Gigante gassoso con anelli
+            (520, 18, UIColor(red: 0.5, green: 0.8, blue: 0.6, alpha: 1.0), 55.0, false)   // Pianeta verde lontano
+        ]
+        
+        for (index, planet) in planets.enumerated() {
+            // Orbita (linea tratteggiata sottile)
+            let orbitPath = CGPath(ellipseIn: CGRect(x: -planet.orbit, y: -planet.orbit, width: planet.orbit * 2, height: planet.orbit * 2), transform: nil)
+            let orbitLine = SKShapeNode(path: orbitPath)
+            orbitLine.strokeColor = UIColor.white.withAlphaComponent(0.1)
+            orbitLine.lineWidth = 1
+            orbitLine.lineCap = .round
+            
+            // Pattern tratteggiato
+            let pattern: [CGFloat] = [5, 10]
+            orbitLine.path = orbitPath
+            // Note: SKShapeNode non supporta nativamente dash pattern, ma l'effetto è accettabile
+            
+            planetaryLayer.addChild(orbitLine)
+            
+            // Contenitore per il pianeta (per rotazione orbitale)
+            let planetContainer = SKNode()
+            
+            // Angolo iniziale random per ogni pianeta
+            let startAngle = CGFloat.random(in: 0...(2 * .pi))
+            planetContainer.zRotation = startAngle
+            
+            // Pianeta
+            let planetNode = SKShapeNode(circleOfRadius: planet.size)
+            planetNode.fillColor = planet.color
+            planetNode.strokeColor = planet.color.withAlphaComponent(0.5)
+            planetNode.lineWidth = 1
+            planetNode.position = CGPoint(x: planet.orbit, y: 0)  // Posizionato alla distanza orbitale
+            planetNode.glowWidth = planet.size * 0.3
+            
+            // Anelli (se previsto)
+            if planet.hasRing {
+                let ringOuter = planet.size * 1.8
+                let ringInner = planet.size * 1.3
+                let ringPath = CGMutablePath()
+                ringPath.addEllipse(in: CGRect(x: -ringOuter, y: -ringOuter/3, width: ringOuter * 2, height: ringOuter * 2/3))
+                ringPath.addEllipse(in: CGRect(x: -ringInner, y: -ringInner/3, width: ringInner * 2, height: ringInner * 2/3))
+                
+                let ring = SKShapeNode(path: ringPath)
+                ring.fillColor = UIColor(red: 0.7, green: 0.6, blue: 0.5, alpha: 0.3)
+                ring.strokeColor = UIColor(red: 0.7, green: 0.6, blue: 0.5, alpha: 0.5)
+                ring.lineWidth = 0.5
+                
+                planetNode.addChild(ring)
+            }
+            
+            planetContainer.addChild(planetNode)
+            planetaryLayer.addChild(planetContainer)
+            
+            // Rotazione orbitale (più lento = più lontano)
+            let rotate = SKAction.rotate(byAngle: .pi * 2, duration: planet.speed)
+            planetContainer.run(SKAction.repeatForever(rotate))
+        }
+        
+        worldLayer.addChild(planetaryLayer)
+        
+        // Polvere cosmica (particelle che attraversano)
+        for _ in 0..<20 {
+            let dust = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.5...1.5))
+            dust.fillColor = UIColor.white.withAlphaComponent(CGFloat.random(in: 0.1...0.3))
+            dust.strokeColor = .clear
+            
+            let x = CGFloat.random(in: -size.width...size.width)
+            let y = CGFloat.random(in: -size.height...size.height)
+            dust.position = CGPoint(x: x, y: y)
+            dust.zPosition = -25
+            
+            planetaryLayer.addChild(dust)
+        }
+        
+        // Stelle di background
+        starsLayer1 = createDeepSpaceStars(starCount: 80, zPosition: -30, sizeRange: 0.8...1.5, alphaRange: 0.2...0.4)
+        starsLayer2 = createDeepSpaceStars(starCount: 50, zPosition: -20, sizeRange: 1.5...2.5, alphaRange: 0.3...0.5)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+    }
+    
+    private func setupCometTrailEnvironment() {
+        // Background nero profondo
+        backgroundColor = .black
+        
+        let cometLayer = SKNode()
+        cometLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        cometLayer.zPosition = -35
+        
+        // 2-3 comete con traiettorie diverse
+        let comets: [(startX: CGFloat, startY: CGFloat, endX: CGFloat, endY: CGFloat, duration: Double, color: UIColor)] = [
+            (-300, 400, 800, -300, 25.0, UIColor(red: 0.7, green: 0.9, blue: 1.0, alpha: 1.0)),     // Bianco-azzurro
+            (600, -200, -400, 500, 30.0, UIColor(red: 1.0, green: 0.8, blue: 0.6, alpha: 1.0)),     // Arancio-bianco
+            (-200, -300, 700, 600, 28.0, UIColor(red: 0.9, green: 0.95, blue: 1.0, alpha: 1.0))     // Bianco puro
+        ]
+        
+        for comet in comets {
+            // Nucleo della cometa
+            let cometHead = SKShapeNode(circleOfRadius: 8)
+            cometHead.fillColor = comet.color
+            cometHead.strokeColor = .white
+            cometHead.lineWidth = 1
+            cometHead.glowWidth = 15
+            cometHead.position = CGPoint(x: comet.startX, y: comet.startY)
+            
+            cometLayer.addChild(cometHead)
+            
+            // Scia di particelle (emitter simulato con nodi)
+            let trailContainer = SKNode()
+            trailContainer.position = cometHead.position
+            cometLayer.addChild(trailContainer)
+            
+            // Movimento della cometa
+            let move = SKAction.move(to: CGPoint(x: comet.endX, y: comet.endY), duration: comet.duration)
+            let resetPosition = SKAction.move(to: CGPoint(x: comet.startX, y: comet.startY), duration: 0)
+            let sequence = SKAction.sequence([move, resetPosition])
+            
+            cometHead.run(SKAction.repeatForever(sequence))
+            trailContainer.run(SKAction.repeatForever(sequence))
+            
+            // Crea particelle di scia (spawna periodicamente)
+            // Simulazione semplice: aggiungi particelle che fadeOut
+            let spawnTrail = SKAction.run {
+                let particle = SKShapeNode(circleOfRadius: CGFloat.random(in: 2...5))
+                particle.fillColor = comet.color.withAlphaComponent(0.6)
+                particle.strokeColor = .clear
+                particle.position = cometHead.position
+                particle.zPosition = -1
+                
+                cometLayer.addChild(particle)
+                
+                // Fade out e scala
+                let fadeOut = SKAction.fadeOut(withDuration: 2.0)
+                let scaleDown = SKAction.scale(to: 0.1, duration: 2.0)
+                let remove = SKAction.removeFromParent()
+                particle.run(SKAction.sequence([SKAction.group([fadeOut, scaleDown]), remove]))
+            }
+            
+            let spawnDelay = SKAction.wait(forDuration: 0.1)
+            let spawnSequence = SKAction.sequence([spawnTrail, spawnDelay])
+            cometHead.run(SKAction.repeatForever(spawnSequence), withKey: "trailSpawn")
+        }
+        
+        worldLayer.addChild(cometLayer)
+        
+        // Polvere stellare luminosa
+        for _ in 0..<40 {
+            let dust = SKShapeNode(circleOfRadius: CGFloat.random(in: 1...2.5))
+            dust.fillColor = UIColor(white: 0.9, alpha: CGFloat.random(in: 0.2...0.4))
+            dust.strokeColor = .clear
+            
+            let x = CGFloat.random(in: -size.width/2...size.width/2)
+            let y = CGFloat.random(in: -size.height/2...size.height/2)
+            dust.position = CGPoint(x: x, y: y)
+            dust.zPosition = -28
+            
+            cometLayer.addChild(dust)
+        }
+        
+        // Stelle di background
+        starsLayer1 = createDeepSpaceStars(starCount: 100, zPosition: -30, sizeRange: 0.8...1.5, alphaRange: 0.2...0.4)
+        starsLayer2 = createDeepSpaceStars(starCount: 60, zPosition: -20, sizeRange: 1.5...2.5, alphaRange: 0.3...0.5)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+    }
+    
+    private func setupDarkMatterCloudEnvironment() {
+        // Background nero profondo con sfumatura viola
+        backgroundColor = UIColor(red: 0.02, green: 0.0, blue: 0.05, alpha: 1.0)
+        
+        let darkMatterLayer = SKNode()
+        darkMatterLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        darkMatterLayer.zPosition = -35
+        
+        // Nuvole di materia oscura (forme amorfe semi-trasparenti)
+        for i in 0..<5 {
+            let cloudSize = CGFloat.random(in: 150...300)
+            let cloud = SKShapeNode(circleOfRadius: cloudSize)
+            cloud.fillColor = UIColor(red: 0.15, green: 0.05, blue: 0.25, alpha: 0.15)
+            cloud.strokeColor = UIColor(red: 0.3, green: 0.1, blue: 0.4, alpha: 0.2)
+            cloud.lineWidth = 2
+            cloud.glowWidth = 40
+            
+            let x = CGFloat.random(in: -size.width/2...size.width/2)
+            let y = CGFloat.random(in: -size.height/2...size.height/2)
+            cloud.position = CGPoint(x: x, y: y)
+            cloud.zPosition = CGFloat(-38 + i)
+            
+            // Movimento lento oscillatorio
+            let moveX = CGFloat.random(in: -50...50)
+            let moveY = CGFloat.random(in: -50...50)
+            let duration = Double.random(in: 15...25)
+            
+            let move = SKAction.moveBy(x: moveX, y: moveY, duration: duration)
+            let moveBack = move.reversed()
+            let sequence = SKAction.sequence([move, moveBack])
+            cloud.run(SKAction.repeatForever(sequence))
+            
+            // Pulsazione alpha
+            let fadeOut = SKAction.fadeAlpha(to: 0.05, duration: Double.random(in: 3...6))
+            let fadeIn = SKAction.fadeAlpha(to: 0.15, duration: Double.random(in: 3...6))
+            let pulse = SKAction.sequence([fadeOut, fadeIn])
+            cloud.run(SKAction.repeatForever(pulse))
+            
+            darkMatterLayer.addChild(cloud)
+        }
+        
+        worldLayer.addChild(darkMatterLayer)
+        
+        // Particelle che si attraggono/respingono (effetto gravitazionale simulato)
+        for _ in 0..<60 {
+            let particle = SKShapeNode(circleOfRadius: CGFloat.random(in: 1.5...3))
+            particle.fillColor = UIColor(red: 0.7, green: 0.6, blue: 0.9, alpha: 0.5)
+            particle.strokeColor = .clear
+            particle.glowWidth = 4
+            
+            let x = CGFloat.random(in: -size.width/2...size.width/2)
+            let y = CGFloat.random(in: -size.height/2...size.height/2)
+            particle.position = CGPoint(x: x, y: y)
+            particle.zPosition = -32
+            
+            // Movimento browniano (casuale)
+            let moveX = CGFloat.random(in: -80...80)
+            let moveY = CGFloat.random(in: -80...80)
+            let duration = Double.random(in: 8...15)
+            
+            let move = SKAction.moveBy(x: moveX, y: moveY, duration: duration)
+            let moveBack = move.reversed()
+            let sequence = SKAction.sequence([move, moveBack])
+            particle.run(SKAction.repeatForever(sequence))
+            
+            darkMatterLayer.addChild(particle)
+        }
+        
+        // Stelle di background (poche, perché la materia oscura oscura)
+        starsLayer1 = createDeepSpaceStars(starCount: 40, zPosition: -30, sizeRange: 0.8...1.5, alphaRange: 0.1...0.3)
+        starsLayer2 = createDeepSpaceStars(starCount: 25, zPosition: -20, sizeRange: 1.5...2.5, alphaRange: 0.2...0.4)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
+    }
+    
+    private func setupSupernovaRemnantEnvironment() {
+        // Background nero con lieve sfumatura rossa
+        backgroundColor = UIColor(red: 0.05, green: 0.0, blue: 0.0, alpha: 1.0)
+        
+        let supernovaLayer = SKNode()
+        supernovaLayer.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        supernovaLayer.zPosition = -35
+        
+        // Nucleo stellare centrale luminoso
+        let core = SKShapeNode(circleOfRadius: 15)
+        core.fillColor = UIColor(red: 1.0, green: 0.9, blue: 0.8, alpha: 1.0)
+        core.strokeColor = UIColor(red: 1.0, green: 0.7, blue: 0.3, alpha: 0.8)
+        core.lineWidth = 3
+        core.glowWidth = 30
+        
+        // Pulsazione del nucleo
+        let scaleUp = SKAction.scale(to: 1.2, duration: 1.5)
+        let scaleDown = SKAction.scale(to: 1.0, duration: 1.5)
+        let pulse = SKAction.sequence([scaleUp, scaleDown])
+        core.run(SKAction.repeatForever(pulse))
+        
+        supernovaLayer.addChild(core)
+        
+        // Anelli concentrici in espansione (gas)
+        let ringColors: [UIColor] = [
+            UIColor(red: 1.0, green: 0.3, blue: 0.2, alpha: 0.4),   // Rosso
+            UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 0.3),   // Arancio
+            UIColor(red: 1.0, green: 0.9, blue: 0.3, alpha: 0.25),  // Giallo
+            UIColor(red: 0.5, green: 0.7, blue: 1.0, alpha: 0.2)    // Blu elettrico
+        ]
+        
+        for (index, color) in ringColors.enumerated() {
+            let ring = SKShapeNode(circleOfRadius: CGFloat(80 + index * 60))
+            ring.strokeColor = color
+            ring.fillColor = .clear
+            ring.lineWidth = CGFloat(8) - CGFloat(index) * 1.5
+            ring.glowWidth = 15
+            ring.alpha = 0
+            
+            supernovaLayer.addChild(ring)
+            
+            // Espansione continua
+            let delay = SKAction.wait(forDuration: TimeInterval(index) * 0.8)
+            let fadeIn = SKAction.fadeAlpha(to: CGFloat(color.cgColor.alpha), duration: 0.5)
+            let expand = SKAction.scale(to: 2.5, duration: 8.0)
+            let fadeOut = SKAction.fadeOut(withDuration: 2.0)
+            let reset = SKAction.group([
+                SKAction.scale(to: 1.0, duration: 0),
+                SKAction.fadeAlpha(to: 0, duration: 0)
+            ])
+            
+            let sequence = SKAction.sequence([delay, fadeIn, SKAction.group([expand, fadeOut]), reset])
+            ring.run(SKAction.repeatForever(sequence))
+        }
+        
+        // Particelle espulse (schizzi dal centro)
+        for _ in 0..<80 {
+            let particle = SKShapeNode(circleOfRadius: CGFloat.random(in: 2...4))
+            
+            let colorChoice = Int.random(in: 0...3)
+            switch colorChoice {
+            case 0: particle.fillColor = UIColor(red: 1.0, green: 0.3, blue: 0.2, alpha: 0.8)
+            case 1: particle.fillColor = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 0.8)
+            case 2: particle.fillColor = UIColor(red: 1.0, green: 0.9, blue: 0.4, alpha: 0.8)
+            default: particle.fillColor = UIColor(red: 0.5, green: 0.8, blue: 1.0, alpha: 0.8)
+            }
+            
+            particle.strokeColor = .clear
+            particle.position = .zero  // Parte dal centro
+            particle.glowWidth = 6
+            
+            // Direzione random
+            let angle = CGFloat.random(in: 0...(2 * .pi))
+            let distance = CGFloat.random(in: 200...500)
+            let endX = cos(angle) * distance
+            let endY = sin(angle) * distance
+            let duration = Double.random(in: 4...8)
+            
+            let move = SKAction.move(to: CGPoint(x: endX, y: endY), duration: duration)
+            let fadeOut = SKAction.fadeOut(withDuration: duration * 0.7)
+            let reset = SKAction.group([
+                SKAction.move(to: .zero, duration: 0),
+                SKAction.fadeIn(withDuration: 0)
+            ])
+            let delay = SKAction.wait(forDuration: Double.random(in: 0...3))
+            
+            let sequence = SKAction.sequence([delay, SKAction.group([move, fadeOut]), reset])
+            particle.run(SKAction.repeatForever(sequence))
+            
+            supernovaLayer.addChild(particle)
+        }
+        
+        worldLayer.addChild(supernovaLayer)
+        
+        // Stelle di background
+        starsLayer1 = createDeepSpaceStars(starCount: 60, zPosition: -30, sizeRange: 0.8...1.5, alphaRange: 0.2...0.4)
+        starsLayer2 = createDeepSpaceStars(starCount: 40, zPosition: -20, sizeRange: 1.5...2.5, alphaRange: 0.3...0.5)
+        
+        if let layer1 = starsLayer1 { addChild(layer1) }
+        if let layer2 = starsLayer2 { addChild(layer2) }
     }
     
     private func createRedGiantGradientTexture() -> SKTexture {
@@ -2990,20 +3453,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let currentSpeed = sqrt(playerBody.velocity.dx * playerBody.velocity.dx + 
                                playerBody.velocity.dy * playerBody.velocity.dy)
         
-        // Velocità massima per aggancio - Ring 3 ellisse è il più veloce
+        // Velocità massima per aggancio - Ring 3 è il più veloce (sia ellisse che cerchio)
         let maxSpeedForGrapple: CGFloat
-        if isClosestEllipse && closestRing == 3 {
-            maxSpeedForGrapple = 600  // Ring 3 ellisse: molto tollerante
+        if closestRing == 3 {
+            maxSpeedForGrapple = 600  // Ring 3: molto tollerante (ellisse o cerchio)
         } else if isClosestEllipse {
             maxSpeedForGrapple = 400  // Ring 1-2 ellisse: tollerante
         } else {
-            maxSpeedForGrapple = 150  // Cerchi: normale
+            maxSpeedForGrapple = 150  // Ring 1-2 cerchi: normale
         }
         
         // Threshold diversi per ellissi vs cerchi
-        // Ring 3 ellisse ha threshold maggiorati
-        let grappleMultiplier: CGFloat = (isClosestEllipse && closestRing == 3) ? 2.0 : (isClosestEllipse ? 1.5 : 1.0)
-        let detachMultiplier: CGFloat = (isClosestEllipse && closestRing == 3) ? 3.0 : (isClosestEllipse ? 2.0 : 1.0)
+        // Ring 3 ha threshold maggiorati anche per i cerchi (più distante = più tolleranza)
+        let grappleMultiplier: CGFloat
+        let detachMultiplier: CGFloat
+        
+        if closestRing == 3 {
+            // Ring 3: bonus per entrambi i tipi (ellisse e cerchio)
+            grappleMultiplier = isClosestEllipse ? 2.0 : 1.8
+            detachMultiplier = isClosestEllipse ? 3.0 : 2.5
+        } else if isClosestEllipse {
+            // Ring 1-2 ellisse
+            grappleMultiplier = 1.5
+            detachMultiplier = 2.0
+        } else {
+            // Ring 1-2 cerchi
+            grappleMultiplier = 1.0
+            detachMultiplier = 1.0
+        }
         
         let grappleThreshold = orbitalGrappleThreshold * grappleMultiplier
         let detachThreshold = orbitalDetachThreshold * detachMultiplier
