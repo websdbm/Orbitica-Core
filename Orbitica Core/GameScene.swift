@@ -4257,19 +4257,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             debugLog("🌀 Player hit atmosphere - bounce (no recharge) + 5 points")
         }
         
-        // Projectile + Atmosphere
+        // Projectile + Atmosphere - Comportamento originale
         else if collision == (PhysicsCategory.projectile | PhysicsCategory.atmosphere) {
-            handleAtmosphereBounce(contact: contact, isPlayer: false)
-            rechargeAtmosphere(amount: 1.05)  // Ridotto del 30% da 1.5 a 1.05
-            flashAtmosphere()
+            let projectileBody = contact.bodyA.categoryBitMask == PhysicsCategory.projectile ? contact.bodyA : contact.bodyB
             
-            // Rimuovi il proiettile
-            if contact.bodyA.categoryBitMask == PhysicsCategory.projectile {
-                contact.bodyA.node?.removeFromParent()
-            } else {
-                contact.bodyB.node?.removeFromParent()
+            if let projectile = projectileBody.node {
+                // Particelle all'impatto
+                createCollisionParticles(at: contact.contactPoint, color: .cyan)
+                
+                // Ricarica atmosfera leggermente
+                rechargeAtmosphere(amount: 1.05)
+                flashAtmosphere()
+                
+                // Rimuovi proiettile
+                projectile.removeFromParent()
+                
+                debugLog("🛡️ Projectile stopped by atmosphere")
             }
-            debugLog("💥 Projectile hit atmosphere - bounce + recharge")
         }
         
         // Asteroid + Atmosphere
@@ -5778,11 +5782,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Pausa la fisica
         physicsWorld.speed = 0
         
-        // STOPPA LA MUSICA (non pause, ma stop completo)
-        musicPlayerCurrent?.stop()
-        musicPlayerNext?.stop()
+        // PAUSA LA MUSICA (non stop, così riprende da dove era)
+        musicPlayerCurrent?.pause()
+        musicPlayerNext?.pause()
         
-        debugLog("⏸️ Music stopped on pause")
+        debugLog("⏸️ Music paused")
         
         // Crea overlay scuro (coordinate relative alla camera)
         let overlay = SKNode()
@@ -5853,13 +5857,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Ripristina la fisica
         physicsWorld.speed = 1
         
-        // RIAVVIA LA MUSICA DA CAPO (re-inizializza)
-        if musicPlayerCurrent != nil {
-            // Riparte la musica del wave corrente
-            playWaveMusic()
-        }
+        // RIPRENDI LA MUSICA da dove era
+        musicPlayerCurrent?.play()
+        musicPlayerNext?.play()
         
-        debugLog("▶️ Music restarted on resume")
+        debugLog("▶️ Music resumed")
         
         // Rimuovi overlay con animazione
         if let overlay = pauseOverlay {
@@ -6350,5 +6352,47 @@ class BrakeButtonNode: SKNode {
     
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         touchesEnded(touches, with: event)
+    }
+}
+
+// MARK: - CGVector Extensions for Reflection
+extension CGVector {
+    // Normalizza il vettore
+    func normalized() -> CGVector {
+        let length = sqrt(dx * dx + dy * dy)
+        guard length > 0 else { return CGVector.zero }
+        return CGVector(dx: dx / length, dy: dy / length)
+    }
+    
+    // Prodotto scalare
+    static func * (lhs: CGVector, rhs: CGVector) -> CGFloat {
+        return lhs.dx * rhs.dx + lhs.dy * rhs.dy
+    }
+}
+
+// MARK: - PROJECTILE REFLECTION FEATURE (DISABLED - WIP)
+// Vedi REFLECTION_FEATURE_WIP.md per codice completo
+// Disabilitato perché i proiettili trapassano l'atmosfera
+
+// MARK: - CGVector Extension (per uso futuro)
+extension CGVector {
+    
+    // Riflessione del vettore rispetto a una normale
+    // Formula: v' = v - 2 * (v · n) * n
+    func bounced(withNormal normal: CGVector) -> CGVector {
+        let normalizedSelf = self.normalized()
+        let normalizedNormal = normal.normalized()
+        let dotProduct = normalizedSelf * normalizedNormal
+        
+        // Riflessione: v - 2(v·n)n
+        let dx = self.dx - 2 * dotProduct * normalizedNormal.dx
+        let dy = self.dy - 2 * dotProduct * normalizedNormal.dy
+        
+        return CGVector(dx: dx, dy: dy)
+    }
+    
+    // Lunghezza del vettore
+    var magnitude: CGFloat {
+        return sqrt(dx * dx + dy * dy)
     }
 }
