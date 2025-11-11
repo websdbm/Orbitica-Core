@@ -189,6 +189,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var aiController: AIController?
     private var aiTargetPosition: CGPoint?  // Target dell'AI per puntare la nave
     
+    // Regia Mode configuration
+    var isRegiaMode: Bool = false  // True se partita avviata da RegiaScene
+    var shouldStartRecording: Bool = false  // True se deve avviare registrazione
+    
     // Helper per log condizionali
     private func debugLog(_ message: String) {
         if debugMode {
@@ -420,6 +424,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Avvia la wave iniziale (1 o quella selezionata dal debug)
         startWave(startingWave)
+        
+        // Avvia registrazione se richiesto dalla modalità Regia
+        if shouldStartRecording && isRegiaMode {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                ReplayManager.shared.startRecording { error in
+                    if let error = error {
+                        print("❌ Errore avvio registrazione: \(error.localizedDescription)")
+                    } else {
+                        print("🔴 Registrazione avviata automaticamente")
+                    }
+                }
+            }
+        }
     }
     
     override func willMove(from view: SKView) {
@@ -3107,7 +3124,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     return
                 }
                 if node.name == "menuButton" {
-                    quitToMenu()
+                    // Se modalità Regia, torna a RegiaScene invece che al menu
+                    if isRegiaMode {
+                        returnToRegiaScene()
+                    } else {
+                        quitToMenu()
+                    }
                     return
                 }
                 if node.name == "saveScoreButton" {
@@ -7424,6 +7446,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func quitToMenu() {
+        // Se modalità Regia e registrazione attiva, ferma e mostra preview
+        if isRegiaMode && ReplayManager.shared.isCurrentlyRecording {
+            print("🎬 Regia Mode: fermando registrazione prima di uscire")
+            ReplayManager.shared.stopRecording { [weak self] url, error in
+                DispatchQueue.main.async {
+                    // Dopo aver mostrato/salvato il video, torna a RegiaScene
+                    self?.returnToRegiaScene()
+                }
+            }
+            return
+        }
+        
         // FERMA TUTTA LA MUSICA prima di uscire
         crossfadeTimer?.invalidate()
         crossfadeTimer = nil
@@ -7444,11 +7478,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self = self else { return }
             
-            // Transizione al menu principale
-            let transition = SKTransition.fade(withDuration: 0.5)
-            let menuScene = MainMenuScene(size: self.size)
-            menuScene.scaleMode = self.scaleMode
-            self.view?.presentScene(menuScene, transition: transition)
+            // Se modalità Regia, torna a RegiaScene invece che al menu
+            if self.isRegiaMode {
+                self.returnToRegiaScene()
+            } else {
+                // Transizione al menu principale
+                let transition = SKTransition.fade(withDuration: 0.5)
+                let menuScene = MainMenuScene(size: self.size)
+                menuScene.scaleMode = self.scaleMode
+                self.view?.presentScene(menuScene, transition: transition)
+            }
         }
     }
     
@@ -7481,6 +7520,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
+    private func returnToRegiaScene() {
+        // FERMA TUTTA LA MUSICA
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = nil
+        musicPlayerCurrent?.stop()
+        musicPlayerCurrent = nil
+        musicPlayerNext?.stop()
+        musicPlayerNext = nil
+        
+        // Rimuovi tutti gli elementi
+        self.removeAllActions()
+        self.removeAllChildren()
+        
+        print("🎬 Returning to Regia Scene")
+        
+        // Transizione a RegiaScene
+        let transition = SKTransition.fade(withDuration: 0.5)
+        let regiaScene = RegiaScene(size: size)
+        regiaScene.scaleMode = scaleMode
+        view?.presentScene(regiaScene, transition: transition)
+    }
+    
     // MARK: - Planet Health System
     private func updatePlanetHealthLabel() {
         planetHealthLabel.text = "\(planetHealth)/\(maxPlanetHealth)"
@@ -7504,6 +7565,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Ferma la musica con fade out
         fadeOutAndStop()
+        
+        // Se modalità Regia e registrazione attiva, ferma e mostra preview
+        if isRegiaMode && ReplayManager.shared.isCurrentlyRecording {
+            print("🎬 Regia Mode: fermando registrazione al game over")
+            // Esplosione finale prima di fermare
+            createPlanetExplosion(at: planet.position)
+            planet.alpha = 0
+            playExplosionSound()
+            
+            // Attendi 2 secondi poi ferma registrazione
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                ReplayManager.shared.stopRecording { [weak self] url, error in
+                    DispatchQueue.main.async {
+                        // Dopo aver mostrato/salvato il video, mostra game over
+                        self?.showGameOverScreen(isTopTen: false)
+                    }
+                }
+            }
+            return
+        }
         
         // Esplosione finale del pianeta (3x più grande)
         createPlanetExplosion(at: planet.position)
@@ -7643,32 +7724,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         saveScoreButton.addChild(saveScoreLabel)
         overlay.addChild(saveScoreButton)
         
-        // Pulsante RETRY - ridotto
-        let retryButton = SKShapeNode(rectOf: CGSize(width: 170, height: 50), cornerRadius: 10)
-        retryButton.fillColor = UIColor.white.withAlphaComponent(0.1)
-        retryButton.strokeColor = .white
-        retryButton.lineWidth = 3
-        retryButton.position = CGPoint(x: -95, y: -145)  // Più vicini
-        retryButton.name = "retryButton"
+        // Pulsante RETRY - ridotto (NASCOSTO se modalità Regia)
+        if !isRegiaMode {
+            let retryButton = SKShapeNode(rectOf: CGSize(width: 170, height: 50), cornerRadius: 10)
+            retryButton.fillColor = UIColor.white.withAlphaComponent(0.1)
+            retryButton.strokeColor = .white
+            retryButton.lineWidth = 3
+            retryButton.position = CGPoint(x: -95, y: -145)  // Più vicini
+            retryButton.name = "retryButton"
+            
+            let retryLabel = SKLabelNode(fontNamed: fontName)
+            retryLabel.text = "RETRY"
+            retryLabel.fontSize = 20  // Ridotto da 24
+            retryLabel.fontColor = .white
+            retryLabel.verticalAlignmentMode = .center
+            retryButton.addChild(retryLabel)
+            overlay.addChild(retryButton)
+        }
         
-        let retryLabel = SKLabelNode(fontNamed: fontName)
-        retryLabel.text = "RETRY"
-        retryLabel.fontSize = 20  // Ridotto da 24
-        retryLabel.fontColor = .white
-        retryLabel.verticalAlignmentMode = .center
-        retryButton.addChild(retryLabel)
-        overlay.addChild(retryButton)
-        
-        // Pulsante MENU - ridotto
+        // Pulsante MENU/REGIA - ridotto
         let menuButton = SKShapeNode(rectOf: CGSize(width: 170, height: 50), cornerRadius: 10)
         menuButton.fillColor = UIColor.white.withAlphaComponent(0.1)
         menuButton.strokeColor = .white
         menuButton.lineWidth = 3
-        menuButton.position = CGPoint(x: 95, y: -145)  // Più vicini
+        menuButton.position = isRegiaMode ? CGPoint(x: 0, y: -145) : CGPoint(x: 95, y: -145)  // Centrato se Regia
         menuButton.name = "menuButton"
         
         let menuLabel = SKLabelNode(fontNamed: fontName)
-        menuLabel.text = "MENU"
+        menuLabel.text = isRegiaMode ? "BACK TO REGIA" : "MENU"
         menuLabel.fontSize = 20  // Ridotto da 24
         menuLabel.fontColor = .white
         menuLabel.verticalAlignmentMode = .center

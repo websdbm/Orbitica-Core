@@ -455,11 +455,13 @@ class RegiaScene: SKScene {
         gameScene.startingWave = selectedWave
         gameScene.aiDifficulty = selectedDifficulty
         gameScene.useAIController = autoPlay
+        gameScene.isRegiaMode = true  // Indica che è una partita da Regia
+        gameScene.shouldStartRecording = recordingEnabled  // Indica se avviare registrazione
         // TODO: implementare backgroundIndex e musicTrack
         // gameScene.backgroundIndex = selectedBackground
         // gameScene.musicTrack = musicTracks[selectedMusic]
         
-        print("✅ GameScene configured with useAIController: \(autoPlay)")
+        print("✅ GameScene configured with useAIController: \(autoPlay), isRegiaMode: true")
         
         view?.presentScene(gameScene, transition: SKTransition.fade(withDuration: 1.0))
     }
