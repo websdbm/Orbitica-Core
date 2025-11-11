@@ -74,35 +74,36 @@ class AIController: PlayerController {
     // Parametri configurabili
     var difficulty: AIDifficulty = .normal
     var desiredOrbitRadius: CGFloat = 0  // Sarà impostato dinamicamente
+    var currentTarget: CGPoint?  // Target corrente per puntare la nave
     
     // Stato interno
     private var lastFireTime: TimeInterval = 0
-    private let fireRateLimit: TimeInterval = 0.3  // Spara max ogni 0.3s
+    private let fireRateLimit: TimeInterval = 0.15  // Spara max ogni 0.15s (più veloce)
     
     enum AIDifficulty {
         case easy, normal, hard
         
         var orbitRadiusMultiplier: CGFloat {
             switch self {
-            case .easy: return 2.5
-            case .normal: return 2.2
-            case .hard: return 2.0
+            case .easy: return 4.0    // Orbita molto larga (160px)
+            case .normal: return 3.5  // Orbita larga (140px)  
+            case .hard: return 3.0    // Orbita media (120px)
             }
         }
         
         var aimTolerance: CGFloat {
             switch self {
-            case .easy: return 0.4  // ~23 gradi
-            case .normal: return 0.3  // ~17 gradi
-            case .hard: return 0.2  // ~11 gradi
+            case .easy: return 0.5  // ~29 gradi - spara più spesso
+            case .normal: return 0.4  // ~23 gradi
+            case .hard: return 0.3  // ~17 gradi
             }
         }
         
         var reactionSpeed: CGFloat {
             switch self {
-            case .easy: return 0.5
-            case .normal: return 0.7
-            case .hard: return 1.0
+            case .easy: return 0.8
+            case .normal: return 1.0  // Reazione più veloce
+            case .hard: return 1.2
             }
         }
     }
@@ -111,7 +112,7 @@ class AIController: PlayerController {
         // Calcola raggio orbitale desiderato basato sulla difficoltà
         desiredOrbitRadius = state.planetRadius * difficulty.orbitRadiusMultiplier
         
-        // 1. MANTIENI RAGGIO ORBITALE SICURO
+        // 1. CALCOLA DISTANZA DAL PIANETA
         let shipVector = CGVector(
             dx: state.playerPosition.x - state.planetPosition.x,
             dy: state.playerPosition.y - state.planetPosition.y
@@ -121,22 +122,33 @@ class AIController: PlayerController {
         // 2. TROVA TARGET PIÙ PERICOLOSO
         let target = findMostDangerousAsteroid(state: state)
         
+        // Salva il target corrente per puntare la nave
+        currentTarget = target?.position
+        
         var thrust = CGVector.zero
         
-        if currentRadius < desiredOrbitRadius * 0.8 {
-            // TROPPO VICINO: allontanati radialmente
+        // PRIORITÀ ASSOLUTA: evitare collisione con il pianeta
+        let safetyZone = desiredOrbitRadius * 0.9  // Zona di sicurezza più ampia
+        
+        if currentRadius < safetyZone {
+            // EMERGENZA: allontanati SEMPRE dal pianeta se troppo vicino
             let radialX = shipVector.dx / currentRadius
             let radialY = shipVector.dy / currentRadius
-            thrust = CGVector(dx: radialX, dy: radialY)
             
-        } else if currentRadius > desiredOrbitRadius * 1.3 {
+            // Considera anche la velocità: se stai andando verso il pianeta, spinta massima
+            let velocityTowardPlanet = -(state.playerVelocity.dx * radialX + state.playerVelocity.dy * radialY)
+            let urgency: CGFloat = velocityTowardPlanet > 0 ? 2.0 : 1.5  // Più urgente se ti stai avvicinando
+            
+            thrust = CGVector(dx: radialX * urgency, dy: radialY * urgency)
+            
+        } else if currentRadius > desiredOrbitRadius * 1.5 {
             // TROPPO LONTANO: avvicinati
             let radialX = -shipVector.dx / currentRadius
             let radialY = -shipVector.dy / currentRadius
             thrust = CGVector(dx: radialX, dy: radialY)
             
         } else if let target = target {
-            // RAGGIO OK: muoviti verso il target
+            // RAGGIO OK: muoviti verso il target MA controlla che non ti porti verso il pianeta
             let targetVector = CGVector(
                 dx: target.position.x - state.playerPosition.x,
                 dy: target.position.y - state.playerPosition.y
@@ -144,16 +156,30 @@ class AIController: PlayerController {
             let targetDistance = sqrt(targetVector.dx * targetVector.dx + targetVector.dy * targetVector.dy)
             
             if targetDistance > 0 {
-                thrust = CGVector(
-                    dx: targetVector.dx / targetDistance,
-                    dy: targetVector.dy / targetDistance
-                )
+                let targetDirX = targetVector.dx / targetDistance
+                let targetDirY = targetVector.dy / targetDistance
+                
+                // Verifica se il movimento verso il target ti porta verso il pianeta
+                let radialX = shipVector.dx / currentRadius
+                let radialY = shipVector.dy / currentRadius
+                let dotProduct = targetDirX * (-radialX) + targetDirY * (-radialY)  // Negativo perché radial punta fuori
+                
+                if dotProduct > 0.3 {
+                    // Il target è troppo verso il pianeta: bilancia movimento
+                    thrust = CGVector(
+                        dx: targetDirX * 0.8 + radialX * 0.7,  // Mix: 80% target + 70% fuga
+                        dy: targetDirY * 0.8 + radialY * 0.7
+                    )
+                } else {
+                    // Target sicuro: vai aggressivamente
+                    thrust = CGVector(dx: targetDirX * 1.5, dy: targetDirY * 1.5)
+                }
             }
         } else {
             // NESSUN TARGET: orbita tangenzialmente
             let tangentX = -shipVector.dy / currentRadius
             let tangentY = shipVector.dx / currentRadius
-            thrust = CGVector(dx: tangentX * 0.5, dy: tangentY * 0.5)
+            thrust = CGVector(dx: tangentX * 0.8, dy: tangentY * 0.8)
         }
         
         // Applica velocità di reazione
@@ -178,8 +204,12 @@ class AIController: PlayerController {
         )
         let targetAngle = atan2(toTarget.dy, toTarget.dx)
         
+        // IMPORTANTE: player.zRotation ha offset di -π/2 perché la texture punta verso l'alto
+        // Compensiamo per ottenere l'angolo effettivo della nave
+        let shipAngle = state.playerAngle + .pi / 2
+        
         // Calcola differenza angolare
-        var angleDiff = abs(targetAngle - state.playerAngle)
+        var angleDiff = abs(targetAngle - shipAngle)
         if angleDiff > .pi {
             angleDiff = 2 * .pi - angleDiff
         }

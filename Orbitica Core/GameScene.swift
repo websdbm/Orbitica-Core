@@ -187,6 +187,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var useAIController: Bool = false
     var aiDifficulty: AIController.AIDifficulty = .normal
     private var aiController: AIController?
+    private var aiTargetPosition: CGPoint?  // Target dell'AI per puntare la nave
     
     // Helper per log condizionali
     private func debugLog(_ message: String) {
@@ -286,10 +287,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let zoomLevelFar: CGFloat = 2.5          // Zoom massimo (molto lontano)
     private var currentZoomLevel: CGFloat = 1.0
     
-    // Controls
-    private var joystick: JoystickNode!
-    private var fireButton: FireButtonNode!
-    private var brakeButton: BrakeButtonNode!
+    // Controls (optional perché non vengono creati in AI mode)
+    private var joystick: JoystickNode?
+    private var fireButton: FireButtonNode?
+    private var brakeButton: BrakeButtonNode?
     private var joystickDirection = CGVector.zero
     private var isBraking = false
     private var isFiring = false
@@ -329,6 +330,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastCollisionTime: TimeInterval = 0
     private let collisionCooldown: TimeInterval = 0.5  // 500ms tra collisioni
     private var lastUpdateTime: TimeInterval = 0  // Traccia l'ultimo currentTime da update
+    private var frameCount: Int = 0  // Contatore frame per debug periodici
     
     // Score
     private var score: Int = 0
@@ -371,6 +373,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Setup
     override func didMove(to view: SKView) {
+        print("🎯 didMove called - useAIController: \(useAIController), aiDifficulty: \(aiDifficulty)")
+        debugLog("🎯 didMove called - useAIController: \(useAIController), aiDifficulty: \(aiDifficulty)")
+        
         backgroundColor = .black
         
         // Mantieni lo schermo acceso durante il gioco
@@ -2901,6 +2906,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupControls() {
+        print("=== CONTROLS SETUP START ===")
+        print("AI Mode: \(useAIController)")
         debugLog("=== CONTROLS SETUP START ===")
         debugLog("Scene size: \(size)")
         debugLog("AI Mode: \(useAIController)")
@@ -2909,6 +2916,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if useAIController {
             aiController = AIController()
             aiController?.difficulty = aiDifficulty
+            print("✅ AI Controller initialized with difficulty: \(aiDifficulty)")
             debugLog("✅ AI Controller initialized with difficulty: \(aiDifficulty)")
             // Non creare controlli fisici - l'AI comanderà direttamente
             return
@@ -2920,39 +2928,45 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Joystick - fisso in basso a sinistra (nell'HUD layer)
         joystick = JoystickNode(baseRadius: 70, thumbRadius: 30)
-        joystick.position = CGPoint(x: 120 - halfWidth, y: 120 - halfHeight)
-        joystick.zPosition = 1000
-        joystick.onMove = { [weak self] direction in
+        joystick?.position = CGPoint(x: 120 - halfWidth, y: 120 - halfHeight)
+        joystick?.zPosition = 1000
+        joystick?.onMove = { [weak self] direction in
             self?.joystickDirection = direction
         }
-        joystick.onEnd = { [weak self] in
+        joystick?.onEnd = { [weak self] in
             self?.joystickDirection = .zero
         }
-        hudLayer.addChild(joystick)
+        if let joystick = joystick {
+            hudLayer.addChild(joystick)
+        }
         
         // Brake button - a sinistra del fire button (nell'HUD layer) - ridotto ulteriormente del 15%
         brakeButton = BrakeButtonNode(radius: 36.1)  // 42.5 * 0.85 = 36.125
-        brakeButton.position = CGPoint(x: size.width - 240 - halfWidth, y: 120 - halfHeight)
-        brakeButton.zPosition = 1000
-        brakeButton.onPress = { [weak self] in
+        brakeButton?.position = CGPoint(x: size.width - 240 - halfWidth, y: 120 - halfHeight)
+        brakeButton?.zPosition = 1000
+        brakeButton?.onPress = { [weak self] in
             self?.isBraking = true
         }
-        brakeButton.onRelease = { [weak self] in
+        brakeButton?.onRelease = { [weak self] in
             self?.isBraking = false
         }
-        hudLayer.addChild(brakeButton)
+        if let brakeButton = brakeButton {
+            hudLayer.addChild(brakeButton)
+        }
         
         // Fire button - fisso in basso a destra (nell'HUD layer) - ridotto ulteriormente del 15%
         fireButton = FireButtonNode(radius: 43.35)  // 51 * 0.85 = 43.35
-        fireButton.position = CGPoint(x: size.width - 120 - halfWidth, y: 120 - halfHeight)
-        fireButton.zPosition = 1000
-        fireButton.onPress = { [weak self] in
+        fireButton?.position = CGPoint(x: size.width - 120 - halfWidth, y: 120 - halfHeight)
+        fireButton?.zPosition = 1000
+        fireButton?.onPress = { [weak self] in
             self?.isFiring = true
         }
-        fireButton.onRelease = { [weak self] in
+        fireButton?.onRelease = { [weak self] in
             self?.isFiring = false
         }
-        hudLayer.addChild(fireButton)
+        if let fireButton = fireButton {
+            hudLayer.addChild(fireButton)
+        }
         
         debugLog("✅ Controls in HUD layer (unaffected by camera zoom)")
         debugLog("=== CONTROLS SETUP END ===")
@@ -3104,8 +3118,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Se non siamo in pausa, gestisci i controlli normali
             if !isGamePaused {
-                joystick.touchBegan(touch, in: self)
-                fireButton.touchBegan(touch, in: self)
+                joystick?.touchBegan(touch, in: self)
+                fireButton?.touchBegan(touch, in: self)
             }
         }
     }
@@ -3113,31 +3127,42 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         if isGamePaused { return }
         for touch in touches {
-            joystick.touchMoved(touch, in: self)
+            joystick?.touchMoved(touch, in: self)
         }
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         if isGamePaused { return }
         for touch in touches {
-            joystick.touchEnded(touch)
-            fireButton.touchEnded(touch)
+            joystick?.touchEnded(touch)
+            fireButton?.touchEnded(touch)
         }
     }
     
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         if isGamePaused { return }
         for touch in touches {
-            joystick.touchEnded(touch)
-            fireButton.touchEnded(touch)
+            joystick?.touchEnded(touch)
+            fireButton?.touchEnded(touch)
         }
     }
     
     // MARK: - Update Loop
     override func update(_ currentTime: TimeInterval) {
+        frameCount += 1
+        
+        if frameCount == 1 {
+            print("🎮 First update called - useAIController: \(useAIController), isGamePaused: \(isGamePaused)")
+        }
+        
         if isGamePaused { return }
         
         lastUpdateTime = currentTime  // Salva per usarlo in didBegin
+        
+        // Debug AI state
+        if frameCount % 60 == 0 {  // Log ogni 60 frame (circa 1 secondo)
+            print("🔍 AI State: useAI=\(useAIController), aiController=\(aiController != nil), player=\(player != nil), planet=\(planet != nil)")
+        }
         
         // Aggiorna AI Controller se attivo
         if useAIController, let ai = aiController, player != nil, planet != nil {
@@ -3174,9 +3199,35 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             )
             
             // Ottieni input dall'AI
-            joystickDirection = ai.desiredMovement(for: gameState)
-            isFiring = ai.shouldFire(for: gameState)
-            isBraking = false  // L'AI non usa il freno per ora
+            let aiMovement = ai.desiredMovement(for: gameState)
+            let aiShouldFire = ai.shouldFire(for: gameState)
+            
+            // Salva il target per orientare la nave
+            aiTargetPosition = ai.currentTarget
+            
+            if frameCount % 120 == 0 {  // Log ogni 2 secondi
+                print("🎯 AI Debug: asteroids=\(asteroidInfos.count), player pos=\(player.position), movement=\(aiMovement), fire=\(aiShouldFire), target=\(aiTargetPosition != nil)")
+            }
+            
+            joystickDirection = aiMovement
+            isFiring = aiShouldFire
+            
+            // FRENO INTELLIGENTE: attiva se vai troppo veloce VERSO il pianeta
+            let toPlanet = CGVector(
+                dx: planet.position.x - player.position.x,
+                dy: planet.position.y - player.position.y
+            )
+            let toPlanetLength = sqrt(toPlanet.dx * toPlanet.dx + toPlanet.dy * toPlanet.dy)
+            let velocityTowardPlanet = (player.physicsBody!.velocity.dx * toPlanet.dx + player.physicsBody!.velocity.dy * toPlanet.dy) / max(toPlanetLength, 1)
+            
+            // Frena se velocità verso pianeta > 200 e distanza < 350
+            isBraking = velocityTowardPlanet > 200 && toPlanetLength < 350
+            
+            if isBraking && frameCount % 60 == 0 {
+                print("🛑 AI BRAKING: velocity toward planet=\(velocityTowardPlanet), distance=\(toPlanetLength)")
+            }
+        } else if useAIController {
+            print("⚠️ AI mode active but aiController=\(aiController != nil), player=\(player != nil), planet=\(planet != nil)")
         }
         
         applyGravity()
@@ -3246,6 +3297,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func updatePlayerMovement() {
         let magnitude = hypot(joystickDirection.dx, joystickDirection.dy)
         
+        if useAIController && frameCount % 120 == 0 {
+            print("⚡ Movement: joystick=\(joystickDirection), magnitude=\(magnitude)")
+        }
+        
         // Gestione frenata - FISICA CORRETTA: forza opposta nella direzione dove punta la nave
         if isBraking {
             // Calcola direzione opposta a dove punta la nave
@@ -3276,16 +3331,36 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             
             if magnitude > 0.1 {
-                // FISICA: Applica forza proporzionale - RIDOTTO DEL 20%
-                let thrustPower: CGFloat = 116.0  // 145.0 * 0.8 = 116.0
+                // FISICA: Applica forza proporzionale
+                // In AI mode: motori MOLTO più potenti per contrastare la gravità planetaria
+                let thrustPower: CGFloat = useAIController ? 500.0 : 116.0
                 let forceX = joystickDirection.dx * thrustPower * magnitude
                 let forceY = joystickDirection.dy * thrustPower * magnitude
                 
-                player.physicsBody?.applyForce(CGVector(dx: forceX, dy: forceY))
+                if let physics = player.physicsBody {
+                    physics.applyForce(CGVector(dx: forceX, dy: forceY))
+                    
+                    if useAIController && frameCount % 120 == 0 {
+                        print("🚀 Force applied: (\(forceX), \(forceY)), velocity: \(physics.velocity)")
+                    }
+                } else {
+                    print("❌ ERROR: player.physicsBody is nil!")
+                }
                 
-                // Orienta la nave nella direzione del movimento
-                let angle = atan2(joystickDirection.dy, joystickDirection.dx) - .pi / 2
-                player.zRotation = angle
+                // Orienta la nave: se AI con target, punta al target, altrimenti nella direzione del movimento
+                if useAIController, let target = aiTargetPosition {
+                    // AI: punta verso il target
+                    let toTarget = CGVector(
+                        dx: target.x - player.position.x,
+                        dy: target.y - player.position.y
+                    )
+                    let angle = atan2(toTarget.dy, toTarget.dx) - .pi / 2
+                    player.zRotation = angle
+                } else {
+                    // Controllo umano: punta nella direzione del movimento
+                    let angle = atan2(joystickDirection.dy, joystickDirection.dx) - .pi / 2
+                    player.zRotation = angle
+                }
                 
                 // EFFETTO REATTORI: Glow che pulsa con l'intensità
                 thrusterGlow.alpha = 0.3 + (magnitude * 0.7)  // Da 0.3 a 1.0
