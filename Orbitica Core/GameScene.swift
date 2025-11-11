@@ -200,6 +200,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
+    // Initialization flag - impedisce update loop prima del setup completo
+    private var isInitialized: Bool = false
+    
     // Player
     private var player: SKShapeNode!
     private var playerShield: SKShapeNode!  // Barriera circolare
@@ -430,6 +433,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Avvia la wave iniziale (1 o quella selezionata dal debug)
         startWave(startingWave)
+        
+        // IMPORTANTE: Segnala che l'inizializzazione è completa
+        // Questo permette all'update loop di iniziare a funzionare
+        isInitialized = true
         
         // Avvia registrazione se richiesto dalla modalità Regia
         if shouldStartRecording && isRegiaMode {
@@ -2336,10 +2343,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupPlanet() {
         if useEnhancedVisuals {
             // NUOVO SISTEMA VISIVO - Terra Realistica con continenti e nuvole
-            enhancedPlanet = EnhancedPlanetNode(radius: planetRadius, style: currentPlanetStyle)
-            enhancedPlanet?.position = CGPoint(x: size.width / 2, y: size.height / 2)
-            enhancedPlanet?.zPosition = 1
-            enhancedPlanet?.name = "enhancedPlanet"
+            let newPlanet = EnhancedPlanetNode(radius: planetRadius, style: currentPlanetStyle)
+            newPlanet.position = CGPoint(x: size.width / 2, y: size.height / 2)
+            newPlanet.zPosition = 1
+            newPlanet.name = "enhancedPlanet"
             
             // Physics body invisibile per collisioni
             let planetBody = SKPhysicsBody(circleOfRadius: planetRadius)
@@ -2347,9 +2354,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             planetBody.categoryBitMask = PhysicsCategory.planet
             planetBody.contactTestBitMask = PhysicsCategory.asteroid
             planetBody.collisionBitMask = 0
-            enhancedPlanet?.physicsBody = planetBody
+            newPlanet.physicsBody = planetBody
             
-            worldLayer.addChild(enhancedPlanet!)
+            worldLayer.addChild(newPlanet)
+            enhancedPlanet = newPlanet
+            
+            // IMPORTANTE: Crea anche planet (SKShapeNode invisibile) per compatibilità con il resto del codice
+            planet = SKShapeNode(circleOfRadius: planetRadius)
+            planet.fillColor = .clear
+            planet.strokeColor = .clear
+            planet.alpha = 0.0  // Completamente invisibile
+            planet.position = newPlanet.position
+            planet.zPosition = newPlanet.zPosition
+            planet.name = "planetReference"
+            // NON aggiungere physics body qui - già presente su enhancedPlanet
+            worldLayer.addChild(planet)
             
             // Label della salute del pianeta al centro
             planetHealthLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
@@ -2360,9 +2379,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             planetHealthLabel.verticalAlignmentMode = .center
             planetHealthLabel.position = CGPoint.zero
             planetHealthLabel.zPosition = 100
-            enhancedPlanet?.addChild(planetHealthLabel)
+            newPlanet.addChild(planetHealthLabel)
             
-            debugLog("✅ Enhanced Planet created at: \(enhancedPlanet?.position ?? .zero)")
+            debugLog("✅ Enhanced Planet created at: \(newPlanet.position) + invisible reference planet")
         } else {
             // SISTEMA ORIGINALE
             let planetPath = createIrregularPlanetPath(radius: planetRadius)
@@ -2403,23 +2422,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupAtmosphere() {
         if useEnhancedVisuals {
             // SISTEMA ENHANCED: Atmosfera stratificata a 3 layer con colori dinamici
-            enhancedAtmosphere = EnhancedAtmosphereNode(radius: atmosphereRadius)
-            enhancedAtmosphere.name = "atmosphere"
-            enhancedAtmosphere.zPosition = 2
-            enhancedAtmosphere.position = CGPoint(x: size.width / 2, y: size.height / 2)
+            let newAtmosphere = EnhancedAtmosphereNode(radius: atmosphereRadius)
+            newAtmosphere.name = "atmosphere"
+            newAtmosphere.zPosition = 2
+            newAtmosphere.position = CGPoint(x: size.width / 2, y: size.height / 2)
             
             let atmosphereBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
             atmosphereBody.isDynamic = false
             atmosphereBody.categoryBitMask = PhysicsCategory.atmosphere
             atmosphereBody.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
             atmosphereBody.collisionBitMask = 0
-            enhancedAtmosphere.physicsBody = atmosphereBody
+            newAtmosphere.physicsBody = atmosphereBody
             
-            worldLayer.addChild(enhancedAtmosphere)
+            worldLayer.addChild(newAtmosphere)
+            enhancedAtmosphere = newAtmosphere
             
-            // Inizializza con energia corrente
-            let energyPercent = CGFloat(atmosphereEnergy) / CGFloat(maxAtmosphereEnergy)
-            enhancedAtmosphere.updateEnergy(energyPercent)
+            // Inizializza con energia corrente basata sul raggio
+            let currentEnergy = atmosphereRadius - planetRadius
+            let maxEnergy = maxAtmosphereRadius - planetRadius
+            newAtmosphere.updateEnergy(current: currentEnergy, max: maxEnergy)
             
             debugLog("✅ Enhanced atmosphere created with 3 layers, radius: \(atmosphereRadius)")
         } else {
@@ -2972,8 +2993,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Physics category per il player
         player.physicsBody?.categoryBitMask = PhysicsCategory.player
-        player.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.asteroid
-        player.physicsBody?.collisionBitMask = 0
+        player.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.asteroid | PhysicsCategory.planet
+        player.physicsBody?.collisionBitMask = 0  // NO collisioni automatiche - rimbalzo gestito manualmente in handleAtmosphereBounce/handlePlanetBounce
         
         worldLayer.addChild(player)
     }
@@ -3227,6 +3248,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Update Loop
     override func update(_ currentTime: TimeInterval) {
+        // CRITICAL: Non eseguire update finché l'inizializzazione non è completa
+        guard isInitialized else { return }
+        
         frameCount += 1
         
         if frameCount == 1 {
@@ -3243,7 +3267,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Aggiorna AI Controller se attivo
-        if useAIController, let ai = aiController, player != nil, planet != nil {
+        if useAIController, let ai = aiController, let player = player, let planet = planet {
             // Crea GameState per l'AI
             let asteroidInfos = asteroids.map { asteroid -> AsteroidInfo in
                 let dx = asteroid.position.x - planet.position.x
@@ -3390,6 +3414,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func updatePlayerMovement() {
+        // Safety check: verifica che player esista
+        guard isInitialized,
+              let player = player,
+              let playerBody = player.physicsBody else {
+            return
+        }
+        
         let magnitude = hypot(joystickDirection.dx, joystickDirection.dy)
         
         if useAIController && frameCount % 120 == 0 {
@@ -3574,14 +3605,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         projectile.physicsBody?.isDynamic = true
         projectile.physicsBody?.categoryBitMask = PhysicsCategory.projectile
         projectile.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.asteroid
-        projectile.physicsBody?.collisionBitMask = 0
+        projectile.physicsBody?.collisionBitMask = 0  // NO collisioni fisiche - solo contact detection
         projectile.physicsBody?.mass = 0.01
         projectile.physicsBody?.linearDamping = 0
         projectile.physicsBody?.affectedByGravity = false
+        projectile.physicsBody?.allowsRotation = false
+        projectile.physicsBody?.restitution = 0  // NO rimbalzo
+        projectile.physicsBody?.friction = 0  // NO attrito
         
         // Posizione davanti alla nave - spara nella direzione in cui punta
         let angle = player.zRotation + .pi / 2
-        let offset: CGFloat = 25
+        let offset: CGFloat = 30  // Aumentato da 25 a 30 per spawn più lontano dal player
         projectile.position = CGPoint(
             x: player.position.x + cos(angle) * offset,
             y: player.position.y + sin(angle) * offset
@@ -3848,6 +3882,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Gravity System
     private func applyGravity() {
+        // Safety check: Non eseguire se non inizializzato o se planet/player sono nil
+        guard isInitialized, 
+              let planet = planet,
+              let player = player else { return }
+        
         // OTTIMIZZAZIONE: Calcola gravità solo per oggetti vicini al pianeta o al player
         let planetPos = planet.position
         let maxGravityDistance: CGFloat = 1500  // Oltre questa distanza, niente gravità
@@ -3939,6 +3978,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func applyGravityToNode(node: SKNode, body: SKPhysicsBody, multiplier: CGFloat) {
+        // SAFETY CHECK: Assicurati che planet esista
+        guard let planet = planet else { return }
+        
         // Calcola distanza dal pianeta
         let dx = planet.position.x - node.position.x
         let dy = planet.position.y - node.position.y
@@ -3961,6 +4003,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func applyGravityToPlayer(node: SKNode, body: SKPhysicsBody, multiplier: CGFloat) {
+        // SAFETY CHECK: Assicurati che player esista
+        guard let player = player else { return }
+        
         // Calcola distanza dal PLAYER invece che dal pianeta
         let dx = player.position.x - node.position.x
         let dy = player.position.y - node.position.y
@@ -4428,7 +4473,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     */
     
     private func updateOrbitalGrapple() {
-        guard let playerBody = player.physicsBody else { return }
+        // Safety check: verifica che player e planet esistano
+        guard isInitialized,
+              let player = player,
+              let planet = planet,
+              let playerBody = player.physicsBody else { return }
         
         // Calcola distanza dal centro del pianeta
         let planetCenter = planet.position
@@ -5746,6 +5795,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func updateCameraZoom() {
+        // Safety check: verifica che player e planet siano inizializzati
+        guard let player = player, let planet = planet else { return }
+        
+        // Safety check: verifica che gameCamera sia inizializzata
+        guard gameCamera != nil else { return }
+        
         // Calcola distanze assolute dal pianeta
         let dx = abs(player.position.x - planet.position.x)
         let dy = abs(player.position.y - planet.position.y)
@@ -5802,6 +5857,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if abs(currentZoomLevel - gameCamera.xScale) > 0.01 {
             gameCamera.setScale(currentZoomLevel)
         }
+        
+        // CAMERA TRACKING: Segue il player con interpolazione fluida
+        let cameraSpeed: CGFloat = 0.1  // Velocità di inseguimento (0.1 = 10% per frame)
+        let targetX = player.position.x
+        let targetY = player.position.y
+        
+        gameCamera.position.x = gameCamera.position.x + (targetX - gameCamera.position.x) * cameraSpeed
+        gameCamera.position.y = gameCamera.position.y + (targetY - gameCamera.position.y) * cameraSpeed
         
         // Debug (opzionale)
         // debugLog("dx: \(Int(dx))/\(Int(limitFarH)) dy: \(Int(dy))/\(Int(limitFarV)) | ZoomH: \(needsZoomH) ZoomV: \(needsZoomV) | Target: \(String(format: "%.2f", targetZoom)) Current: \(String(format: "%.2f", currentZoomLevel))")
@@ -5955,6 +6018,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
 
+        // Player + Planet - Rimbalzo sulla superficie del pianeta
+        else if collision == (PhysicsCategory.player | PhysicsCategory.planet) {
+            // Cooldown per evitare collisioni multiple consecutive
+            guard currentTime - lastCollisionTime > collisionCooldown else { return }
+            lastCollisionTime = currentTime
+            
+            // Usa lo stesso sistema di rimbalzo dell'atmosfera (funziona per player)
+            handleAtmosphereBounce(contact: contact, isPlayer: true)
+            flashPlanet()
+            flashPlayerShield()
+            
+            // Danno al pianeta quando player colpisce direttamente (solo se atmosfera al minimo)
+            if atmosphereRadius <= planetRadius {
+                planetHealth -= 1
+                updatePlanetHealthLabel()
+                
+                if planetHealth <= 0 {
+                    gameOver()
+                    return
+                }
+                
+                debugLog("💥 Player hit planet directly - 1 damage, health: \(planetHealth)/\(maxPlanetHealth)")
+            }
+            
+            debugLog("🌍 Player bounced off planet surface")
+        }
+
         // Player + Power-up
         else if collision == (PhysicsCategory.player | PhysicsCategory.powerup) {
             // Identifica il power-up
@@ -6101,6 +6191,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func handleAtmosphereBounce(contact: SKPhysicsContact, isPlayer: Bool) {
+        // Safety check: verifica che planet esista
+        guard let planet = planet else { return }
+        
         // Determina quale body è quello che rimbalza
         let bouncingBody = isPlayer ? 
             (contact.bodyA.categoryBitMask == PhysicsCategory.player ? contact.bodyA : contact.bodyB) :
@@ -6147,6 +6240,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func handleAsteroidAtmosphereBounce(contact: SKPhysicsContact) {
+        // Safety check: verifica che planet esista
+        guard let planet = planet else { return }
+        
         // Determina quale body è l'asteroide
         let asteroidBody = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA : contact.bodyB
         
@@ -6191,6 +6287,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func handlePlanetBounce(contact: SKPhysicsContact, asteroid: SKShapeNode) {
+        // Safety check: verifica che planet esista
+        guard let planet = planet else { return }
+        
         // Calcola direzione dal centro del pianeta all'asteroide
         let dx = asteroid.position.x - planet.position.x
         let dy = asteroid.position.y - planet.position.y
@@ -6594,12 +6693,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func updateAtmosphereVisuals() {
         if useEnhancedVisuals {
             // SISTEMA ENHANCED: Aggiorna colori dinamici e salute
-            let energyPercent = CGFloat(atmosphereEnergy) / CGFloat(maxAtmosphereEnergy)
-            enhancedAtmosphere?.updateEnergy(energyPercent)
+            let currentEnergy = atmosphereRadius - planetRadius
+            let maxEnergy = maxAtmosphereRadius - planetRadius
+            enhancedAtmosphere?.updateEnergy(current: currentEnergy, max: maxEnergy)
             
-            let healthPercent = CGFloat(planetHealth) / CGFloat(maxPlanetHealth)
-            enhancedPlanet?.updateHealth(healthPercent)
+            let currentHealth = CGFloat(planetHealth)
+            let maxHealth = CGFloat(maxPlanetHealth)
+            enhancedPlanet?.updateHealth(current: currentHealth, max: maxHealth)
             
+            let energyPercent = currentEnergy / maxEnergy
+            let healthPercent = currentHealth / maxHealth
             debugLog("🎨 Enhanced visuals updated: energy \(Int(energyPercent * 100))%, health \(Int(healthPercent * 100))%")
         } else {
             // SISTEMA ORIGINALE: Aggiorna dimensioni atmosfera
@@ -6622,6 +6725,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Visual Feedback
     private func flashAtmosphere() {
+        // Safety check: verifica che atmosphere esista
+        guard atmosphere != nil else { return }
+        
         // Flash bianco brillante sulla collisione
         let originalColor = atmosphere.strokeColor
         
@@ -6641,6 +6747,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func flashPlayerShield() {
+        // Safety check: verifica che playerShield esista
+        guard playerShield != nil else { return }
+        
         // Flash dello scudo del player
         let originalAlpha = playerShield.alpha
         
@@ -6662,6 +6771,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func bounceAtmospherePositive() {
+        // Safety check: verifica che atmosphere esista
+        guard atmosphere != nil else { return }
+        
         // Effetto bounce vibrante positivo (verde/cyan brillante)
         let originalColor = atmosphere.strokeColor
         let originalLineWidth = atmosphere.lineWidth
@@ -7758,6 +7870,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func flashPlanet() {
+        // Safety check: verifica che planet esista
+        guard planet != nil else { return }
+        
         // Effetto flash rosso sul pianeta quando viene colpito
         planet.fillColor = .red
         

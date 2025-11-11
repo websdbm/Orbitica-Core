@@ -65,27 +65,18 @@ class EnhancedPlanetNode: SKNode {
     // MARK: - Opzione 1: Terra Realistica
     
     private func setupRealisticEarth() {
-        // Base: Terra con colori oceano/continenti
+        // Base: Pianeta con texture REALE da file
         baseLayer = SKNode()
         
-        // Corpo principale della Terra
-        let earthCore = SKShapeNode(circleOfRadius: radius)
-        earthCore.fillColor = UIColor(red: 0.13, green: 0.29, blue: 0.53, alpha: 1.0) // Oceani blu scuro
-        earthCore.strokeColor = .clear
-        earthCore.name = "earthCore"
-        baseLayer.addChild(earthCore)
+        // PIANETA BASE: Usa texture earth.jpg con scrolling effect
+        let earthSprite = createPlanetFromImage()
+        earthSprite.name = "earthCore"
+        baseLayer.addChild(earthSprite)
         
-        // Aggiungi "continenti" come forme irregolari
-        addContinents(to: baseLayer)
-        
-        // Rotazione lenta della Terra
-        let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: 120.0) // 2 minuti per rotazione completa
-        baseLayer.run(SKAction.repeatForever(rotateAction))
+        // RIMUOVE rotazione geometrica - ora usiamo texture scrolling
+        // (L'effetto di scrolling è implementato direttamente nell'earthSprite)
         
         addChild(baseLayer)
-        
-        // Layer nuvole semi-trasparenti
-        setupCloudsLayer()
         
         // Glow blu attorno al pianeta
         setupPlanetGlow(color: UIColor.cyan)
@@ -94,107 +85,170 @@ class EnhancedPlanetNode: SKNode {
         setupHealthFilter()
     }
     
-    private func addContinents(to layer: SKNode) {
-        // Continente 1 (Nord America style)
-        let continent1 = createContinentShape(
-            centerAngle: 0.3,
-            angularSpread: 1.2,
-            radialSpread: 0.4
-        )
-        continent1.fillColor = UIColor(red: 0.25, green: 0.5, blue: 0.25, alpha: 1.0) // Verde terra
-        continent1.strokeColor = .clear
-        layer.addChild(continent1)
+    private func createPlanetFromImage() -> SKSpriteNode {
+        // Carica la texture earth.jpg (il path non include "Immagini/")
+        guard let earthTexture = SKTexture(imageNamed: "earth.jpg") as SKTexture? else {
+            print("⚠️ earth.jpg non trovata, uso fallback procedurale")
+            return createPlanetWithTextureFallback()
+        }
         
-        // Continente 2 (Europa/Africa style)
-        let continent2 = createContinentShape(
-            centerAngle: 1.8,
-            angularSpread: 1.5,
-            radialSpread: 0.5
-        )
-        continent2.fillColor = UIColor(red: 0.30, green: 0.48, blue: 0.23, alpha: 1.0)
-        continent2.strokeColor = .clear
-        layer.addChild(continent2)
+        // STRATEGIA: Per simulare rotazione sull'asse Z (3D), facciamo scorrere
+        // la texture orizzontalmente dentro una maschera circolare
         
-        // Continente 3 (Asia style)
-        let continent3 = createContinentShape(
-            centerAngle: 3.5,
-            angularSpread: 1.8,
-            radialSpread: 0.45
-        )
-        continent3.fillColor = UIColor(red: 0.28, green: 0.52, blue: 0.27, alpha: 1.0)
-        continent3.strokeColor = .clear
-        layer.addChild(continent3)
+        // 1. Crea un container con maschera circolare
+        let cropNode = SKCropNode()
+        let mask = SKShapeNode(circleOfRadius: radius)
+        mask.fillColor = .white
+        mask.strokeColor = .clear
+        cropNode.maskNode = mask
         
-        // Calotte polari bianche
-        let northPole = SKShapeNode(circleOfRadius: radius * 0.15)
-        northPole.position = CGPoint(x: 0, y: radius * 0.8)
-        northPole.fillColor = .white
-        northPole.strokeColor = .clear
-        layer.addChild(northPole)
+        // 2. Crea uno sprite LARGO (3x il diametro) con la texture ripetuta
+        let targetDiameter = radius * 2
+        let wideWidth = targetDiameter * 3  // 3 copie della texture affiancate
         
-        let southPole = SKShapeNode(circleOfRadius: radius * 0.15)
-        southPole.position = CGPoint(x: 0, y: -radius * 0.8)
-        southPole.fillColor = .white
-        southPole.strokeColor = .clear
-        layer.addChild(southPole)
+        // Crea 3 sprite affiancati per effetto seamless
+        let sprite1 = SKSpriteNode(texture: earthTexture)
+        sprite1.size = CGSize(width: targetDiameter, height: targetDiameter)
+        sprite1.position = CGPoint(x: -targetDiameter, y: 0)
+        
+        let sprite2 = SKSpriteNode(texture: earthTexture)
+        sprite2.size = CGSize(width: targetDiameter, height: targetDiameter)
+        sprite2.position = CGPoint(x: 0, y: 0)
+        
+        let sprite3 = SKSpriteNode(texture: earthTexture)
+        sprite3.size = CGSize(width: targetDiameter, height: targetDiameter)
+        sprite3.position = CGPoint(x: targetDiameter, y: 0)
+        
+        // Container per i 3 sprite
+        let scrollingContainer = SKNode()
+        scrollingContainer.addChild(sprite1)
+        scrollingContainer.addChild(sprite2)
+        scrollingContainer.addChild(sprite3)
+        
+        cropNode.addChild(scrollingContainer)
+        
+        // 3. Animazione: muovi il container verso sinistra continuamente
+        let scrollDuration: TimeInterval = 120.0  // 2 minuti per un ciclo completo
+        let moveLeft = SKAction.moveBy(x: -targetDiameter, y: 0, duration: scrollDuration)
+        let resetPosition = SKAction.moveBy(x: targetDiameter, y: 0, duration: 0)
+        let scrollSequence = SKAction.sequence([moveLeft, resetPosition])
+        scrollingContainer.run(SKAction.repeatForever(scrollSequence))
+        
+        // 4. Wrap in SKSpriteNode per compatibilità con il return type
+        // (il cropNode non può essere direttamente un SKSpriteNode)
+        let wrapper = SKSpriteNode(color: .clear, size: CGSize(width: targetDiameter, height: targetDiameter))
+        wrapper.addChild(cropNode)
+        
+        print("🌍 Earth texture scrolling setup - simula rotazione 3D sull'asse Z")
+        
+        return wrapper
     }
     
-    private func createContinentShape(centerAngle: CGFloat, angularSpread: CGFloat, radialSpread: CGFloat) -> SKShapeNode {
-        let path = CGMutablePath()
-        let segments = 20
-        let startAngle = centerAngle - angularSpread / 2
+    private func createPlanetWithTextureFallback() -> SKSpriteNode {
+        // FALLBACK: Crea una texture semplice e pulita se earth.jpg non è disponibile
+        let size = CGSize(width: radius * 2, height: radius * 2)
+        let renderer = UIGraphicsImageRenderer(size: size)
         
+        let image = renderer.image { context in
+            let rect = CGRect(origin: .zero, size: size)
+            
+            // Sfondo base - blu oceano
+            let oceanColor = UIColor(red: 0.15, green: 0.35, blue: 0.60, alpha: 1.0)
+            oceanColor.setFill()
+            context.cgContext.fillEllipse(in: rect)
+            
+            // Aggiungi qualche "massa continentale" come macchie verdi irregolari
+            let landColor = UIColor(red: 0.30, green: 0.50, blue: 0.25, alpha: 0.85)
+            landColor.setFill()
+            
+            // Continente 1 (alto-destra)
+            let path1 = createOrganicPath(
+                center: CGPoint(x: size.width * 0.65, y: size.height * 0.30),
+                baseRadius: radius * 0.4,
+                segments: 12
+            )
+            context.cgContext.addPath(path1)
+            context.cgContext.fillPath()
+            
+            // Continente 2 (sinistra)
+            let path2 = createOrganicPath(
+                center: CGPoint(x: size.width * 0.25, y: size.height * 0.55),
+                baseRadius: radius * 0.35,
+                segments: 10
+            )
+            context.cgContext.addPath(path2)
+            context.cgContext.fillPath()
+            
+            // Continente 3 (basso-destra)
+            let path3 = createOrganicPath(
+                center: CGPoint(x: size.width * 0.70, y: size.height * 0.75),
+                baseRadius: radius * 0.28,
+                segments: 8
+            )
+            context.cgContext.addPath(path3)
+            context.cgContext.fillPath()
+            
+            // Calotte polari bianche
+            let polarColor = UIColor.white.withAlphaComponent(0.9)
+            polarColor.setFill()
+            
+            // Polo Nord
+            let northPole = CGRect(
+                x: size.width * 0.5 - radius * 0.2,
+                y: size.height * 0.05,
+                width: radius * 0.4,
+                height: radius * 0.3
+            )
+            context.cgContext.fillEllipse(in: northPole)
+            
+            // Polo Sud
+            let southPole = CGRect(
+                x: size.width * 0.5 - radius * 0.2,
+                y: size.height * 0.85 - radius * 0.15,
+                width: radius * 0.4,
+                height: radius * 0.3
+            )
+            context.cgContext.fillEllipse(in: southPole)
+        }
+        
+        let texture = SKTexture(image: image)
+        let sprite = SKSpriteNode(texture: texture)
+        sprite.size = size
+        return sprite
+    }
+    
+    private func createOrganicPath(center: CGPoint, baseRadius: CGFloat, segments: Int) -> CGPath {
+        let path = CGMutablePath()
         var points: [CGPoint] = []
         
         for i in 0...segments {
-            let angle = startAngle + (angularSpread * CGFloat(i) / CGFloat(segments))
-            // Raggio variabile per forma irregolare
-            let variation = CGFloat.random(in: 0.7...1.0)
-            let r = radius * radialSpread * variation
-            let x = cos(angle) * r
-            let y = sin(angle) * r
+            let angle = (CGFloat(i) / CGFloat(segments)) * .pi * 2
+            // Variazione casuale del raggio per forme organiche
+            let radiusVariation = CGFloat.random(in: 0.7...1.0)
+            let r = baseRadius * radiusVariation
+            let x = center.x + cos(angle) * r
+            let y = center.y + sin(angle) * r
             points.append(CGPoint(x: x, y: y))
         }
         
         path.move(to: points[0])
-        for point in points.dropFirst() {
-            path.addLine(to: point)
+        for i in 1..<points.count {
+            // Usa curve per rendere i bordi più morbidi
+            let current = points[i]
+            let previous = points[i-1]
+            let controlPoint = CGPoint(
+                x: (current.x + previous.x) / 2,
+                y: (current.y + previous.y) / 2
+            )
+            path.addQuadCurve(to: current, control: controlPoint)
         }
         path.closeSubpath()
         
-        return SKShapeNode(path: path)
+        return path
     }
     
-    private func setupCloudsLayer() {
-        cloudsLayer = SKNode()
-        
-        // Crea 8-12 nuvole sparse
-        for _ in 0..<10 {
-            let cloud = createCloudSprite()
-            let angle = CGFloat.random(in: 0...(2 * .pi))
-            let distance = radius * CGFloat.random(in: 0.5...0.9)
-            cloud.position = CGPoint(
-                x: cos(angle) * distance,
-                y: sin(angle) * distance
-            )
-            cloudsLayer?.addChild(cloud)
-        }
-        
-        // Rotazione nuvole leggermente più veloce della Terra
-        let rotateAction = SKAction.rotate(byAngle: .pi * 2, duration: 90.0)
-        cloudsLayer?.run(SKAction.repeatForever(rotateAction))
-        
-        if let clouds = cloudsLayer {
-            addChild(clouds)
-        }
-    }
-    
-    private func createCloudSprite() -> SKShapeNode {
-        let cloudSize = radius * CGFloat.random(in: 0.1...0.2)
-        let cloud = SKShapeNode(circleOfRadius: cloudSize)
-        cloud.fillColor = UIColor.white.withAlphaComponent(0.4)
-        cloud.strokeColor = .clear
-        return cloud
+    private func addContinents(to layer: SKNode) {
+        // DEPRECATO - ora usiamo la texture
     }
     
     private func setupPlanetGlow(color: UIColor) {
@@ -392,34 +446,48 @@ class EnhancedAtmosphereNode: SKNode {
     }
     
     private func setupParticleEffects() {
-        // Particelle energetiche che orbitano nell'atmosfera
-        for i in 0..<12 {
+        // Crea una texture semplice per le particelle (cerchio bianco)
+        let particleTexture = createParticleTexture()
+        
+        // Particelle energetiche che orbitano nell'atmosfera - RIDOTTE e PIÙ DISCRETE
+        for i in 0..<8 {  // Ridotte da 12 a 8
             let emitter = SKEmitterNode()
-            emitter.particleTexture = SKTexture(imageNamed: "spark") // Fallback a pixel bianco
-            emitter.particleBirthRate = 5
-            emitter.particleLifetime = 3.0
+            emitter.particleTexture = particleTexture
+            emitter.particleBirthRate = 2  // Ridotte da 5 a 2
+            emitter.particleLifetime = 2.0  // Ridotto da 3.0 a 2.0
             emitter.particleColor = .cyan
             emitter.particleColorBlendFactor = 1.0
-            emitter.particleAlpha = 0.8
-            emitter.particleScale = 0.3
-            emitter.particleScaleSpeed = -0.1
-            emitter.emissionAngle = CGFloat(i) * (.pi * 2 / 12)
-            emitter.emissionAngleRange = .pi / 12
+            emitter.particleAlpha = 0.4  // Ridotto da 0.8 a 0.4 (più trasparenti)
+            emitter.particleScale = 0.15  // Ridotto da 0.3 a 0.15 (più piccole)
+            emitter.particleScaleSpeed = -0.05  // Ridotto da -0.1
+            emitter.emissionAngle = CGFloat(i) * (.pi * 2 / 8)
+            emitter.emissionAngleRange = .pi / 8
             
             // Posiziona sulla circonferenza
-            let angle = CGFloat(i) * (.pi * 2 / 12)
+            let angle = CGFloat(i) * (.pi * 2 / 8)
             emitter.position = CGPoint(
-                x: cos(angle) * radius * 1.1,
-                y: sin(angle) * radius * 1.1
+                x: cos(angle) * radius * 1.05,  // Più vicino all'atmosfera
+                y: sin(angle) * radius * 1.05
             )
             
             addChild(emitter)
             particleEmitters.append(emitter)
         }
         
-        // Rotazione degli emitter
-        let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 10.0)
+        // Rotazione degli emitter (più lenta)
+        let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 15.0)  // Più lenta
         run(SKAction.repeatForever(rotate))
+    }
+    
+    // Helper per creare texture particelle
+    private func createParticleTexture() -> SKTexture {
+        let size = CGSize(width: 4, height: 4)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            UIColor.white.setFill()
+            context.cgContext.fillEllipse(in: CGRect(origin: .zero, size: size))
+        }
+        return SKTexture(image: image)
     }
     
     // MARK: - Update Methods
