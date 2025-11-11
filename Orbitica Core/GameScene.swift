@@ -2903,7 +2903,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Se AI è attiva, inizializza il controller AI e nascondi i controlli
         if useAIController {
-            aiController = AIController(difficulty: aiDifficulty)
+            aiController = AIController()
+            aiController?.difficulty = aiDifficulty
             debugLog("✅ AI Controller initialized with difficulty: \(aiDifficulty)")
             // Non creare controlli fisici - l'AI comanderà direttamente
             return
@@ -3136,17 +3137,42 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Aggiorna AI Controller se attivo
         if useAIController, let ai = aiController {
-            let inputs = ai.update(
-                scene: self,
-                player: player,
-                planet: planet,
-                asteroids: asteroids.compactMap { $0 as SKNode },
-                deltaTime: currentTime - lastUpdateTime
+            // Crea GameState per l'AI
+            let asteroidInfos = asteroids.map { asteroid -> AsteroidInfo in
+                let dx = asteroid.position.x - planet.position.x
+                let dy = asteroid.position.y - planet.position.y
+                let distance = sqrt(dx * dx + dy * dy)
+                
+                return AsteroidInfo(
+                    position: asteroid.position,
+                    velocity: asteroid.physicsBody?.velocity ?? .zero,
+                    size: asteroid.frame.width / 2,
+                    health: asteroid.userData?["health"] as? Int ?? 1,
+                    distanceFromPlanet: distance
+                )
+            }
+            
+            let gameState = GameState(
+                playerPosition: player.position,
+                playerVelocity: player.physicsBody?.velocity ?? .zero,
+                playerAngle: player.zRotation,
+                planetPosition: planet.position,
+                planetRadius: planetRadius,
+                planetHealth: planetHealth,
+                maxPlanetHealth: maxPlanetHealth,
+                atmosphereRadius: atmosphereRadius,
+                maxAtmosphereRadius: maxAtmosphereRadius,
+                asteroids: asteroidInfos,
+                currentWave: currentWave,
+                score: score,
+                isGrappledToOrbit: isGrappledToOrbit,
+                orbitalRingRadius: currentOrbitalRing == 1 ? orbitalRing1Radius : (currentOrbitalRing == 2 ? orbitalRing2Radius : (currentOrbitalRing == 3 ? orbitalRing3Radius : nil))
             )
-            // Applica gli input dell'AI
-            joystickDirection = inputs.movement
-            isFiring = inputs.shouldFire
-            isBraking = inputs.shouldBrake
+            
+            // Ottieni input dall'AI
+            joystickDirection = ai.desiredMovement(for: gameState)
+            isFiring = ai.shouldFire(for: gameState)
+            isBraking = false  // L'AI non usa il freno per ora
         }
         
         applyGravity()
