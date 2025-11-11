@@ -29,7 +29,7 @@ class AvoidPlanetBehavior: AIBehavior {
         
         // Se troppo vicino al pianeta, SCAPPA!
         if distance < dangerZone {
-            let escapeDirection = CGVector(dx: -toPlanet.dx, dy: -toPlanet.dy).normalized
+            let escapeDirection = CGVector(dx: -toPlanet.dx, dy: -toPlanet.dy).normalized()
             
             // Urgenza aumenta avvicinandosi al pianeta
             let urgency = 1.0 + (1.0 - distance / dangerZone) * 0.5
@@ -71,7 +71,7 @@ class AttackPlanetBehavior: AIBehavior {
             dx: context.planetPosition.x - entity.position.x,
             dy: context.planetPosition.y - entity.position.y
         )
-        let direction = toPlanet.normalized
+        let direction = toPlanet.normalized()
         
         return AIDecision(
             movement: CGVector(
@@ -112,17 +112,17 @@ class BombardPlanetBehavior: AIBehavior {
         
         // Se troppo lontano, avvicinati
         if distance > targetRadius + 50 {
-            let approach = toPlanet.normalized
+            let approach = toPlanet.normalized()
             movement = CGVector(dx: approach.dx * 0.7, dy: approach.dy * 0.7)
         }
         // Se troppo vicino, allontanati
         else if distance < targetRadius - 50 {
-            let retreat = toPlanet.normalized
+            let retreat = toPlanet.normalized()
             movement = CGVector(dx: -retreat.dx * 0.5, dy: -retreat.dy * 0.5)
         }
         // Distanza ottimale: orbita tangenzialmente
         else {
-            let tangent = CGVector(dx: -toPlanet.dy, dy: toPlanet.dx).normalized
+            let tangent = CGVector(dx: -toPlanet.dy, dy: toPlanet.dx).normalized()
             movement = CGVector(dx: tangent.dx * 0.6, dy: tangent.dy * 0.6)
         }
         
@@ -169,7 +169,7 @@ class HuntPlayerBehavior: AIBehavior {
         let distance = toPlayer.length
         
         // Insegui il giocatore
-        let direction = toPlayer.normalized
+        let direction = toPlayer.normalized()
         let movement = CGVector(
             dx: direction.dx * aggressiveness,
             dy: direction.dy * aggressiveness
@@ -222,7 +222,7 @@ class DefendPlanetBehavior: AIBehavior {
         )
         
         // Muoviti verso l'asteroide
-        let direction = toAsteroid.normalized
+        let direction = toAsteroid.normalized()
         let movement = CGVector(dx: direction.dx * 0.9, dy: direction.dy * 0.9)
         
         // Verifica se puoi sparare
@@ -254,14 +254,14 @@ class DefendPlanetBehavior: AIBehavior {
         
         // Mantieni distanza di pattuglia
         if distance > targetRadius + 30 {
-            let approach = toPlanet.normalized
+            let approach = toPlanet.normalized()
             movement = CGVector(dx: approach.dx * 0.6, dy: approach.dy * 0.6)
         } else if distance < targetRadius - 30 {
-            let retreat = toPlanet.normalized
+            let retreat = toPlanet.normalized()
             movement = CGVector(dx: -retreat.dx * 0.6, dy: -retreat.dy * 0.6)
         } else {
             // Orbita tangenzialmente
-            let tangent = CGVector(dx: -toPlanet.dy, dy: toPlanet.dx).normalized
+            let tangent = CGVector(dx: -toPlanet.dy, dy: toPlanet.dx).normalized()
             movement = CGVector(dx: tangent.dx * 0.7, dy: tangent.dy * 0.7)
         }
         
@@ -329,7 +329,7 @@ class CollectPowerupBehavior: AIBehavior {
             dx: nearest.position.x - entity.position.x,
             dy: nearest.position.y - entity.position.y
         )
-        let direction = toPowerup.normalized
+        let direction = toPowerup.normalized()
         
         return AIDecision(
             movement: CGVector(dx: direction.dx * 0.8, dy: direction.dy * 0.8),
@@ -366,14 +366,14 @@ class OrbitPlanetBehavior: AIBehavior {
         
         // Correggi distanza
         if distance > targetRadius + 30 {
-            let approach = toPlanet.normalized
+            let approach = toPlanet.normalized()
             movement = CGVector(dx: approach.dx * 0.5, dy: approach.dy * 0.5)
         } else if distance < targetRadius - 30 {
-            let retreat = toPlanet.normalized
+            let retreat = toPlanet.normalized()
             movement = CGVector(dx: -retreat.dx * 0.5, dy: -retreat.dy * 0.5)
         } else {
             // Orbita tangenzialmente
-            let tangent = CGVector(dx: -toPlanet.dy, dy: toPlanet.dx).normalized
+            let tangent = CGVector(dx: -toPlanet.dy, dy: toPlanet.dx).normalized()
             movement = CGVector(dx: tangent.dx * orbitSpeed, dy: tangent.dy * orbitSpeed)
         }
         
@@ -394,7 +394,7 @@ extension CGVector {
         return sqrt(dx * dx + dy * dy)
     }
     
-    var normalized: CGVector {
+    func normalized() -> CGVector {
         let len = length
         guard len > 0 else { return .zero }
         return CGVector(dx: dx / len, dy: dy / len)
