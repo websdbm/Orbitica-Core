@@ -2405,7 +2405,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         debugLog("✅ Atmosphere created with radius: \(atmosphereRadius)")
     }
-    }
     
     private func setupOrbitalRing() {
         let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
