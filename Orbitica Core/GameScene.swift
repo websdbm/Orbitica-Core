@@ -571,11 +571,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // PULIZIA COMPLETA degli effetti dell'ambiente precedente
         cleanupPreviousEnvironment()
         
-        // Rimuovi layer esistenti (legacy)
+        // Rimuovi layer esistenti (legacy) - con guard per evitare crash
         starsLayer1?.removeFromParent()
+        starsLayer1 = nil
         starsLayer2?.removeFromParent()
+        starsLayer2 = nil
         starsLayer3?.removeFromParent()
+        starsLayer3 = nil
         nebulaLayer?.removeFromParent()
+        nebulaLayer = nil
         
         // Rimuovi anche starfield dinamico se presente
         childNode(withName: "dynamicStarfield")?.removeFromParent()
@@ -3136,7 +3140,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         lastUpdateTime = currentTime  // Salva per usarlo in didBegin
         
         // Aggiorna AI Controller se attivo
-        if useAIController, let ai = aiController {
+        if useAIController, let ai = aiController, player != nil, planet != nil {
             // Crea GameState per l'AI
             let asteroidInfos = asteroids.map { asteroid -> AsteroidInfo in
                 let dx = asteroid.position.x - planet.position.x
