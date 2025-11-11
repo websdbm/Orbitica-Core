@@ -164,15 +164,16 @@ class RegiaScene: SKScene {
         toggleText.name = "toggleText"
         toggleButton.addChild(toggleText)
         
-        // BOTTONI AZIONE (centrati in basso)
+        // BOTTONI AZIONE (affiancati in basso)
         let actionY = toggleY - 80
+        let buttonSpacing: CGFloat = 15
         
-        // Record Button
+        // Record Button (sinistra)
         recordButton = SKShapeNode(rectOf: CGSize(width: 160, height: 50), cornerRadius: 10)
         recordButton?.fillColor = .red
         recordButton?.strokeColor = .white
         recordButton?.lineWidth = 2
-        recordButton?.position = CGPoint(x: size.width / 2, y: actionY)
+        recordButton?.position = CGPoint(x: size.width / 2 - 80 - buttonSpacing / 2, y: actionY)
         recordButton?.name = "recordButton"
         addChild(recordButton!)
         
@@ -184,12 +185,12 @@ class RegiaScene: SKScene {
         recordLabel?.position = CGPoint(x: 0, y: 0)
         recordButton?.addChild(recordLabel!)
         
-        // Start Demo Button
+        // Start Demo Button (destra)
         let startButton = SKShapeNode(rectOf: CGSize(width: 220, height: 60), cornerRadius: 12)
         startButton.fillColor = UIColor(red: 0.0, green: 0.5, blue: 1.0, alpha: 1.0)
         startButton.strokeColor = .yellow
         startButton.lineWidth = 3
-        startButton.position = CGPoint(x: size.width / 2, y: actionY - 70)
+        startButton.position = CGPoint(x: size.width / 2 + 110 + buttonSpacing / 2, y: actionY + 5)
         startButton.name = "startDemo"
         addChild(startButton)
         
