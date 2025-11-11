@@ -20,6 +20,7 @@ class MainMenuScene: SKScene {
     private var hiScoreButton: SKShapeNode!
     private var hiScoreButtonLabel: SKLabelNode!
     private var debugButton: SKShapeNode?
+    private var regiaButton: SKShapeNode?
     
     // Music player per sottofondo
     private var musicPlayer: AVAudioPlayer?
@@ -37,6 +38,7 @@ class MainMenuScene: SKScene {
         // Pulsante debug temporaneo
         if debugButtonEnabled {
             setupDebugButton()
+            setupRegiaButton()  // Pulsante Regia a fianco del DEBUG
         }
         
         // Avvia musica di sottofondo
@@ -369,6 +371,31 @@ class MainMenuScene: SKScene {
         }
     }
     
+    private func setupRegiaButton() {
+        // Bottone REGIA accanto al DEBUG (a destra)
+        let buttonSize: CGFloat = 80
+        
+        regiaButton = SKShapeNode(rectOf: CGSize(width: buttonSize, height: buttonSize * 0.6), cornerRadius: 5)
+        regiaButton?.fillColor = UIColor.red.withAlphaComponent(0.3)
+        regiaButton?.strokeColor = .yellow
+        regiaButton?.lineWidth = 2
+        regiaButton?.position = CGPoint(x: 160, y: 50)  // A destra del DEBUG
+        regiaButton?.zPosition = 10
+        regiaButton?.name = "regiaButton"
+        
+        if let button = regiaButton {
+            addChild(button)
+            
+            let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+            label.text = "REGIA"
+            label.fontSize = 14
+            label.fontColor = .yellow
+            label.verticalAlignmentMode = .center
+            label.zPosition = 11
+            button.addChild(label)
+        }
+    }
+    
     // MARK: - Altri sfondi
     
     private func setupDeepSpaceBackground() {
@@ -669,6 +696,9 @@ class MainMenuScene: SKScene {
             } else if node.name == "debugButton" || node.parent?.name == "debugButton" {
                 showDebugScene()
                 return
+            } else if node.name == "regiaButton" || node.parent?.name == "regiaButton" {
+                showRegiaScene()
+                return
             }
         }
     }
@@ -711,6 +741,17 @@ class MainMenuScene: SKScene {
             let debugScene = DebugScene(size: self.size)
             debugScene.scaleMode = .aspectFill
             self.view?.presentScene(debugScene, transition: transition)
+        }
+    }
+    
+    private func showRegiaScene() {
+        // Fade out musica, poi transizione alla pagina Regia
+        fadeOutMusic { [weak self] in
+            guard let self = self else { return }
+            let transition = SKTransition.fade(withDuration: 0.5)
+            let regiaScene = RegiaScene(size: self.size)
+            regiaScene.scaleMode = .aspectFill
+            self.view?.presentScene(regiaScene, transition: transition)
         }
     }
 }

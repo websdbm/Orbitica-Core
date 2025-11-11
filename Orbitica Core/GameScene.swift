@@ -223,6 +223,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var orbitalGrappleStrength: CGFloat = 0.0   // 0.0 = libero, 1.0 = completamente agganciato
     private var currentOrbitalRing: Int = 0  // 1, 2, o 3 - quale anello è agganciato
     private var lastOrbitalVelocity: CGVector = .zero    // Ultima velocità orbitale calcolata (per conservazione moto allo sgancio)
+    private var justDetachedFromOrbit: Bool = false      // Flag per evitare interferenze subito dopo lo sgancio
+    private var detachCooldownFrames: Int = 0            // Frames di cooldown dopo sgancio
+    private var radialThrustAccumulator: CGFloat = 0.0   // Accumula spinta radiale per sgancio graduale (serve "attrito")
     // Player slingshot state
     private var playerSlingshotOrbits: Int = 0
     private var playerSlingshotStartAngle: CGFloat = 0.0
@@ -471,6 +474,66 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupParallaxBackground()
     }
     
+    // MARK: - Environment Cleanup
+    
+    /// Rimuove TUTTI gli effetti specifici dell'ambiente precedente
+    /// Chiamata PRIMA di applicare un nuovo ambiente per evitare sovrapposizioni
+    private func cleanupPreviousEnvironment() {
+        print("🧹 Cleaning up previous environment effects...")
+        
+        // 1. Rimuovi TUTTI gli emitter di particelle dal worldLayer
+        worldLayer.children.forEach { node in
+            if node is SKEmitterNode {
+                print("   ❌ Removing emitter: \(node.name ?? "unnamed")")
+                node.removeFromParent()
+            }
+        }
+        
+        // 2. Rimuovi nodi specifici degli ambienti enhanced (PER NOME)
+        let environmentNodes = [
+            "backgroundStars",          // Cosmic Nebula, Nebula Galaxy
+            "cosmicNebulaLayer1",       // Cosmic Nebula 3-layer (fondo)
+            "cosmicNebulaLayer2",       // Cosmic Nebula 3-layer (medio)
+            "cosmicNebulaLayer3",       // Cosmic Nebula 3-layer (fronte)
+            "mainNebula",               // Nebula Galaxy sprite
+            "mainSolarSystem",          // Animated Cosmos
+            "parallaxStarfield",        // Deep Space Enhanced
+            "nebula",                   // Altri ambienti
+            "starfield"                 // Altri starfield
+        ]
+        
+        for nodeName in environmentNodes {
+            if let node = worldLayer.childNode(withName: nodeName) {
+                print("   ❌ Removing: \(nodeName)")
+                node.removeFromParent()
+            }
+        }
+        
+        // 3. Rimuovi TUTTI i nodi con nomi che contengono keywords di ambiente
+        // MA PROTEGGI i nodi di gioco essenziali
+        let protectedNames = ["planet", "atmosphere", "player", "asteroid", "bullet", "powerup", "orbital"]
+        let environmentKeywords = ["dust", "nebula", "solar", "cosmic", "star", "galaxy"]
+        
+        worldLayer.children.forEach { node in
+            if let nodeName = node.name?.lowercased() {
+                // Verifica se è protetto
+                let isProtected = protectedNames.contains { nodeName.contains($0.lowercased()) }
+                
+                if !isProtected {
+                    // Verifica se contiene keyword di ambiente
+                    let isEnvironmentNode = environmentKeywords.contains { nodeName.contains($0) }
+                    
+                    if isEnvironmentNode {
+                        print("   ❌ Removing environment keyword node: \(node.name ?? "unnamed")")
+                        node.removeFromParent()
+                    }
+                }
+            }
+        }
+        
+        print("✅ Environment cleanup complete")
+    }
+    
     private func setupParallaxBackground() {
         // Sequenza fissa basata sulla wave corrente (ciclo attraverso tutti i 12 ambienti)
         let environments: [SpaceEnvironment] = [
@@ -500,7 +563,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func applyEnvironment(_ environment: SpaceEnvironment) {
-        // Rimuovi layer esistenti
+        // PULIZIA COMPLETA degli effetti dell'ambiente precedente
+        cleanupPreviousEnvironment()
+        
+        // Rimuovi layer esistenti (legacy)
         starsLayer1?.removeFromParent()
         starsLayer2?.removeFromParent()
         starsLayer3?.removeFromParent()
@@ -892,56 +958,103 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         worldLayer.addChild(backgroundStars)
         
-        // 2. NEBULOSA GRANDE ANIMATA (usando nebula02.png)
-        print("🔍 DEBUG: Tentativo caricamento nebula02.png")
-        if let imagePath = Bundle.main.path(forResource: "nebula02", ofType: "png") {
-            print("✅ DEBUG: PNG trovato al path: \(imagePath)")
-        } else {
-            print("❌ DEBUG: nebula02.png NON trovata nel bundle")
-        }
+        // 2. NEBULOSA TRIPLA LAYER (parallasse rotazionale concentrico)
+        print("🔍 DEBUG: Creazione nebulosa a 3 layer con nebula02.png")
         
         let nebulaTexture = SKTexture(imageNamed: "nebula02")
         print("🔍 DEBUG: Texture size: \(nebulaTexture.size())")
-        let nebula = SKSpriteNode(texture: nebulaTexture)
-        nebula.name = "cosmicNebula"
-        nebula.zPosition = -900
         
-        // Posizione random nel mondo (non al centro)
+        // Posizione condivisa per tutti i layer (stesso centro)
         let positions: [(x: CGFloat, y: CGFloat)] = [
             (size.width * 0.30, size.height * 0.70),
             (size.width * 0.70, size.height * 0.30),
             (size.width * 0.25, size.height * 0.40),
             (size.width * 0.75, size.height * 0.60)
         ]
-        let chosenPos = positions.randomElement()!
-        nebula.position = CGPoint(x: chosenPos.x, y: chosenPos.y)
+        let sharedPosition = positions.randomElement()!
+        let nebulaPosition = CGPoint(x: sharedPosition.x, y: sharedPosition.y)
         
-        // Scala grande
-        let nebulaScale = CGFloat.random(in: 2.5...3.5)
-        nebula.setScale(nebulaScale)
+        // Scala condivisa per tutti i layer
+        let sharedScale = CGFloat.random(in: 2.5...3.5)
         
-        // Opacità bassa per sfondo elegante
-        nebula.alpha = 0.25
+        // LAYER 1: Nebulosa di fondo (più lenta, più trasparente)
+        let nebulaLayer1 = SKSpriteNode(texture: nebulaTexture)
+        nebulaLayer1.name = "cosmicNebulaLayer1"
+        nebulaLayer1.position = nebulaPosition
+        nebulaLayer1.setScale(sharedScale)
+        nebulaLayer1.alpha = 0.60  // 60% opacità (più in alto)
+        nebulaLayer1.blendMode = .add
+        nebulaLayer1.zPosition = -920  // Più lontano
+        nebulaLayer1.zRotation = 0  // Parte da 0°
+        worldLayer.addChild(nebulaLayer1)
         
-        // Blend mode per effetto nebulosa
-        nebula.blendMode = .add
+        // LAYER 2: Nebulosa intermedia (velocità media, opacità media)
+        let nebulaLayer2 = SKSpriteNode(texture: nebulaTexture)
+        nebulaLayer2.name = "cosmicNebulaLayer2"
+        nebulaLayer2.position = nebulaPosition
+        nebulaLayer2.setScale(sharedScale)
+        nebulaLayer2.alpha = 0.80  // 80% opacità (più in basso)
+        nebulaLayer2.blendMode = .add
+        nebulaLayer2.zPosition = -910  // Intermedio
+        nebulaLayer2.zRotation = .pi * 2 / 3  // Parte da 120°
+        worldLayer.addChild(nebulaLayer2)
         
-        worldLayer.addChild(nebula)
+        // LAYER 3: Nebulosa frontale (più veloce, più opaca)
+        let nebulaLayer3 = SKSpriteNode(texture: nebulaTexture)
+        nebulaLayer3.name = "cosmicNebulaLayer3"
+        nebulaLayer3.position = nebulaPosition
+        nebulaLayer3.setScale(sharedScale)
+        nebulaLayer3.alpha = 1.0  // 100% opacità (più vicino)
+        nebulaLayer3.blendMode = .add
+        nebulaLayer3.zPosition = -900  // Più vicino
+        nebulaLayer3.zRotation = .pi * 4 / 3  // Parte da 240°
+        worldLayer.addChild(nebulaLayer3)
         
-        // ROTAZIONE MOLTO LENTA (120-180 secondi per giro completo)
-        let rotationDuration = Double.random(in: 120...180)
-        let rotationDirection: CGFloat = Bool.random() ? 1 : -1
-        let rotate = SKAction.rotate(byAngle: .pi * 2 * rotationDirection, duration: rotationDuration)
-        nebula.run(SKAction.repeatForever(rotate))
+        // ROTAZIONI DIFFERENZIATE (parallasse concentrico)
+        // Layer 1 (fondo): MOLTO LENTO
+        let duration1 = 240.0  // 4 minuti per giro completo
+        let rotate1 = SKAction.rotate(byAngle: .pi * 2, duration: duration1)
+        nebulaLayer1.run(SKAction.repeatForever(rotate1))
         
-        // Pulsazione leggera dell'alpha
-        let pulse = SKAction.sequence([
-            SKAction.fadeAlpha(to: 0.18, duration: Double.random(in: 8...12)),
-            SKAction.fadeAlpha(to: 0.32, duration: Double.random(in: 8...12))
+        // Layer 2 (medio): MEDIO
+        let duration2 = 160.0  // 2.67 minuti per giro completo (1.5x più veloce)
+        let rotate2 = SKAction.rotate(byAngle: .pi * 2, duration: duration2)
+        nebulaLayer2.run(SKAction.repeatForever(rotate2))
+        
+        // Layer 3 (fronte): PIÙ VELOCE
+        let duration3 = 100.0  // 1.67 minuti per giro completo (2.4x più veloce del fondo)
+        let rotate3 = SKAction.rotate(byAngle: .pi * 2, duration: duration3)
+        nebulaLayer3.run(SKAction.repeatForever(rotate3))
+        
+        // Pulsazione leggera coordinata su tutti i layer
+        let basePulseAlpha1: CGFloat = 0.60
+        let basePulseAlpha2: CGFloat = 0.80
+        let basePulseAlpha3: CGFloat = 1.0
+        let pulseDuration = Double.random(in: 10...15)
+        
+        let pulse1 = SKAction.sequence([
+            SKAction.fadeAlpha(to: basePulseAlpha1 * 0.7, duration: pulseDuration),
+            SKAction.fadeAlpha(to: basePulseAlpha1, duration: pulseDuration)
         ])
-        nebula.run(SKAction.repeatForever(pulse))
+        nebulaLayer1.run(SKAction.repeatForever(pulse1))
         
-        print("   🌫️ Cosmic Nebula sprite loaded: scale=\(nebulaScale), rotation=\(Int(rotationDuration))s")
+        let pulse2 = SKAction.sequence([
+            SKAction.fadeAlpha(to: basePulseAlpha2 * 0.8, duration: pulseDuration * 0.9),
+            SKAction.fadeAlpha(to: basePulseAlpha2, duration: pulseDuration * 0.9)
+        ])
+        nebulaLayer2.run(SKAction.repeatForever(pulse2))
+        
+        let pulse3 = SKAction.sequence([
+            SKAction.fadeAlpha(to: basePulseAlpha3 * 0.9, duration: pulseDuration * 0.8),
+            SKAction.fadeAlpha(to: basePulseAlpha3, duration: pulseDuration * 0.8)
+        ])
+        nebulaLayer3.run(SKAction.repeatForever(pulse3))
+        
+        print("   � Cosmic Nebula 3-layer parallax created:")
+        print("      Layer 1 (back):   α=60%, rotation=\(Int(duration1))s (slowest)")
+        print("      Layer 2 (mid):    α=80%, rotation=\(Int(duration2))s")
+        print("      Layer 3 (front):  α=100%, rotation=\(Int(duration3))s (fastest)")
+        print("      Scale: \(String(format: "%.2f", sharedScale))x")
         
         // 3. PARTICELLE DUST LEGGERE (2 emitter) - specifiche per Cosmic Nebula
         createCosmicNebulaDustEmitters()
@@ -1124,7 +1237,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Emitter 1: Dust rosa-viola
         let dustEmitter1 = SKEmitterNode()
-        dustEmitter1.name = "dustEmitter1"
+        dustEmitter1.name = "nebulaGalaxyDustEmitter1"
         dustEmitter1.particleTexture = createDustTexture()
         dustEmitter1.particleBirthRate = 0.8  // MOLTO BASSA
         dustEmitter1.particleLifetime = 60  // Lunga vita
@@ -1157,7 +1270,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Emitter 2: Dust blu-cyan
         let dustEmitter2 = SKEmitterNode()
-        dustEmitter2.name = "dustEmitter2"
+        dustEmitter2.name = "nebulaGalaxyDustEmitter2"
         dustEmitter2.particleTexture = createDustTexture()
         dustEmitter2.particleBirthRate = 0.6
         dustEmitter2.particleLifetime = 50
@@ -4191,7 +4304,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let detachThreshold = orbitalDetachThreshold * detachMultiplier
         let effectiveThreshold = isGrappledToOrbit ? detachThreshold : grappleThreshold
         
-        if distanceFromRing < effectiveThreshold && currentSpeed < maxSpeedForGrapple {
+        // COOLDOWN: previeni ri-aggancio immediato dopo sgancio
+        if justDetachedFromOrbit {
+            detachCooldownFrames -= 1
+            if detachCooldownFrames <= 0 {
+                justDetachedFromOrbit = false
+                detachCooldownFrames = 0
+            }
+            // Durante cooldown, NON permettere nuovo aggancio
+            debugLog("⏱️ Detach cooldown: \(detachCooldownFrames) frames remaining")
+        }
+        
+        if distanceFromRing < effectiveThreshold && currentSpeed < maxSpeedForGrapple && !justDetachedFromOrbit {
             if !isGrappledToOrbit || currentOrbitalRing != closestRing {
                 isGrappledToOrbit = true
                 currentOrbitalRing = closestRing
@@ -4242,15 +4366,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             debugLog("⚠️ Distance \(Int(distanceFromRing)) > threshold \(Int(orbitalDetachThreshold)), reducing grapple strength to \(String(format: "%.2f", orbitalGrappleStrength))")
             
             if orbitalGrappleStrength <= 0 {
-                // Sgancio completo - CONSERVA la velocità orbitale
+                // Sgancio completo - CONSERVA la velocità orbitale + APPLICA velocità corrente
                 guard let playerBody = player.physicsBody else { return }
                 
-                // Applica la velocità orbitale memorizzata per conservazione del moto
-                playerBody.velocity = lastOrbitalVelocity
+                // COMBINA velocità orbitale + velocità corrente (per conservazione momentum completo)
+                let finalVelocity = CGVector(
+                    dx: lastOrbitalVelocity.dx + playerBody.velocity.dx * 0.3,
+                    dy: lastOrbitalVelocity.dy + playerBody.velocity.dy * 0.3
+                )
+                playerBody.velocity = finalVelocity
                 
                 isGrappledToOrbit = false
                 orbitalGrappleStrength = 0
                 currentOrbitalRing = 0
+                justDetachedFromOrbit = true      // Attiva cooldown
+                detachCooldownFrames = 30         // 0.5 secondi di cooldown
+                radialThrustAccumulator = 0.0     // Reset accumulo
                 lastOrbitalVelocity = .zero
                 
                 // Ripristina tutti gli anelli (con safe unwrapping)
@@ -4266,41 +4397,58 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         
-        // SGANCIO MANUALE: solo se spinta RADIALE forte (verso dentro/fuori), NON per rotazione tangenziale
+        // SGANCIO MANUALE: ACCUMULO GRADUALE per dare "attrito" e permettere manovre tangenziali
         if isGrappledToOrbit && orbitalGrappleStrength > 0.2 {
             let thrustDirection = joystickDirection
             let forceMagnitude = sqrt(thrustDirection.dx * thrustDirection.dx + thrustDirection.dy * thrustDirection.dy)
             
-            // NUOVO: Calcola componente RADIALE della spinta (proiezione verso centro/esterno)
-            // DOPPIA SOGLIA: gas sufficiente E allineamento radiale
-            if forceMagnitude > 0.85 {  // Soglia gas MOLTO alta: serve gas quasi massimo (era 0.75)
-                // Normalizza direzione player rispetto al centro
-                let playerAngle = atan2(dy, dx)
-                let radialX = cos(playerAngle)  // Direzione verso esterno
-                let radialY = sin(playerAngle)
+            // Normalizza direzione player rispetto al centro
+            let playerAngle = atan2(dy, dx)
+            let radialX = cos(playerAngle)  // Direzione verso esterno
+            let radialY = sin(playerAngle)
+            
+            // Proiezione dot product: quanto la spinta è allineata con direzione radiale
+            let thrustNormX = thrustDirection.dx / max(forceMagnitude, 0.001)  // Evita divisione per zero
+            let thrustNormY = thrustDirection.dy / max(forceMagnitude, 0.001)
+            let radialAlignment = abs(thrustNormX * radialX + thrustNormY * radialY)
+            
+            // SOGLIE PIÙ ALTE per più "attrito":
+            // - Serve GAS MASSIMO (95%+)
+            // - Serve allineamento radiale MOLTO forte (80%+)
+            let minForce: CGFloat = 0.95       // Era 0.85 - ora serve gas quasi pieno
+            let minAlignment: CGFloat = 0.80   // Era 0.65 - ora serve allineamento molto preciso
+            
+            if forceMagnitude > minForce && radialAlignment > minAlignment {
+                // ACCUMULO GRADUALE: la spinta deve essere sostenuta per sganciarsi
+                radialThrustAccumulator += 0.02  // Accumula gradualmente (serve ~25 frame = 0.4s di spinta sostenuta)
                 
-                // Proiezione dot product: quanto la spinta è allineata con direzione radiale
-                let thrustNormX = thrustDirection.dx / forceMagnitude
-                let thrustNormY = thrustDirection.dy / forceMagnitude
-                let radialAlignment = abs(thrustNormX * radialX + thrustNormY * radialY)
-                
-                // Sgancio SOLO se la spinta è FORTEMENTE radiale (> 65% allineamento)
-                if radialAlignment > 0.65 {
-                    // SGANCIO VELOCISSIMO una volta avviato!
-                    orbitalGrappleStrength -= 0.5  // Era 0.15, ora 3x più veloce
+                if radialThrustAccumulator > 0.5 {
+                    // SOGLIA ACCUMULO RAGGIUNTA: inizia sgancio veloce
+                    orbitalGrappleStrength -= 0.4  // Sgancio rapido ma non istantaneo
+                    
+                    debugLog("⚡ Radial thrust accumulated: \(String(format: "%.2f", radialThrustAccumulator)) - detaching! (strength: \(String(format: "%.2f", orbitalGrappleStrength)))")
                     
                     if orbitalGrappleStrength <= 0 {
-                        // Sgancio manuale - CONSERVA la velocità orbitale
+                        // Sgancio manuale - BOOST nella direzione della spinta!
                         
-                        // Applica la velocità orbitale memorizzata per conservazione del moto
-                        playerBody.velocity = lastOrbitalVelocity
+                        // Calcola boost direzionale: velocità orbitale + spinta joystick amplificata
+                        let thrustBoost: CGFloat = 150.0  // Boost significativo
+                        let boostedVelocity = CGVector(
+                            dx: lastOrbitalVelocity.dx + thrustDirection.dx * thrustBoost,
+                            dy: lastOrbitalVelocity.dy + thrustDirection.dy * thrustBoost
+                        )
+                        
+                        playerBody.velocity = boostedVelocity
                         
                         isGrappledToOrbit = false
                         orbitalGrappleStrength = 0
                         currentOrbitalRing = 0
+                        justDetachedFromOrbit = true      // Attiva cooldown
+                        detachCooldownFrames = 30         // 0.5 secondi di cooldown
+                        radialThrustAccumulator = 0.0     // Reset accumulo
                         
-                        let detachSpeed = sqrt(lastOrbitalVelocity.dx * lastOrbitalVelocity.dx + 
-                                              lastOrbitalVelocity.dy * lastOrbitalVelocity.dy)
+                        let detachSpeed = sqrt(boostedVelocity.dx * boostedVelocity.dx + 
+                                              boostedVelocity.dy * boostedVelocity.dy)
                         lastOrbitalVelocity = .zero
                         
                         // Ripristina tutti gli anelli (con safe unwrapping)
@@ -4311,11 +4459,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                         orbitalRing3?.strokeColor = UIColor.white.withAlphaComponent(0.25)
                         orbitalRing3?.lineWidth = 1
                         
-                        debugLog("🔓 Detached from orbital ring (radial thrust) - velocity conserved: \(detachSpeed)")
+                        debugLog("🔓 Detached from orbital ring (radial thrust sustained) - velocity: \(Int(detachSpeed)), accumulator: reset")
                         return
                     }
+                } else {
+                    // Accumulo in corso ma non ancora alla soglia
+                    debugLog("🔄 Accumulating radial thrust: \(String(format: "%.2f", radialThrustAccumulator))/0.5 (force: \(String(format: "%.2f", forceMagnitude)), align: \(String(format: "%.2f", radialAlignment)))")
+                }
+            } else {
+                // NON stai spingendo abbastanza radialmente: DECADI l'accumulo rapidamente
+                if radialThrustAccumulator > 0 {
+                    radialThrustAccumulator -= 0.05  // Decade 2.5x più veloce di quanto accumula
+                    if radialThrustAccumulator < 0 {
+                        radialThrustAccumulator = 0
+                    }
+                    debugLog("⬇️ Radial thrust decay: \(String(format: "%.2f", radialThrustAccumulator)) (insufficient force/alignment)")
                 }
             }
+        } else if !isGrappledToOrbit {
+            // Non agganciato: reset accumulo
+            radialThrustAccumulator = 0.0
         }
         
         // APPLICA EFFETTO ORBITALE (se c'è aggancio)

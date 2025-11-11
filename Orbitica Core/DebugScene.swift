@@ -516,32 +516,51 @@ class DebugScene: SKScene {
         // Stelle di sfondo
         addSimpleStars(count: 80, colorRange: [.white])
         
-        // Nebulosa sprite (nebula02)
-        print("🔍 [DebugScene] Tentativo caricamento nebula02.png")
-        if let imagePath = Bundle.main.path(forResource: "nebula02", ofType: "png") {
-            print("✅ [DebugScene] PNG trovato: \(imagePath)")
-        } else {
-            print("❌ [DebugScene] nebula02.png NON trovata")
-        }
-        
+        // Nebulosa a 3 layer (parallasse concentrico)
         let nebulaTexture = SKTexture(imageNamed: "nebula02")
-        print("🔍 [DebugScene] Texture size: \(nebulaTexture.size())")
-        let nebula = SKSpriteNode(texture: nebulaTexture)
-        nebula.position = CGPoint(x: size.width * 0.6, y: size.height * 0.5)
-        nebula.setScale(1.5)
-        nebula.alpha = 0.3
-        nebula.blendMode = .add
-        nebula.zPosition = -60
-        addChild(nebula)
+        let sharedPosition = CGPoint(x: size.width * 0.6, y: size.height * 0.5)
+        let sharedScale: CGFloat = 1.2
         
-        // Rotazione lenta
-        let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 90)
-        nebula.run(SKAction.repeatForever(rotate))
+        // Layer 1: Fondo (più lento, α=60%)
+        let layer1 = SKSpriteNode(texture: nebulaTexture)
+        layer1.position = sharedPosition
+        layer1.setScale(sharedScale)
+        layer1.alpha = 0.60
+        layer1.blendMode = .add
+        layer1.zPosition = -65
+        layer1.zRotation = 0
+        addChild(layer1)
+        let rotate1 = SKAction.rotate(byAngle: .pi * 2, duration: 120)
+        layer1.run(SKAction.repeatForever(rotate1))
         
-        // Particelle dust (semplificate per preview)
-        for _ in 0..<20 {
-            let dust = SKShapeNode(circleOfRadius: CGFloat.random(in: 2...4))
-            dust.fillColor = UIColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 0.3)
+        // Layer 2: Medio (velocità media, α=80%)
+        let layer2 = SKSpriteNode(texture: nebulaTexture)
+        layer2.position = sharedPosition
+        layer2.setScale(sharedScale)
+        layer2.alpha = 0.80
+        layer2.blendMode = .add
+        layer2.zPosition = -60
+        layer2.zRotation = .pi * 2 / 3
+        addChild(layer2)
+        let rotate2 = SKAction.rotate(byAngle: .pi * 2, duration: 80)
+        layer2.run(SKAction.repeatForever(rotate2))
+        
+        // Layer 3: Fronte (più veloce, α=100%)
+        let layer3 = SKSpriteNode(texture: nebulaTexture)
+        layer3.position = sharedPosition
+        layer3.setScale(sharedScale)
+        layer3.alpha = 1.0
+        layer3.blendMode = .add
+        layer3.zPosition = -55
+        layer3.zRotation = .pi * 4 / 3
+        addChild(layer3)
+        let rotate3 = SKAction.rotate(byAngle: .pi * 2, duration: 50)
+        layer3.run(SKAction.repeatForever(rotate3))
+        
+        // Particelle dust ridotte (solo decorative)
+        for _ in 0..<10 {
+            let dust = SKShapeNode(circleOfRadius: CGFloat.random(in: 2...3))
+            dust.fillColor = UIColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 0.2)
             dust.strokeColor = .clear
             dust.position = CGPoint(
                 x: CGFloat.random(in: 0...size.width),
@@ -550,17 +569,15 @@ class DebugScene: SKScene {
             dust.zPosition = -50
             addChild(dust)
             
-            // Movimento lento
-            let duration = Double.random(in: 20...30)
-            let moveBy = CGVector(dx: CGFloat.random(in: -50...50), dy: CGFloat.random(in: -50...50))
+            let duration = Double.random(in: 25...35)
+            let moveBy = CGVector(dx: CGFloat.random(in: -40...40), dy: CGFloat.random(in: -40...40))
             let move = SKAction.move(by: moveBy, duration: duration)
-            let moveBack = move.reversed()
-            dust.run(SKAction.repeatForever(SKAction.sequence([move, moveBack])))
+            dust.run(SKAction.repeatForever(SKAction.sequence([move, move.reversed()])))
         }
         
         // Indicatore
         let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        label.text = "COSMIC NEBULA"
+        label.text = "COSMIC NEBULA (3-Layer)"
         label.fontSize = 16
         label.fontColor = UIColor(red: 0.8, green: 0.6, blue: 0.9, alpha: 1.0)
         label.position = CGPoint(x: size.width/2, y: 30)
