@@ -451,12 +451,13 @@ class RegiaScene: SKScene {
         let gameScene = GameScene(size: size)
         gameScene.scaleMode = .aspectFill
         
-        // TODO: Passa configurazione al GameScene
-        // gameScene.startingWave = selectedWave
-        // gameScene.aiDifficulty = selectedDifficulty
+        // Passa configurazione al GameScene
+        gameScene.startingWave = selectedWave
+        gameScene.aiDifficulty = selectedDifficulty
+        gameScene.useAIController = autoPlay
+        // TODO: implementare backgroundIndex e musicTrack
         // gameScene.backgroundIndex = selectedBackground
         // gameScene.musicTrack = musicTracks[selectedMusic]
-        // gameScene.useAIController = autoPlay
         
         view?.presentScene(gameScene, transition: SKTransition.fade(withDuration: 1.0))
     }

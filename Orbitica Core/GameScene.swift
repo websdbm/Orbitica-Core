@@ -183,6 +183,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Starting wave (per debug scene)
     var startingWave: Int = 1
     
+    // AI Controller configuration
+    var useAIController: Bool = false
+    var aiDifficulty: AIController.AIDifficulty = .normal
+    private var aiController: AIController?
+    
     // Helper per log condizionali
     private func debugLog(_ message: String) {
         if debugMode {
@@ -2894,6 +2899,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupControls() {
         debugLog("=== CONTROLS SETUP START ===")
         debugLog("Scene size: \(size)")
+        debugLog("AI Mode: \(useAIController)")
+        
+        // Se AI è attiva, inizializza il controller AI e nascondi i controlli
+        if useAIController {
+            aiController = AIController(difficulty: aiDifficulty)
+            debugLog("✅ AI Controller initialized with difficulty: \(aiDifficulty)")
+            // Non creare controlli fisici - l'AI comanderà direttamente
+            return
+        }
         
         // Coordinate relative alla camera (centrata sullo schermo)
         let halfWidth = size.width / 2
@@ -3119,6 +3133,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if isGamePaused { return }
         
         lastUpdateTime = currentTime  // Salva per usarlo in didBegin
+        
+        // Aggiorna AI Controller se attivo
+        if useAIController, let ai = aiController {
+            let inputs = ai.update(
+                scene: self,
+                player: player,
+                planet: planet,
+                asteroids: asteroids.compactMap { $0 as SKNode },
+                deltaTime: currentTime - lastUpdateTime
+            )
+            // Applica gli input dell'AI
+            joystickDirection = inputs.movement
+            isFiring = inputs.shouldFire
+            isBraking = inputs.shouldBrake
+        }
         
         applyGravity()
         applyRepulsorForces()  // Gestisce repulsione asteroidi repulsor sul player
