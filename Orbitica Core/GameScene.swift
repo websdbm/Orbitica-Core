@@ -90,7 +90,7 @@ enum AsteroidType {
     var healthMultiplier: Int {
         switch self {
         case .armored: return 2  // Armored richiede 2 colpi
-        case .heavy: return 4     // Heavy molto resistente - richiede 4 colpi
+        case .heavy: return 3     // Heavy resistente - richiede 3 colpi (ridotto da 4)
         case .square: return 2    // Square richiede 2 colpi (doppia resistenza)
         case .repulsor: return 2  // Repulsor richiede 2 colpi
         default: return 1
@@ -6231,9 +6231,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             case .small: basePoints = 10
             }
             
-            // SQUARE asteroids valgono IL DOPPIO
-            let isSquare = asteroid.name?.contains("square") ?? false
-            let typeMultiplier: CGFloat = isSquare ? 2.0 : 1.0
+            // Moltiplicatori per tipo speciale
+            let asteroidType = asteroid.userData?["type"] as? AsteroidType
+            let typeMultiplier: CGFloat
+            
+            if let type = asteroidType {
+                switch type {
+                case .square: typeMultiplier = 2.0      // Square: 2x punti
+                case .heavy: typeMultiplier = 3.0       // Heavy (verde): 3x punti
+                case .armored: typeMultiplier = 1.5     // Armored: 1.5x punti
+                case .repulsor: typeMultiplier = 2.0    // Repulsor: 2x punti
+                case .explosive: typeMultiplier = 1.5   // Explosive: 1.5x punti
+                case .fast: typeMultiplier = 1.3        // Fast: 1.3x punti
+                default: typeMultiplier = 1.0           // Normal: 1x punti
+                }
+            } else {
+                typeMultiplier = 1.0
+            }
             
             let points = Int(CGFloat(basePoints) * damageMultiplier * typeMultiplier)
             score += points
@@ -7408,8 +7422,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             case .small: basePoints = 10
             }
             
-            let isSquare = asteroid.name?.contains("square") ?? false
-            let points = isSquare ? basePoints * 2 : basePoints
+            // Moltiplicatori per tipo speciale
+            let asteroidType = asteroid.userData?["type"] as? AsteroidType
+            let typeMultiplier: CGFloat
+            
+            if let type = asteroidType {
+                switch type {
+                case .square: typeMultiplier = 2.0      // Square: 2x punti
+                case .heavy: typeMultiplier = 3.0       // Heavy (verde): 3x punti
+                case .armored: typeMultiplier = 1.5     // Armored: 1.5x punti
+                case .repulsor: typeMultiplier = 2.0    // Repulsor: 2x punti
+                case .explosive: typeMultiplier = 1.5   // Explosive: 1.5x punti
+                case .fast: typeMultiplier = 1.3        // Fast: 1.3x punti
+                default: typeMultiplier = 1.0           // Normal: 1x punti
+                }
+            } else {
+                typeMultiplier = 1.0
+            }
+            
+            let points = Int(CGFloat(basePoints) * typeMultiplier)
             score += points
             scoreLabel.text = "\(score)"
             showPointsLabel(points: points, at: asteroid.position)
