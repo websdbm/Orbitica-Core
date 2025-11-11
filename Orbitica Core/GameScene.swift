@@ -3332,8 +3332,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             if magnitude > 0.1 {
                 // FISICA: Applica forza proporzionale
-                // In AI mode: motori MOLTO più potenti per contrastare la gravità planetaria
-                let thrustPower: CGFloat = useAIController ? 500.0 : 116.0
+                // In AI mode: motori bilanciati per movimento naturale
+                let thrustPower: CGFloat = useAIController ? 300.0 : 116.0
                 let forceX = joystickDirection.dx * thrustPower * magnitude
                 let forceY = joystickDirection.dy * thrustPower * magnitude
                 

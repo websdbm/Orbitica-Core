@@ -74,13 +74,27 @@ class ReplayManager: NSObject {
                 return
             }
             
-            // Salva automaticamente nel rullino
+            // Mostra il preview per salvare il video
             if let previewController = previewController {
                 previewController.previewControllerDelegate = self
-                print("✅ Recording stopped, preview available")
+                
+                // Trova il view controller corrente per mostrare il preview
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootVC = windowScene.windows.first?.rootViewController {
+                    
+                    // Trova il view controller top-most
+                    var topVC = rootVC
+                    while let presentedVC = topVC.presentedViewController {
+                        topVC = presentedVC
+                    }
+                    
+                    print("✅ Showing recording preview")
+                    topVC.present(previewController, animated: true) {
+                        print("📹 Preview shown - user can save/share the video")
+                    }
+                }
             }
             
-            print("✅ Recording completed")
             completion(nil, nil)
         }
     }

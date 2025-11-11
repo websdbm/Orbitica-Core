@@ -85,9 +85,9 @@ class AIController: PlayerController {
         
         var orbitRadiusMultiplier: CGFloat {
             switch self {
-            case .easy: return 4.0    // Orbita molto larga (160px)
-            case .normal: return 3.5  // Orbita larga (140px)  
-            case .hard: return 3.0    // Orbita media (120px)
+            case .easy: return 5.0    // Orbita molto larga (200px)
+            case .normal: return 4.5  // Orbita larga (180px)  
+            case .hard: return 4.0    // Orbita media (160px)
             }
         }
         
@@ -101,9 +101,9 @@ class AIController: PlayerController {
         
         var reactionSpeed: CGFloat {
             switch self {
-            case .easy: return 0.8
-            case .normal: return 1.0  // Reazione più veloce
-            case .hard: return 1.2
+            case .easy: return 0.6    // Lento
+            case .normal: return 0.75 // Naturale
+            case .hard: return 0.9    // Veloce
             }
         }
     }
@@ -131,13 +131,13 @@ class AIController: PlayerController {
         let safetyZone = desiredOrbitRadius * 0.9  // Zona di sicurezza più ampia
         
         if currentRadius < safetyZone {
-            // EMERGENZA: allontanati SEMPRE dal pianeta se troppo vicino
+            // EMERGENZA: allontanati dal pianeta se troppo vicino
             let radialX = shipVector.dx / currentRadius
             let radialY = shipVector.dy / currentRadius
             
-            // Considera anche la velocità: se stai andando verso il pianeta, spinta massima
+            // Considera anche la velocità: se stai andando verso il pianeta, spinta maggiore
             let velocityTowardPlanet = -(state.playerVelocity.dx * radialX + state.playerVelocity.dy * radialY)
-            let urgency: CGFloat = velocityTowardPlanet > 0 ? 2.0 : 1.5  // Più urgente se ti stai avvicinando
+            let urgency: CGFloat = velocityTowardPlanet > 0 ? 1.3 : 1.0  // Meno urgente per movimento naturale
             
             thrust = CGVector(dx: radialX * urgency, dy: radialY * urgency)
             
@@ -167,12 +167,12 @@ class AIController: PlayerController {
                 if dotProduct > 0.3 {
                     // Il target è troppo verso il pianeta: bilancia movimento
                     thrust = CGVector(
-                        dx: targetDirX * 0.8 + radialX * 0.7,  // Mix: 80% target + 70% fuga
-                        dy: targetDirY * 0.8 + radialY * 0.7
+                        dx: targetDirX * 0.6 + radialX * 0.5,  // Mix più cauto
+                        dy: targetDirY * 0.6 + radialY * 0.5
                     )
                 } else {
-                    // Target sicuro: vai aggressivamente
-                    thrust = CGVector(dx: targetDirX * 1.5, dy: targetDirY * 1.5)
+                    // Target sicuro: movimento moderato
+                    thrust = CGVector(dx: targetDirX * 1.0, dy: targetDirY * 1.0)
                 }
             }
         } else {
@@ -203,6 +203,7 @@ class AIController: PlayerController {
             dy: target.position.y - state.playerPosition.y
         )
         let targetAngle = atan2(toTarget.dy, toTarget.dx)
+        let targetDistance = sqrt(toTarget.dx * toTarget.dx + toTarget.dy * toTarget.dy)
         
         // IMPORTANTE: player.zRotation ha offset di -π/2 perché la texture punta verso l'alto
         // Compensiamo per ottenere l'angolo effettivo della nave
@@ -214,8 +215,41 @@ class AIController: PlayerController {
             angleDiff = 2 * .pi - angleDiff
         }
         
-        // Spara se allineato entro la tolleranza
-        let shouldShoot = angleDiff < difficulty.aimTolerance
+        // Verifica che sia allineato
+        guard angleDiff < difficulty.aimTolerance else { return false }
+        
+        // VERIFICA CRITICA: il pianeta è sulla linea di tiro?
+        // Calcola la distanza minima tra la linea di tiro e il centro del pianeta
+        let toPlanet = CGVector(
+            dx: state.planetPosition.x - state.playerPosition.x,
+            dy: state.planetPosition.y - state.playerPosition.y
+        )
+        let planetDistance = sqrt(toPlanet.dx * toPlanet.dx + toPlanet.dy * toPlanet.dy)
+        
+        // Proietta il vettore al pianeta sulla direzione di sparo
+        let planetAngle = atan2(toPlanet.dy, toPlanet.dx)
+        let angleToShot = abs(planetAngle - shipAngle)
+        let normalizedAngleToShot = angleToShot > .pi ? 2 * .pi - angleToShot : angleToShot
+        
+        // Distanza perpendicolare dalla linea di tiro al pianeta
+        let perpendicularDistance = abs(planetDistance * sin(normalizedAngleToShot))
+        
+        // Se il pianeta è troppo vicino alla linea di tiro E davanti alla nave, NON SPARARE
+        let planetIsAhead = cos(normalizedAngleToShot) > 0  // Pianeta è davanti
+        let safetyMargin: CGFloat = state.planetRadius + 30  // Margine di sicurezza
+        
+        if planetIsAhead && perpendicularDistance < safetyMargin {
+            // Il pianeta è sulla traiettoria - NON SPARARE
+            return false
+        }
+        
+        // Anche il target deve essere più lontano del pianeta (non sparare "attraverso" il pianeta)
+        if planetIsAhead && planetDistance < targetDistance {
+            return false
+        }
+        
+        // Tutto ok: spara!
+        let shouldShoot = true
         
         if shouldShoot {
             lastFireTime = currentTime
