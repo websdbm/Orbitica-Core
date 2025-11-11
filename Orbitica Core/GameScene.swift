@@ -8111,21 +8111,6 @@ class BrakeButtonNode: SKNode {
     }
 }
 
-// MARK: - CGVector Extensions for Reflection
-extension CGVector {
-    // Normalizza il vettore
-    func normalized() -> CGVector {
-        let length = sqrt(dx * dx + dy * dy)
-        guard length > 0 else { return CGVector.zero }
-        return CGVector(dx: dx / length, dy: dy / length)
-    }
-    
-    // Prodotto scalare
-    static func * (lhs: CGVector, rhs: CGVector) -> CGFloat {
-        return lhs.dx * rhs.dx + lhs.dy * rhs.dy
-    }
-}
-
 // MARK: - Enhanced Background System (New)
 
 extension GameScene {
@@ -8189,26 +8174,3 @@ extension GameScene {
 // MARK: - PROJECTILE REFLECTION FEATURE (DISABLED - WIP)
 // Vedi REFLECTION_FEATURE_WIP.md per codice completo
 // Disabilitato perché i proiettili trapassano l'atmosfera
-
-// MARK: - CGVector Extension (per uso futuro)
-extension CGVector {
-    
-    // Riflessione del vettore rispetto a una normale
-    // Formula: v' = v - 2 * (v · n) * n
-    func bounced(withNormal normal: CGVector) -> CGVector {
-        let normalizedSelf = self.normalized()
-        let normalizedNormal = normal.normalized()
-        let dotProduct = normalizedSelf * normalizedNormal
-        
-        // Riflessione: v - 2(v·n)n
-        let dx = self.dx - 2 * dotProduct * normalizedNormal.dx
-        let dy = self.dy - 2 * dotProduct * normalizedNormal.dy
-        
-        return CGVector(dx: dx, dy: dy)
-    }
-    
-    // Lunghezza del vettore
-    var magnitude: CGFloat {
-        return sqrt(dx * dx + dy * dy)
-    }
-}
