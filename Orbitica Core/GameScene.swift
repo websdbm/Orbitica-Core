@@ -7270,6 +7270,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func checkWaveBlastDamage() {
+        // Accumula tutti gli asteroidi da distruggere invece di processarli subito
+        var asteroidsToDestroy: [(asteroid: SKShapeNode, progress: CGFloat)] = []
+        
         // Controlla ogni 0.05s durante i 0.5s di espansione (10 controlli totali)
         let checkInterval: TimeInterval = 0.05
         let totalChecks = 10
@@ -7286,10 +7289,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Converti in coordinate world (la barriera è relativa al player)
             let blastCenterWorld = player.position
             
-            // Danneggia asteroidi nel raggio
-            var asteroidsToDestroy: [SKShapeNode] = []
-            
+            // Identifica asteroidi nel raggio
             for asteroid in asteroids {
+                // Skip se già in lista
+                if asteroidsToDestroy.contains(where: { $0.asteroid == asteroid }) {
+                    continue
+                }
+                
                 let dx = asteroid.position.x - blastCenterWorld.x
                 let dy = asteroid.position.y - blastCenterWorld.y
                 let distance = sqrt(dx * dx + dy * dy)
@@ -7303,26 +7309,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     ])
                     asteroid.run(flash)
                     
-                    // Controlla se ha vita (armored)
-                    if let health = asteroid.userData?["health"] as? Int, health > 1 {
-                        // Riduci la vita di 2 (equivalente a 2 colpi normali)
-                        let newHealth = max(0, health - 2)
-                        asteroid.userData?["health"] = newHealth
-                        
-                        // Se la vita arriva a 0, distruggi
-                        if newHealth <= 0 {
-                            asteroidsToDestroy.append(asteroid)
-                        }
-                    } else {
-                        // Asteroide normale o armored con 1 vita rimasta -> distruggi
-                        asteroidsToDestroy.append(asteroid)
-                    }
+                    // Aggiungi alla lista per distruzione batch
+                    asteroidsToDestroy.append((asteroid: asteroid, progress: progress))
                 }
-            }
-            
-            // Distruggi gli asteroidi colpiti (usa fragmentAsteroid per gestire frammenti e punti)
-            for asteroid in asteroidsToDestroy {
-                fragmentAsteroid(asteroid, damageMultiplier: 2.0)
             }
             
             // Pianifica il prossimo controllo se non abbiamo finito
@@ -7330,11 +7319,116 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + checkInterval) {
                     performCheck()
                 }
+            } else {
+                // Ultimo controllo completato: processa tutti gli asteroidi in batch
+                processWaveBlastDestructions(asteroidsToDestroy)
             }
         }
         
         // Inizia i controlli
         performCheck()
+    }
+    
+    private func processWaveBlastDestructions(_ asteroidsToDestroy: [(asteroid: SKShapeNode, progress: CGFloat)]) {
+        // Limita il numero totale di frammenti generabili
+        let maxTotalFragments = 25
+        var fragmentsCreated = 0
+        
+        debugLog("💥 Wave Blast: processing \(asteroidsToDestroy.count) asteroids")
+        
+        // Processa asteroidi in batch con delay minimo
+        for (index, item) in asteroidsToDestroy.enumerated() {
+            let asteroid = item.asteroid
+            
+            // Delay incrementale per distribuire il carico
+            let delay = Double(index) * 0.02  // 20ms tra ogni asteroide
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self else { return }
+                
+                // Verifica che l'asteroide esista ancora
+                guard self.asteroids.contains(asteroid) else { return }
+                
+                // Gestisci asteroidi armored
+                if let health = asteroid.userData?["health"] as? Int, health > 1 {
+                    let newHealth = max(0, health - 2)  // Wave fa 2 danni
+                    asteroid.userData?["health"] = newHealth
+                    
+                    if newHealth <= 0 {
+                        // Distruggi senza frammenti (armored esaurito)
+                        self.destroyAsteroidSimple(asteroid, givePoints: true)
+                    }
+                    return
+                }
+                
+                // Ottieni la size
+                guard let sizeString = asteroid.name?.split(separator: "_").last,
+                      let sizeRaw = Int(String(sizeString)),
+                      let size = AsteroidSize(rawValue: sizeRaw) else {
+                    self.destroyAsteroidSimple(asteroid, givePoints: true)
+                    return
+                }
+                
+                // LIMITE FRAMMENTI: genera frammenti SOLO se non abbiamo superato il limite
+                if fragmentsCreated >= maxTotalFragments || size == .small {
+                    // Distruggi senza frammenti
+                    self.destroyAsteroidSimple(asteroid, givePoints: true)
+                } else {
+                    // Crea frammenti limitati
+                    let fragmentsToCreate = size == .large ? 2 : 1  // Large -> 2 medium, Medium -> 1 small
+                    
+                    if fragmentsCreated + fragmentsToCreate <= maxTotalFragments {
+                        // Usa fragmentAsteroid normale
+                        self.fragmentAsteroid(asteroid, damageMultiplier: 2.0, givePoints: true)
+                        fragmentsCreated += fragmentsToCreate
+                    } else {
+                        // Non abbastanza spazio per frammenti completi: distruggi senza frammentare
+                        self.destroyAsteroidSimple(asteroid, givePoints: true)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func destroyAsteroidSimple(_ asteroid: SKShapeNode, givePoints: Bool) {
+        // Distrugge asteroide senza creare frammenti (per ottimizzazione Wave Blast)
+        guard let sizeString = asteroid.name?.split(separator: "_").last,
+              let sizeRaw = Int(String(sizeString)),
+              let size = AsteroidSize(rawValue: sizeRaw) else {
+            asteroid.removeFromParent()
+            asteroids.removeAll { $0 == asteroid }
+            return
+        }
+        
+        if givePoints {
+            let basePoints: Int
+            switch size {
+            case .large: basePoints = 20
+            case .medium: basePoints = 15
+            case .small: basePoints = 10
+            }
+            
+            let isSquare = asteroid.name?.contains("square") ?? false
+            let points = isSquare ? basePoints * 2 : basePoints
+            score += points
+            scoreLabel.text = "\(score)"
+            showPointsLabel(points: points, at: asteroid.position)
+        }
+        
+        // Effetto visivo ridotto
+        let position = asteroid.position
+        let asteroidType = asteroid.userData?["type"] as? AsteroidType
+        let explosionColor = asteroidType?.color ?? .white
+        
+        createCollisionParticles(at: position, color: explosionColor)  // Particelle ridotte invece di esplosione completa
+        playExplosionSound()
+        
+        // Possibilità di power-up
+        spawnPowerUp(at: position)
+        
+        // Rimuovi
+        asteroid.removeFromParent()
+        asteroids.removeAll { $0 == asteroid }
     }
     
     // MARK: - Pause System
