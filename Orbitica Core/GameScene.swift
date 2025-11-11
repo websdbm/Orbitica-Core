@@ -3181,6 +3181,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 )
             }
             
+            // Raccogli tutti i power-up sulla scena
+            let powerupInfos: [PowerupInfo] = worldLayer.children.compactMap { node in
+                guard let name = node.name, name.hasPrefix("powerup_") else { return nil }
+                let type = String(name.dropFirst("powerup_".count))
+                let dx = node.position.x - player.position.x
+                let dy = node.position.y - player.position.y
+                let distance = sqrt(dx * dx + dy * dy)
+                
+                return PowerupInfo(
+                    position: node.position,
+                    type: type,
+                    distanceFromPlayer: distance
+                )
+            }
+            
             let gameState = GameState(
                 playerPosition: player.position,
                 playerVelocity: player.physicsBody?.velocity ?? .zero,
@@ -3191,7 +3206,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 maxPlanetHealth: maxPlanetHealth,
                 atmosphereRadius: atmosphereRadius,
                 maxAtmosphereRadius: maxAtmosphereRadius,
+                atmosphereActive: atmosphereActive,
                 asteroids: asteroidInfos,
+                powerups: powerupInfos,
                 currentWave: currentWave,
                 score: score,
                 isGrappledToOrbit: isGrappledToOrbit,
