@@ -8047,7 +8047,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
-}
 
 // MARK: - Brake Button Node
 class BrakeButtonNode: SKNode {
