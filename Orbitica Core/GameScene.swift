@@ -2372,16 +2372,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupAtmosphere() {
         // SISTEMA ORIGINALE (Enhanced temporaneamente disabilitato)
         atmosphere = SKShapeNode(circleOfRadius: atmosphereRadius)
-            // Physics body per collisioni
-            let atmosphereBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
-            atmosphereBody.isDynamic = false
-            atmosphereBody.categoryBitMask = PhysicsCategory.atmosphere
-            atmosphereBody.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
-            atmosphereBody.collisionBitMask = 0
-            enhancedAtmosphere?.physicsBody = atmosphereBody
-            
-            worldLayer.addChild(enhancedAtmosphere!)
-            
         atmosphere.fillColor = UIColor.cyan.withAlphaComponent(0.15)
         atmosphere.strokeColor = UIColor.cyan.withAlphaComponent(0.6)
         atmosphere.lineWidth = 2
