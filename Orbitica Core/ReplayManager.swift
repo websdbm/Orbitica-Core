@@ -74,7 +74,7 @@ class ReplayManager: NSObject {
                 return
             }
             
-            // Mostra il preview per salvare il video
+            // Mostra il preview per salvare il video - VERSIONE COMPATTA
             if let previewController = previewController {
                 previewController.previewControllerDelegate = self
                 
@@ -88,9 +88,21 @@ class ReplayManager: NSObject {
                         topVC = presentedVC
                     }
                     
-                    print("✅ Showing recording preview")
-                    topVC.present(previewController, animated: true) {
-                        print("📹 Preview shown - user can save/share the video")
+                    // SOLUZIONE: Presenta il preview in un container custom con sfondo opaco
+                    let containerVC = self?.createCustomPreviewContainer(with: previewController)
+                    
+                    if let containerVC = containerVC {
+                        containerVC.modalPresentationStyle = .overFullScreen
+                        containerVC.modalTransitionStyle = .crossDissolve
+                        
+                        print("✅ Showing CUSTOM CENTERED recording preview")
+                        topVC.present(containerVC, animated: true) {
+                            print("📹 Custom centered preview shown - user can save/share the video")
+                        }
+                    } else {
+                        // Fallback: presenta normalmente
+                        previewController.modalPresentationStyle = .pageSheet
+                        topVC.present(previewController, animated: true)
                     }
                 }
             }
@@ -112,6 +124,84 @@ class ReplayManager: NSObject {
     
     var isAvailable: Bool {
         return recorder.isAvailable
+    }
+    
+    // MARK: - UI Helpers
+    
+    private func createCustomPreviewContainer(with previewController: RPPreviewViewController) -> UIViewController {
+        let containerVC = UIViewController()
+        
+        // 1. SFONDO OPACO SCURO
+        containerVC.view.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        
+        // 2. CALCOLA DIMENSIONI CONTENITORE (80% larghezza, 70% altezza max 600pt)
+        let screenBounds = UIScreen.main.bounds
+        let containerWidth = min(screenBounds.width * 0.85, 600)
+        let containerHeight = min(screenBounds.height * 0.75, 700)
+        
+        let containerX = (screenBounds.width - containerWidth) / 2
+        let containerY = (screenBounds.height - containerHeight) / 2
+        
+        // 3. CONTENITORE CARD con bordo
+        let cardView = UIView(frame: CGRect(
+            x: containerX,
+            y: containerY,
+            width: containerWidth,
+            height: containerHeight
+        ))
+        cardView.backgroundColor = UIColor(white: 0.15, alpha: 1.0)
+        cardView.layer.cornerRadius = 20
+        cardView.layer.borderWidth = 2
+        cardView.layer.borderColor = UIColor.white.cgColor
+        cardView.layer.shadowColor = UIColor.black.cgColor
+        cardView.layer.shadowOpacity = 0.5
+        cardView.layer.shadowOffset = CGSize(width: 0, height: 10)
+        cardView.layer.shadowRadius = 20
+        containerVC.view.addSubview(cardView)
+        
+        // 4. LABEL HEADER "ANTEPRIMA VIDEO"
+        let headerHeight: CGFloat = 55
+        let headerView = UIView(frame: CGRect(x: 0, y: 0, width: containerWidth, height: headerHeight))
+        headerView.backgroundColor = UIColor(red: 0.1, green: 0.1, blue: 0.15, alpha: 1.0)
+        
+        let titleLabel = UILabel(frame: CGRect(x: 15, y: 0, width: containerWidth - 30, height: headerHeight))
+        titleLabel.text = "📹 ANTEPRIMA VIDEO REGISTRATO"
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
+        titleLabel.textColor = .white
+        titleLabel.textAlignment = .center
+        headerView.addSubview(titleLabel)
+        
+        cardView.addSubview(headerView)
+        
+        // 5. AGGIUNGI IL PREVIEW CONTROLLER come child
+        containerVC.addChild(previewController)
+        
+        let previewFrame = CGRect(
+            x: 0,
+            y: headerHeight,
+            width: containerWidth,
+            height: containerHeight - headerHeight
+        )
+        previewController.view.frame = previewFrame
+        previewController.view.layer.cornerRadius = 15
+        previewController.view.layer.masksToBounds = true
+        
+        cardView.addSubview(previewController.view)
+        previewController.didMove(toParent: containerVC)
+        
+        // 6. TAP FUORI PER CHIUDERE (opzionale)
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissPreviewContainer))
+        containerVC.view.addGestureRecognizer(tapGesture)
+        
+        print("🎨 Custom preview container created: \(Int(containerWidth))x\(Int(containerHeight))pt, centered with dimming")
+        
+        return containerVC
+    }
+    
+    @objc private func dismissPreviewContainer() {
+        // Chiudi solo se si tappa FUORI dal container
+        // (Il gesture dovrebbe essere configurato per non interferire con i controlli interni)
+        print("ℹ️ Tap outside detected, but preview controller handles its own dismissal")
     }
 }
 

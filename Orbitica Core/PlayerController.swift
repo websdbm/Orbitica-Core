@@ -105,6 +105,19 @@ class AIController: PlayerController {
     private var maneuverStartTime: TimeInterval = 0
     private var maneuverProgress: CGFloat = 0.0
     
+    // Stato interno - Speronamento asteroidi
+    private var lastRamAttemptTime: TimeInterval = 0
+    private let ramCooldown: TimeInterval = 5.0  // Tenta speronamento ogni 5 secondi max
+    private var ramAttemptsInWindow: Int = 0
+    private var ramWindowStartTime: TimeInterval = 0
+    private let maxRamAttemptsPerWindow: Int = 2  // Max 2 tentativi ogni 10 secondi
+    private let ramWindowDuration: TimeInterval = 10.0
+    
+    // Stato interno - Orbital Ring usage
+    private var lastOrbitalRingSeekTime: TimeInterval = 0
+    private let orbitalRingCooldown: TimeInterval = 6.0  // Cerca orbital ring ogni 6 secondi
+    private var orbitalRingUsageCount: Int = 0
+    
     enum ThrustPhase {
         case accelerate  // Accelerazione 1.5x per 1-2s
         case cruise      // Crociera 1.0x per 3-5s
@@ -159,164 +172,258 @@ class AIController: PlayerController {
         // Calcola raggio orbitale desiderato basato sulla difficoltà
         desiredOrbitRadius = state.planetRadius * difficulty.orbitRadiusMultiplier
         
-        // GESTIONE AGGANCIO LINEE DI FORZA
+        // MOVIMENTO REALISTICO: Virate eleganti con inerzia invece di su/giù continuo
+        
+        // GESTIONE AGGANCIO LINEE DI FORZA - Usa strategicamente le orbital rings
+        let shouldForceDetach: Bool
+        let shouldSeekOrbitalRing: Bool
+        
         if state.isGrappledToOrbit {
             if !wasAttached {
-                // Appena agganciato: registra tempo
                 attachedTime = currentTime
                 wasAttached = true
-                print("🔗 AI: Agganciato a linea di forza")
-            } else if currentTime - attachedTime > maxAttachTime {
-                // Troppo tempo agganciato: FORZA IL DISTACCO
-                print("🔓 AI: Distacco forzato da linea di forza dopo \(maxAttachTime)s")
-                // Spinta radiale per sganciarsi
-                let shipVector = CGVector(
-                    dx: state.playerPosition.x - state.planetPosition.x,
-                    dy: state.playerPosition.y - state.planetPosition.y
-                )
-                let currentRadius = sqrt(shipVector.dx * shipVector.dx + shipVector.dy * shipVector.dy)
-                if currentRadius > 0 {
-                    let radialX = shipVector.dx / currentRadius
-                    let radialY = shipVector.dy / currentRadius
-                    return CGVector(dx: radialX * 2.0, dy: radialY * 2.0)  // Spinta forte verso l'esterno
-                }
+                print("🔗 AI: Agganciato a linea di forza - sfruttando per manovra")
             }
-            // Ancora agganciato ma non ancora timeout: continua normalmente
+            
+            // Rimani agganciato per fare mezzo giro tattico, poi distaccati
+            shouldForceDetach = (currentTime - attachedTime > maxAttachTime)
+            shouldSeekOrbitalRing = false
+            
+            if shouldForceDetach {
+                print("🔓 AI: Completato giro tattico su linea di forza - distacco")
+            }
         } else {
-            // Non più agganciato: reset timer
             if wasAttached {
-                print("✅ AI: Sganciato con successo")
+                print("✅ AI: Sganciato da orbital ring - riprendendo controllo manuale")
+                orbitalRingUsageCount += 1
             }
             wasAttached = false
             attachedTime = 0
-        }
-        
-        // GESTIONE MOVIMENTO DINAMICO (accelera/frena)
-        updateThrustPhase(currentTime: currentTime)
-        
-        // GESTIONE MANOVRE COREOGRAFICHE (ogni 15-20 secondi)
-        if currentManeuver == nil && currentTime - lastManeuverTime > Double.random(in: 15...20) {
-            // Inizia una nuova manovra
-            currentManeuver = [ManeuverPattern.figure8, .spiral, .zigzag].randomElement()
-            maneuverStartTime = currentTime
-            maneuverProgress = 0.0
-            lastManeuverTime = currentTime
-            print("🎭 AI: Inizia manovra \(currentManeuver!)")
-        }
-        
-        // Se c'è una manovra attiva, eseguila
-        if let maneuver = currentManeuver {
-            let elapsed = currentTime - maneuverStartTime
-            if elapsed < maneuver.duration {
-                maneuverProgress = CGFloat(elapsed / maneuver.duration)
-                let maneuverThrust = executeManeuver(maneuver, progress: maneuverProgress, state: state)
-                return CGVector(
-                    dx: maneuverThrust.dx * thrustIntensity * difficulty.reactionSpeed,
-                    dy: maneuverThrust.dy * thrustIntensity * difficulty.reactionSpeed
-                )
+            shouldForceDetach = false
+            
+            // CALCOLA DISTANZA DAL PIANETA (necessaria per valutazione tattica)
+            let shipVector = CGVector(
+                dx: state.playerPosition.x - state.planetPosition.x,
+                dy: state.playerPosition.y - state.planetPosition.y
+            )
+            let currentRadius = sqrt(shipVector.dx * shipVector.dx + shipVector.dy * shipVector.dy)
+            
+            // Cerca orbital ring con cooldown intelligente
+            // Condizioni: disponibile, passato abbastanza tempo, situazione tattica favorevole
+            let timeSinceLastSeek = currentTime - lastOrbitalRingSeekTime
+            let hasRing = state.orbitalRingRadius != nil
+            let cooldownExpired = timeSinceLastSeek > orbitalRingCooldown
+            
+            // Situazioni tattiche favorevoli per usare orbital ring:
+            // 1. Molti asteroidi nelle vicinanze (>3)
+            // 2. Lontano dall'orbita desiderata
+            // 3. Ogni tanto per variare il gameplay (50% probabilità se cooldown scaduto)
+            let nearbyAsteroids = state.asteroids.filter { $0.distanceFromPlanet < 300 }.count
+            let isOffOrbit = abs(currentRadius - desiredOrbitRadius) > 50
+            let tacticallyUseful = nearbyAsteroids > 3 || isOffOrbit
+            
+            if hasRing && cooldownExpired && (tacticallyUseful || Double.random(in: 0...1) < 0.5) {
+                shouldSeekOrbitalRing = true
+                lastOrbitalRingSeekTime = currentTime
+                print("⭕ AI: Orbital ring disponibile - tattica attivata (asteroidi: \(nearbyAsteroids), offOrbit: \(isOffOrbit))")
             } else {
-                // Manovra completata
-                print("✅ AI: Manovra \(maneuver) completata")
-                currentManeuver = nil
+                shouldSeekOrbitalRing = false
             }
         }
         
-        // 1. CALCOLA DISTANZA DAL PIANETA
+        // 1. CALCOLA DISTANZA E ANGOLO DAL PIANETA
         let shipVector = CGVector(
             dx: state.playerPosition.x - state.planetPosition.x,
             dy: state.playerPosition.y - state.planetPosition.y
         )
         let currentRadius = sqrt(shipVector.dx * shipVector.dx + shipVector.dy * shipVector.dy)
         
-        // 2. TROVA TARGET PIÙ PERICOLOSO
-        let target = findMostDangerousAsteroid(state: state)
+        // 2. DETERMINA TARGET DESIDERATO con priorità strategiche
+        var desiredTargetPosition: CGPoint?
+        let safetyZone = desiredOrbitRadius * 0.9
         
-        // Salva il target corrente per puntare la nave
-        currentTarget = target?.position
+        // PRIORITÀ 1: Atmosfera sotto 50% - deve ricaricare!
+        let atmosphereHealthPercent = state.atmosphereRadius / state.maxAtmosphereRadius
+        if atmosphereHealthPercent < 0.50 && atmosphereHealthPercent > 0.05 {
+            // Target: colpisci asteroidi per ricaricare atmosfera
+            if let target = findMostDangerousAsteroid(state: state) {
+                desiredTargetPosition = target.position
+                print("🎯 AI: Atmosfera bassa (\(Int(atmosphereHealthPercent * 100))%) - priorità asteroidi per ricarica")
+            }
+        }
         
-        var thrust = CGVector.zero
+        // PRIORITÀ 2: Power-up nelle immediate vicinanze (< 200px)
+        if desiredTargetPosition == nil {
+            if let powerup = findNearestPowerup(state: state), powerup.distanceFromPlayer < 200 {
+                desiredTargetPosition = powerup.position
+                print("💎 AI: Power-up vicino - raccolta")
+            }
+        }
         
-        // PRIORITÀ ASSOLUTA: evitare collisione con il pianeta
-        let safetyZone = desiredOrbitRadius * 0.9  // Zona di sicurezza più ampia
+        // PRIORITÀ 3: Cerca orbital ring per manovra tattica (ELEVATA PRIORITÀ)
+        if desiredTargetPosition == nil && shouldSeekOrbitalRing {
+            if let ringRadius = state.orbitalRingRadius {
+                // Calcola punto sulla ring più vicino alla posizione attuale
+                let angleToRing = atan2(shipVector.dy, shipVector.dx)
+                let ringX = state.planetPosition.x + cos(angleToRing) * ringRadius
+                let ringY = state.planetPosition.y + sin(angleToRing) * ringRadius
+                desiredTargetPosition = CGPoint(x: ringX, y: ringY)
+                print("⭕ AI: Puntando verso orbital ring (raggio: \(Int(ringRadius))px) per manovra tattica")
+            }
+        }
         
-        if currentRadius < safetyZone {
-            // EMERGENZA: allontanati dal pianeta se troppo vicino
+        // PRIORITÀ 4: Distacco forzato da orbital ring
+        if desiredTargetPosition == nil && shouldForceDetach && currentRadius > 0 {
+            let radialX = shipVector.dx / currentRadius
+            let radialY = shipVector.dy / currentRadius
+            desiredTargetPosition = CGPoint(
+                x: state.playerPosition.x + radialX * 100,
+                y: state.playerPosition.y + radialY * 100
+            )
+            print("🔓 AI: Distacco da orbital ring completato")
+        }
+        
+        // PRIORITÀ 5: Speronamento asteroidi (tecnica reale dei giocatori) - con cooldown intelligente
+        // Reset finestra se è passato troppo tempo
+        if currentTime - ramWindowStartTime > ramWindowDuration {
+            ramAttemptsInWindow = 0
+            ramWindowStartTime = currentTime
+        }
+        
+        let canAttemptRam = (currentTime - lastRamAttemptTime > ramCooldown) && 
+                           (ramAttemptsInWindow < maxRamAttemptsPerWindow)
+        
+        if desiredTargetPosition == nil && canAttemptRam && Double.random(in: 0...1) < 0.3 {
+            if let target = findRammableAsteroid(state: state) {
+                desiredTargetPosition = target.position
+                lastRamAttemptTime = currentTime
+                ramAttemptsInWindow += 1
+                print("💥 AI: Tentativo speronamento asteroide! (\(ramAttemptsInWindow)/\(maxRamAttemptsPerWindow) in finestra)")
+            }
+        }
+        
+        // PRIORITÀ 6: Emergenza - troppo vicino al pianeta
+        if desiredTargetPosition == nil && currentRadius < safetyZone {
+            let radialX = shipVector.dx / currentRadius
+            let radialY = shipVector.dy / currentRadius
+            desiredTargetPosition = CGPoint(
+                x: state.playerPosition.x + radialX * 100,
+                y: state.playerPosition.y + radialY * 100
+            )
+        }
+        
+        // PRIORITÀ 7: Troppo lontano - rientra con virata elegante
+        if desiredTargetPosition == nil && currentRadius > desiredOrbitRadius * 1.5 {
+            // Invece di puntare dritto al pianeta, usa virata ad arco
+            let currentAngle = atan2(shipVector.dy, shipVector.dx)
+            let targetAngle = currentAngle + .pi / 4  // Virata di 45°
+            let targetRadius = desiredOrbitRadius * 1.2
+            desiredTargetPosition = CGPoint(
+                x: state.planetPosition.x + cos(targetAngle) * targetRadius,
+                y: state.planetPosition.y + sin(targetAngle) * targetRadius
+            )
+        }
+        
+        // PRIORITÀ 8: Target asteroide normale
+        if desiredTargetPosition == nil {
+            if let target = findMostDangerousAsteroid(state: state) {
+                desiredTargetPosition = target.position
+            }
+        }
+        
+        // PRIORITÀ 9: Orbita elegante usando inerzia e virate morbide
+        if desiredTargetPosition == nil {
+            // Virata tangenziale + leggera componente radiale per orbita fluida
+            let tangentX = -shipVector.dy / currentRadius
+            let tangentY = shipVector.dx / currentRadius
             let radialX = shipVector.dx / currentRadius
             let radialY = shipVector.dy / currentRadius
             
-            // Considera anche la velocità: se stai andando verso il pianeta, spinta maggiore
-            let velocityTowardPlanet = -(state.playerVelocity.dx * radialX + state.playerVelocity.dy * radialY)
-            let urgency: CGFloat = velocityTowardPlanet > 0 ? 1.3 : 1.0  // Meno urgente per movimento naturale
+            // Usa velocità attuale per calcolare virata naturale con inerzia
+            let currentSpeed = sqrt(state.playerVelocity.dx * state.playerVelocity.dx + 
+                                  state.playerVelocity.dy * state.playerVelocity.dy)
+            let speedFactor = min(currentSpeed / 200.0, 1.5)  // Normalizza velocità
             
-            thrust = CGVector(dx: radialX * urgency, dy: radialY * urgency)
+            // Target: combinazione tangente + correzione radiale dolce
+            let radiusError = currentRadius - desiredOrbitRadius
+            let radialCorrection = radiusError > 0 ? -0.2 : 0.2  // Correzione gentile
             
-        } else if currentRadius > desiredOrbitRadius * 1.5 {
-            // TROPPO LONTANO: avvicinati
-            let radialX = -shipVector.dx / currentRadius
-            let radialY = -shipVector.dy / currentRadius
-            thrust = CGVector(dx: radialX, dy: radialY)
-            
-        } else if let target = target {
-            // RAGGIO OK: muoviti verso il target MA controlla che non ti porti verso il pianeta
-            let targetVector = CGVector(
-                dx: target.position.x - state.playerPosition.x,
-                dy: target.position.y - state.playerPosition.y
+            desiredTargetPosition = CGPoint(
+                x: state.playerPosition.x + tangentX * 100 * speedFactor + radialX * radialCorrection * 50,
+                y: state.playerPosition.y + tangentY * 100 * speedFactor + radialY * radialCorrection * 50
             )
-            let targetDistance = sqrt(targetVector.dx * targetVector.dx + targetVector.dy * targetVector.dy)
-            
-            if targetDistance > 0 {
-                let targetDirX = targetVector.dx / targetDistance
-                let targetDirY = targetVector.dy / targetDistance
-                
-                // Verifica se il movimento verso il target ti porta verso il pianeta
-                let radialX = shipVector.dx / currentRadius
-                let radialY = shipVector.dy / currentRadius
-                let dotProduct = targetDirX * (-radialX) + targetDirY * (-radialY)  // Negativo perché radial punta fuori
-                
-                if dotProduct > 0.3 {
-                    // Il target è troppo verso il pianeta: bilancia movimento
-                    thrust = CGVector(
-                        dx: targetDirX * 0.6 + radialX * 0.5,  // Mix più cauto
-                        dy: targetDirY * 0.6 + radialY * 0.5
-                    )
-                } else {
-                    // Target sicuro: movimento moderato
-                    thrust = CGVector(dx: targetDirX * 1.0, dy: targetDirY * 1.0)
-                }
-            }
-        } else if let powerup = findNearestPowerup(state: state) {
-            // NESSUN ASTEROIDE CRITICO: vai a prendere power-up se vicino
-            let powerupVector = CGVector(
-                dx: powerup.position.x - state.playerPosition.x,
-                dy: powerup.position.y - state.playerPosition.y
-            )
-            let powerupDistance = sqrt(powerupVector.dx * powerupVector.dx + powerupVector.dy * powerupVector.dy)
-            
-            if powerupDistance > 0 && powerupDistance < 300 {  // Solo se entro 300px
-                // Muoviti verso il power-up
-                thrust = CGVector(
-                    dx: (powerupVector.dx / powerupDistance) * 0.8,
-                    dy: (powerupVector.dy / powerupDistance) * 0.8
-                )
-                // Salva come target per puntare la nave
-                currentTarget = powerup.position
-            } else {
-                // Power-up troppo lontano: orbita
-                let tangentX = -shipVector.dy / currentRadius
-                let tangentY = shipVector.dx / currentRadius
-                thrust = CGVector(dx: tangentX * 0.8, dy: tangentY * 0.8)
-            }
-        } else {
-            // NESSUN TARGET E NESSUN POWERUP: orbita tangenzialmente
-            let tangentX = -shipVector.dy / currentRadius
-            let tangentY = shipVector.dx / currentRadius
-            thrust = CGVector(dx: tangentX * 0.8, dy: tangentY * 0.8)
         }
         
-        // Applica intensità dinamica del thrust e velocità di reazione
+        // Salva il target per rotazione nave (usato da GameScene)
+        currentTarget = desiredTargetPosition
+        
+        // 3. CALCOLA L'ANGOLO VERSO IL TARGET DESIDERATO
+        guard let targetPos = desiredTargetPosition else {
+            return .zero
+        }
+        
+        let toTarget = CGVector(
+            dx: targetPos.x - state.playerPosition.x,
+            dy: targetPos.y - state.playerPosition.y
+        )
+        let desiredAngle = atan2(toTarget.dy, toTarget.dx)
+        
+        // L'angolo della nave ha offset di -π/2 perché la texture punta verso l'alto
+        let currentShipAngle = state.playerAngle + .pi / 2
+        
+        // 4. CALCOLA DIFFERENZA ANGOLARE (più breve tra clockwise e counterclockwise)
+        var angleDiff = desiredAngle - currentShipAngle
+        // Normalizza tra -π e π
+        while angleDiff > .pi { angleDiff -= .pi * 2 }
+        while angleDiff < -.pi { angleDiff += .pi * 2 }
+        
+        // 5. SIMULA CONTROLLO REALISTICO CON JOYSTICK
+        // Il joystick può ruotare la nave E dare thrust in avanti
+        
+        // Componente di rotazione: proporzionale all'errore angolare con smoothing
+        let rotationComponent: CGFloat
+        if abs(angleDiff) > .pi / 3 {  // Angolo molto diverso (>60°): rotazione forte ma limitata
+            rotationComponent = (angleDiff > 0 ? 0.85 : -0.85)  // Non a fondo per evitare flickering
+        } else if abs(angleDiff) > .pi / 6 {  // Angolo medio (30-60°): rotazione media
+            rotationComponent = angleDiff / (.pi / 4) * 0.7  // 70% della potenza
+        } else {
+            // Rotazione proporzionale gentile (più precisa vicino al target)
+            rotationComponent = angleDiff / (.pi / 4) * 0.5  // 50% della potenza per precisione
+        }
+        
+        // Componente di thrust: solo se abbastanza allineato
+        let thrustComponent: CGFloat
+        let alignmentThreshold: CGFloat = .pi / 3  // ~60 gradi
+        
+        if abs(angleDiff) < alignmentThreshold {
+            // Abbastanza allineato: applica thrust in avanti
+            // Intensità proporzionale all'allineamento (migliore allineamento = più thrust)
+            let alignmentFactor = 1.0 - (abs(angleDiff) / alignmentThreshold)
+            thrustComponent = alignmentFactor * difficulty.reactionSpeed
+        } else {
+            // Disallineato: niente thrust, solo rotazione
+            thrustComponent = 0.0
+        }
+        
+        // 6. CONVERTI IN VETTORE JOYSTICK VIRTUALE
+        // La nave può solo spingere "in avanti" (nella direzione Y locale)
+        // La rotazione è gestita dalla componente X del joystick
+        
+        // X del joystick = rotazione (sinistra/destra)
+        // Y del joystick = thrust (avanti/indietro)
+        
+        // Calcola vettore thrust nella direzione della nave
+        let thrustX = cos(currentShipAngle) * thrustComponent
+        let thrustY = sin(currentShipAngle) * thrustComponent
+        
+        // Aggiungi componente di rotazione laterale (come se girasse il joystick)
+        // Questo simula un "slide" che aiuta a ruotare più velocemente
+        let lateralX = cos(currentShipAngle + .pi / 2) * rotationComponent * 0.3
+        let lateralY = sin(currentShipAngle + .pi / 2) * rotationComponent * 0.3
+        
         return CGVector(
-            dx: thrust.dx * thrustIntensity * difficulty.reactionSpeed,
-            dy: thrust.dy * thrustIntensity * difficulty.reactionSpeed
+            dx: thrustX + lateralX,
+            dy: thrustY + lateralY
         )
     }
     
@@ -325,9 +432,9 @@ class AIController: PlayerController {
         let currentTime = CACurrentMediaTime()
         guard currentTime - lastFireTime > fireRateLimit else { return false }
         
-        // PRIORITÀ STRATEGICA: Controlla se l'atmosfera ha bisogno di aiuto
+        // PRIORITÀ STRATEGICA: Atmosfera sotto 50% - DEVE ricaricare sparando ad asteroidi!
         let atmosphereHealthPercent = state.atmosphereRadius / state.maxAtmosphereRadius
-        let shouldTargetAtmosphere = state.atmosphereActive && atmosphereHealthPercent < 0.3 && atmosphereHealthPercent > 0.01
+        let shouldTargetAtmosphere = atmosphereHealthPercent < 0.50 && atmosphereHealthPercent > 0.05
         
         if shouldTargetAtmosphere {
             // Target: ATMOSFERA (prioritario quando < 30%)
@@ -437,6 +544,11 @@ class AIController: PlayerController {
         thrustPhase = .cruise
         thrustIntensity = 1.0
         currentManeuver = nil
+        lastRamAttemptTime = 0
+        ramAttemptsInWindow = 0
+        ramWindowStartTime = 0
+        lastOrbitalRingSeekTime = 0
+        orbitalRingUsageCount = 0
     }
     
     // MARK: - Helper Methods
@@ -562,5 +674,51 @@ class AIController: PlayerController {
         
         // Ritorna quello più pericoloso
         return scored.max(by: { $0.danger < $1.danger })?.asteroid
+    }
+    
+    /// Trova un asteroide adatto per speronamento (tecnica reale dei giocatori)
+    private func findRammableAsteroid(state: GameState) -> AsteroidInfo? {
+        guard !state.asteroids.isEmpty else { return nil }
+        
+        // Cerca asteroidi:
+        // 1. Relativamente vicini al player (< 250px)
+        // 2. Sulla traiettoria orbitale (non troppo dentro/fuori)
+        // 3. Preferibilmente grandi (più facili da speronare)
+        
+        let playerToAsteroids = state.asteroids.compactMap { asteroid -> (asteroid: AsteroidInfo, distance: CGFloat, alignment: CGFloat)? in
+            // Distanza dal player
+            let toAsteroid = CGVector(
+                dx: asteroid.position.x - state.playerPosition.x,
+                dy: asteroid.position.y - state.playerPosition.y
+            )
+            let distance = sqrt(toAsteroid.dx * toAsteroid.dx + toAsteroid.dy * toAsteroid.dy)
+            
+            // Troppo lontano: skip
+            guard distance < 250 else { return nil }
+            
+            // Calcola allineamento con velocità attuale (favorisce speronamenti naturali)
+            let velocityMagnitude = sqrt(state.playerVelocity.dx * state.playerVelocity.dx + 
+                                        state.playerVelocity.dy * state.playerVelocity.dy)
+            let alignment: CGFloat
+            if velocityMagnitude > 10 {
+                let dotProduct = (toAsteroid.dx * state.playerVelocity.dx + 
+                                 toAsteroid.dy * state.playerVelocity.dy) / (distance * velocityMagnitude)
+                alignment = max(0, dotProduct)  // 0 = perpendicolare, 1 = allineato
+            } else {
+                alignment = 0.5  // Neutro se fermo
+            }
+            
+            return (asteroid, distance, alignment)
+        }
+        
+        // Trova il candidato migliore (vicino + allineato + grande)
+        let best = playerToAsteroids.max { a, b in
+            // Score: allineamento * (size factor) / distance
+            let scoreA = a.alignment * (1.0 + a.asteroid.size / 30.0) / a.distance
+            let scoreB = b.alignment * (1.0 + b.asteroid.size / 30.0) / b.distance
+            return scoreA < scoreB
+        }
+        
+        return best?.asteroid
     }
 }

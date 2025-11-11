@@ -7,6 +7,7 @@
 
 import SpriteKit
 import UIKit
+import AVFoundation
 
 class RegiaScene: SKScene {
     
@@ -23,6 +24,13 @@ class RegiaScene: SKScene {
     private var recordLabel: SKLabelNode?
     private var statusLabel: SKLabelNode?
     
+    // Background preview
+    private var backgroundLayer: SKNode?
+    private var currentStars: [SKShapeNode] = []
+    
+    // Music player
+    private var musicPlayer: AVAudioPlayer?
+    
     private let musicTracks = ["wave1.m4a", "wave2.m4a", "wave3.m4a", "temp4c.m4a"]
     private let musicNames = ["Wave 1", "Wave 2", "Wave 3", "Boss Theme"]
     
@@ -30,7 +38,17 @@ class RegiaScene: SKScene {
     
     override func didMove(to view: SKView) {
         backgroundColor = .black
+        
+        // Setup background layer per anteprima
+        backgroundLayer = SKNode()
+        backgroundLayer?.zPosition = -100
+        addChild(backgroundLayer!)
+        
         setupUI()
+        
+        // Applica background e musica iniziali
+        applyBackgroundStyle(selectedBackground)
+        playMusicTrack(musicTracks[selectedMusic])
         
         // Listener per stato registrazione
         ReplayManager.shared.onRecordingStatusChanged = { [weak self] isRecording in
@@ -110,11 +128,13 @@ class RegiaScene: SKScene {
                 guard let self = self else { return }
                 self.selectedBackground = max(0, self.selectedBackground - 1)
                 self.updateSelectors()
+                self.applyBackgroundStyle(self.selectedBackground)  // Anteprima live
             },
             onNext: { [weak self] in
                 guard let self = self else { return }
                 self.selectedBackground = min(15, self.selectedBackground + 1)
                 self.updateSelectors()
+                self.applyBackgroundStyle(self.selectedBackground)  // Anteprima live
             }
         )
         yRight -= lineHeight
@@ -129,11 +149,13 @@ class RegiaScene: SKScene {
                 guard let self = self else { return }
                 self.selectedMusic = max(0, self.selectedMusic - 1)
                 self.updateSelectors()
+                self.playMusicTrack(self.musicTracks[self.selectedMusic])  // Anteprima live
             },
             onNext: { [weak self] in
                 guard let self = self else { return }
                 self.selectedMusic = min(self.musicTracks.count - 1, self.selectedMusic + 1)
                 self.updateSelectors()
+                self.playMusicTrack(self.musicTracks[self.selectedMusic])  // Anteprima live
             }
         )
         
@@ -372,10 +394,15 @@ class RegiaScene: SKScene {
     }
     
     private func updateRecordButtonState(isRecording: Bool) {
-        recordingEnabled = isRecording
-        recordButton?.fillColor = isRecording ? .green : .red
-        recordLabel?.text = isRecording ? "⏹ STOP RECORDING" : "⏺ START RECORDING"
-        statusLabel?.text = isRecording ? "🔴 RECORDING IN PROGRESS" : "Ready to record"
+        // Questo callback viene chiamato quando la registrazione effettiva parte/si ferma
+        // Aggiorna solo lo status, non il bottone (che ora è un toggle)
+        if isRecording {
+            statusLabel?.text = "🔴 RECORDING IN PROGRESS"
+        } else if recordingEnabled {
+            statusLabel?.text = "🎬 Recording will start with game"
+        } else {
+            statusLabel?.text = "Ready to demo"
+        }
     }
     
     // MARK: - Touch Handling
@@ -457,9 +484,8 @@ class RegiaScene: SKScene {
         gameScene.useAIController = autoPlay
         gameScene.isRegiaMode = true  // Indica che è una partita da Regia
         gameScene.shouldStartRecording = recordingEnabled  // Indica se avviare registrazione
-        // TODO: implementare backgroundIndex e musicTrack
-        // gameScene.backgroundIndex = selectedBackground
-        // gameScene.musicTrack = musicTracks[selectedMusic]
+        gameScene.regiaBackgroundStyle = selectedBackground  // Stile BG (0-15)
+        gameScene.regiaMusicTrack = musicTracks[selectedMusic]  // Traccia musicale
         
         print("✅ GameScene configured with useAIController: \(autoPlay), isRegiaMode: true")
         
@@ -467,28 +493,138 @@ class RegiaScene: SKScene {
     }
     
     private func toggleRecording() {
-        if ReplayManager.shared.isCurrentlyRecording {
-            // Stop recording
-            ReplayManager.shared.stopRecording { [weak self] url, error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        self?.statusLabel?.text = "❌ Recording error: \(error.localizedDescription)"
-                    } else {
-                        self?.statusLabel?.text = "✅ Recording saved to Photos"
-                    }
-                }
-            }
+        // Invece di avviare/fermare subito la registrazione,
+        // abilita/disabilita il flag che verrà usato da GameScene
+        recordingEnabled.toggle()
+        
+        recordButton?.fillColor = recordingEnabled ? .orange : .red
+        recordLabel?.text = recordingEnabled ? "⏺ REC ENABLED" : "⏺ REC DISABLED"
+        
+        if recordingEnabled {
+            statusLabel?.text = "🎬 Recording will start with game"
         } else {
-            // Start recording
-            ReplayManager.shared.startRecording { [weak self] error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        self?.statusLabel?.text = "❌ Recording error: \(error.localizedDescription)"
-                    } else {
-                        self?.statusLabel?.text = "🔴 RECORDING..."
-                    }
-                }
-            }
+            statusLabel?.text = "Ready to demo"
         }
+    }
+    
+    // MARK: - Background & Music Preview
+    
+    private func applyBackgroundStyle(_ styleIndex: Int) {
+        print("🎨 applyBackgroundStyle called with index: \(styleIndex)")
+        print("🎨 backgroundLayer exists: \(backgroundLayer != nil)")
+        
+        // Rimuovi stelle precedenti
+        currentStars.forEach { $0.removeFromParent() }
+        currentStars.removeAll()
+        
+        // Array di colori background (0-15 stili)
+        let backgrounds: [UIColor] = [
+            .black,                                                    // 0: Nero puro
+            UIColor(red: 0.05, green: 0.0, blue: 0.15, alpha: 1.0),  // 1: Viola scuro
+            UIColor(red: 0.0, green: 0.02, blue: 0.08, alpha: 1.0),  // 2: Blu navy
+            UIColor(red: 0.02, green: 0.0, blue: 0.05, alpha: 1.0),  // 3: Viola blackberry
+            UIColor(red: 0.05, green: 0.0, blue: 0.0, alpha: 1.0),   // 4: Rosso scuro
+            UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1.0), // 5: Marrone
+            UIColor(red: 0.0, green: 0.05, blue: 0.05, alpha: 1.0),  // 6: Teal scuro
+            UIColor(red: 0.05, green: 0.05, blue: 0.0, alpha: 1.0),  // 7: Verde oliva
+            UIColor(red: 0.03, green: 0.03, blue: 0.03, alpha: 1.0), // 8: Grigio carbone
+            UIColor(red: 0.0, green: 0.03, blue: 0.06, alpha: 1.0),  // 9: Blu petrolio
+            UIColor(red: 0.06, green: 0.0, blue: 0.03, alpha: 1.0),  // 10: Magenta scuro
+            UIColor(red: 0.0, green: 0.04, blue: 0.0, alpha: 1.0),   // 11: Verde foresta
+            UIColor(red: 0.04, green: 0.0, blue: 0.04, alpha: 1.0),  // 12: Viola prugna
+            UIColor(red: 0.05, green: 0.03, blue: 0.0, alpha: 1.0),  // 13: Arancione bruciato
+            UIColor(red: 0.0, green: 0.05, blue: 0.08, alpha: 1.0),  // 14: Blu oceano
+            UIColor(red: 0.02, green: 0.02, blue: 0.04, alpha: 1.0)  // 15: Blu mezzanotte
+        ]
+        
+        let index = min(styleIndex, backgrounds.count - 1)
+        backgroundColor = backgrounds[index]
+        
+        // Genera stelle (100 piccole, 30 medie, 10 grandi)
+        for _ in 0..<100 {
+            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.5...1.5))
+            star.fillColor = .white
+            star.strokeColor = .clear
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            star.alpha = CGFloat.random(in: 0.3...0.8)
+            star.zPosition = -90
+            backgroundLayer?.addChild(star)
+            currentStars.append(star)
+            
+            // Twinkle animation
+            let fade1 = SKAction.fadeAlpha(to: 0.2, duration: Double.random(in: 1.0...3.0))
+            let fade2 = SKAction.fadeAlpha(to: 0.8, duration: Double.random(in: 1.0...3.0))
+            star.run(SKAction.repeatForever(SKAction.sequence([fade1, fade2])))
+        }
+        
+        for _ in 0..<30 {
+            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 1.5...2.5))
+            star.fillColor = UIColor(white: 1.0, alpha: CGFloat.random(in: 0.5...0.9))
+            star.strokeColor = .clear
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            star.zPosition = -85
+            backgroundLayer?.addChild(star)
+            currentStars.append(star)
+        }
+        
+        for _ in 0..<10 {
+            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 2.5...4.0))
+            star.fillColor = .white
+            star.strokeColor = .clear
+            star.glowWidth = 3
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height)
+            )
+            star.zPosition = -80
+            backgroundLayer?.addChild(star)
+            currentStars.append(star)
+        }
+        
+        print("🌌 Background style \(styleIndex + 1) applied with \(currentStars.count) stars")
+    }
+    
+    private func playMusicTrack(_ trackName: String) {
+        print("🎵 playMusicTrack called with: \(trackName)")
+        
+        // Ferma musica precedente
+        musicPlayer?.stop()
+        musicPlayer = nil
+        
+        // Carica nuova traccia
+        let resourceName = trackName.replacingOccurrences(of: ".m4a", with: "")
+        print("🎵 Looking for resource: \(resourceName).m4a")
+        
+        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "m4a") else {
+            print("⚠️ Music file not found: \(trackName)")
+            return
+        }
+        
+        print("🎵 Found music file at: \(url)")
+        
+        do {
+            musicPlayer = try AVAudioPlayer(contentsOf: url)
+            musicPlayer?.numberOfLoops = -1  // Loop infinito
+            musicPlayer?.volume = 0.6
+            musicPlayer?.play()
+            print("🎵 Playing: \(trackName)")
+        } catch {
+            print("❌ Error playing music: \(error.localizedDescription)")
+        }
+    }
+    
+    // Cleanup quando si esce dalla scena
+    override func willMove(from view: SKView) {
+        musicPlayer?.stop()
+        musicPlayer = nil
+        currentStars.forEach { $0.removeFromParent() }
+        currentStars.removeAll()
+        print("🧹 RegiaScene cleanup completed")
     }
 }

@@ -192,6 +192,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Regia Mode configuration
     var isRegiaMode: Bool = false  // True se partita avviata da RegiaScene
     var shouldStartRecording: Bool = false  // True se deve avviare registrazione
+    var regiaBackgroundStyle: Int? = nil  // Stile background (0-15) da Regia
+    var regiaMusicTrack: String? = nil  // Nome traccia musicale da Regia
     
     // Helper per log condizionali
     private func debugLog(_ message: String) {
@@ -211,7 +213,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // Planet & Atmosphere
     private var planet: SKShapeNode!
-    private var atmosphere: SKShapeNode!
+    private var atmosphere: SKShapeNode?  // Optional perché può essere distrutta durante il gioco
     private var planetOriginalColor: UIColor = .white  // Memorizza il colore originale del pianeta
     private var atmosphereRadius: CGFloat = 96  // Parte al 100% (96)
     private let maxAtmosphereRadius: CGFloat = 144  // Limite massimo 150% (96 * 1.5)
@@ -361,6 +363,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var missileActive: Bool = false  // Nuovo: Missile homing
     private var activePowerupEndTime: TimeInterval = 0
     private var missiles: [SKNode] = []  // Array per tracciare tutti i missili attivi
+    
+    // DRONE: Power-up persistente
+    private var activeDrone: DroneNode?  // Drone attivo (se esiste)
     
     // Pause system
     private var isGamePaused: Bool = false
@@ -2370,16 +2375,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // NON aggiungere physics body qui - già presente su enhancedPlanet
             worldLayer.addChild(planet)
             
-            // Label della salute del pianeta al centro
-            planetHealthLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-            planetHealthLabel.text = "\(planetHealth)/\(maxPlanetHealth)"
-            planetHealthLabel.fontSize = 20
-            planetHealthLabel.fontColor = .white
-            planetHealthLabel.horizontalAlignmentMode = .center
-            planetHealthLabel.verticalAlignmentMode = .center
-            planetHealthLabel.position = CGPoint.zero
-            planetHealthLabel.zPosition = 100
-            newPlanet.addChild(planetHealthLabel)
+            // RIMOSSO: Label della salute al centro - ora usiamo filtro colore sulla Terra
+            // Il filtro viene applicato automaticamente tramite updateHealth() in EnhancedPlanetNode
             
             debugLog("✅ Enhanced Planet created at: \(newPlanet.position) + invisible reference planet")
         } else {
@@ -2445,27 +2442,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             debugLog("✅ Enhanced atmosphere created with 3 layers, radius: \(atmosphereRadius)")
         } else {
             // SISTEMA ORIGINALE: Atmosfera semplice cyan
-            atmosphere = SKShapeNode(circleOfRadius: atmosphereRadius)
-            atmosphere.fillColor = UIColor.cyan.withAlphaComponent(0.15)
-            atmosphere.strokeColor = UIColor.cyan.withAlphaComponent(0.6)
-            atmosphere.lineWidth = 2
-            atmosphere.name = "atmosphere"
-            atmosphere.zPosition = 2
-            atmosphere.position = CGPoint(x: size.width / 2, y: size.height / 2)
+            let newAtmosphere = SKShapeNode(circleOfRadius: atmosphereRadius)
+            newAtmosphere.fillColor = UIColor.cyan.withAlphaComponent(0.15)
+            newAtmosphere.strokeColor = UIColor.cyan.withAlphaComponent(0.6)
+            newAtmosphere.lineWidth = 2
+            newAtmosphere.name = "atmosphere"
+            newAtmosphere.zPosition = 2
+            newAtmosphere.position = CGPoint(x: size.width / 2, y: size.height / 2)
             
             let atmosphereBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
             atmosphereBody.isDynamic = false
             atmosphereBody.categoryBitMask = PhysicsCategory.atmosphere
             atmosphereBody.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
             atmosphereBody.collisionBitMask = 0
-            atmosphere.physicsBody = atmosphereBody
+            newAtmosphere.physicsBody = atmosphereBody
             
-            worldLayer.addChild(atmosphere)
+            worldLayer.addChild(newAtmosphere)
             
             let pulseUp = SKAction.scale(to: 1.05, duration: 1.5)
             let pulseDown = SKAction.scale(to: 1.0, duration: 1.5)
             let pulse = SKAction.sequence([pulseUp, pulseDown])
-            atmosphere.run(SKAction.repeatForever(pulse))
+            newAtmosphere.run(SKAction.repeatForever(pulse))
+            
+            self.atmosphere = newAtmosphere
             
             debugLog("✅ Atmosphere created with radius: \(atmosphereRadius)")
         }
@@ -3355,6 +3354,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         updateOrbitalGrapple()  // Gestisce slingshot zones del player
         updateAsteroidSpiralForces(currentTime)  // NUOVO: Sistema a spirale discendente per asteroidi
         updateMissiles()  // Aggiorna inseguimento missili homing
+        updateDrone(currentTime)  // Aggiorna drone difensivo (se attivo)
         updatePlayerMovement()
         updatePlayerShooting(currentTime)
         updateCameraZoom()  // Aggiorna zoom dinamico basato su distanza
@@ -3600,14 +3600,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         projectile.lineWidth = 0
         
-        // Physics body per il proiettile
-        projectile.physicsBody = SKPhysicsBody(rectangleOf: usedSize)
+        // Physics body per il proiettile - USA UN CERCHIO PICCOLO per evitare rinculo
+        // Il physics body circolare è più piccolo del visual per evitare collisioni con il player
+        let physicsRadius: CGFloat = 3.0  // Fisso, indipendente dalla dimensione visuale
+        projectile.physicsBody = SKPhysicsBody(circleOfRadius: physicsRadius)
         projectile.physicsBody?.isDynamic = true
         projectile.physicsBody?.categoryBitMask = PhysicsCategory.projectile
         projectile.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.asteroid
-        projectile.physicsBody?.collisionBitMask = 0  // NO collisioni fisiche - solo contact detection
-        projectile.physicsBody?.mass = 0.01
-        projectile.physicsBody?.linearDamping = 0
+        projectile.physicsBody?.collisionBitMask = PhysicsCategory.none  // NO collisioni fisiche - solo contact detection
+        projectile.physicsBody?.mass = 0.1  // Massa maggiore per stabilità (come versione originale)
+        projectile.physicsBody?.linearDamping = 0.0
         projectile.physicsBody?.affectedByGravity = false
         projectile.physicsBody?.allowsRotation = false
         projectile.physicsBody?.restitution = 0  // NO rimbalzo
@@ -3877,6 +3879,56 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     dy: physicsBody.velocity.dy * scale
                 )
             }
+        }
+    }
+    
+    private func updateDrone(_ currentTime: TimeInterval) {
+        guard let drone = activeDrone else { return }
+        
+        // Verifica che il drone sia ancora nella scena
+        guard drone.parent != nil else {
+            activeDrone = nil
+            powerupLabel.text = ""
+            return
+        }
+        
+        // Calcola deltaTime
+        let deltaTime = currentTime - lastUpdateTime
+        
+        // Raccogli tutti gli asteroidi attivi
+        let asteroidsNodes = worldLayer.children.filter { $0.name == "asteroid" }
+        
+        // Debug ogni 3 secondi
+        if frameCount % 180 == 0 {
+            let distance = sqrt(pow(drone.position.x - size.width/2, 2) + pow(drone.position.y - size.height/2, 2))
+            debugLog("🤖 Drone update - Pos: (\(Int(drone.position.x)), \(Int(drone.position.y))), Distance: \(Int(distance))px, HP: \(drone.getHealthString())")
+        }
+        
+        // Aggiorna comportamento drone
+        drone.update(deltaTime: deltaTime, asteroids: asteroidsNodes)
+        
+        // SISTEMA DI SICUREZZA: Se il drone si allontana MOLTO, riportalo indietro
+        let planetCenter = CGPoint(x: size.width / 2, y: size.height / 2)
+        let droneDistance = sqrt(pow(drone.position.x - planetCenter.x, 2) + pow(drone.position.y - planetCenter.y, 2))
+        
+        if droneDistance > 320 {
+            // Troppo lontano! Riposiziona in orbita
+            let angle = atan2(drone.position.y - planetCenter.y, drone.position.x - planetCenter.x)
+            drone.position = CGPoint(
+                x: planetCenter.x + cos(angle) * 170,
+                y: planetCenter.y + sin(angle) * 170
+            )
+            // Resetta velocità con componente tangenziale per orbita fluida
+            drone.physicsBody?.velocity = CGVector(
+                dx: -sin(angle) * 140,
+                dy: cos(angle) * 140
+            )
+            debugLog("⚠️ Drone troppo lontano (\(Int(droneDistance))px) - riposizionato a 170px")
+        }
+        
+        // Aggiorna label salute (ogni secondo circa)
+        if frameCount % 60 == 0 {
+            powerupLabel.text = "DRONE \(drone.getHealthString())"
         }
     }
     
@@ -5185,7 +5237,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Ripristina l'atmosfera al massimo
         atmosphereRadius = maxAtmosphereRadius
-        atmosphere.alpha = 1.0  // Rendi visibile se era invisibile
+        atmosphere?.alpha = 1.0  // Rendi visibile se era invisibile
         updateAtmosphereVisuals()
         debugLog("🌀 Atmosphere fully restored to \(maxAtmosphereRadius)")
         
@@ -5858,13 +5910,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             gameCamera.setScale(currentZoomLevel)
         }
         
-        // CAMERA TRACKING: Segue il player con interpolazione fluida
-        let cameraSpeed: CGFloat = 0.1  // Velocità di inseguimento (0.1 = 10% per frame)
-        let targetX = player.position.x
-        let targetY = player.position.y
-        
-        gameCamera.position.x = gameCamera.position.x + (targetX - gameCamera.position.x) * cameraSpeed
-        gameCamera.position.y = gameCamera.position.y + (targetY - gameCamera.position.y) * cameraSpeed
+        // CAMERA FISSA SUL PIANETA: La camera resta sempre centrata sul pianeta
+        // Solo lo zoom cambia in base alla distanza del player
+        // Questo mantiene il pianeta al centro dello schermo e permette di vedere tutto il campo di gioco
+        let planetCenter = CGPoint(x: size.width / 2, y: size.height / 2)
+        gameCamera.position = planetCenter
         
         // Debug (opzionale)
         // debugLog("dx: \(Int(dx))/\(Int(limitFarH)) dy: \(Int(dy))/\(Int(limitFarV)) | ZoomH: \(needsZoomH) ZoomV: \(needsZoomV) | Target: \(String(format: "%.2f", targetZoom)) Current: \(String(format: "%.2f", currentZoomLevel))")
@@ -5898,7 +5948,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let projectileBody = contact.bodyA.categoryBitMask == PhysicsCategory.projectile ? contact.bodyA : contact.bodyB
             
             if let projectile = projectileBody.node {
-                // Ricarica atmosfera leggermente
+                // CASO SPECIALE: Se è il drone, solo rimbalzo senza distruzione
+                if projectile is DroneNode {
+                    // Il drone rimbalza sull'atmosfera grazie al collisionBitMask
+                    // Applica rimbalzo come per il player
+                    handleAtmosphereBounce(contact: contact, isPlayer: false)
+                    debugLog("🤖 Drone rimbalzato dall'atmosfera")
+                    return
+                }
+                
+                // Proiettile normale: ricarica atmosfera e rimuovi
                 rechargeAtmosphere(amount: 1.05)
                 bounceAtmospherePositive()  // Effetto visivo positivo
                 
@@ -6104,13 +6163,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 )
                 
                 // Flash leggero dell'atmosfera
-                let originalAlpha = atmosphere.strokeColor.withAlphaComponent(0.6)
-                atmosphere.strokeColor = .cyan
-                let wait = SKAction.wait(forDuration: 0.05)
-                let restore = SKAction.run { [weak self] in
-                    self?.atmosphere.strokeColor = originalAlpha
+                if let atmosphere = atmosphere {
+                    let originalAlpha = atmosphere.strokeColor.withAlphaComponent(0.6)
+                    atmosphere.strokeColor = .cyan
+                    let wait = SKAction.wait(forDuration: 0.05)
+                    let restore = SKAction.run { [weak self] in
+                        self?.atmosphere?.strokeColor = originalAlpha
+                    }
+                    atmosphere.run(SKAction.sequence([wait, restore]))
                 }
-                atmosphere.run(SKAction.sequence([wait, restore]))
             }
             debugLog("✨ Power-up bounced off atmosphere")
         }
@@ -6161,6 +6222,49 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Identifica proiettile e asteroide
             let projectile = contact.bodyA.categoryBitMask == PhysicsCategory.projectile ? contact.bodyA.node : contact.bodyB.node
             let asteroid = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA.node as? SKShapeNode : contact.bodyB.node as? SKShapeNode
+            
+            // CASO SPECIALE: Drone colpisce asteroide
+            if let droneNode = projectile as? DroneNode, let asteroidNode = asteroid {
+                // Calcola danno in base al tipo di asteroide
+                let asteroidType = asteroidNode.userData?["type"] as? AsteroidType ?? .normal(.medium)
+                let baseDamage = asteroidType.atmosphereDamageMultiplier
+                
+                // Il drone subisce danno proporzionale al tipo di asteroide
+                let isDead = droneNode.takeDamage(amount: Int(baseDamage))
+                
+                if isDead {
+                    // Drone distrutto: esplosione wave e cleanup
+                    droneNode.explode { [weak self] in
+                        guard let self = self else { return }
+                        
+                        // Frammenta asteroidi colpiti dalla mini-wave
+                        self.worldLayer.enumerateChildNodes(withName: "asteroid") { node, _ in
+                            if let hit = node.userData?["droneWaveHit"] as? Bool, hit {
+                                if let asteroid = node as? SKShapeNode {
+                                    self.createExplosionParticles(at: asteroid.position, color: self.randomExplosionColor())
+                                    self.fragmentAsteroid(asteroid, damageMultiplier: 1.0)
+                                }
+                                // Rimuovi il marker (userData è NSMutableDictionary)
+                                node.userData?["droneWaveHit"] = nil
+                            }
+                        }
+                        
+                        self.activeDrone = nil
+                        self.powerupLabel.text = ""
+                    }
+                    debugLog("💥 Drone destroyed - MINI-WAVE activated!")
+                } else {
+                    // Drone sopravvive: aggiorna label
+                    powerupLabel.text = "DRONE \(droneNode.getHealthString())"
+                    debugLog("🤖 Drone damaged by \(asteroidType) asteroid - Health: \(droneNode.getHealthString())")
+                }
+                
+                // L'asteroide viene comunque frammentato
+                createExplosionParticles(at: asteroidNode.position, color: randomExplosionColor())
+                fragmentAsteroid(asteroidNode, damageMultiplier: 1.0)
+                
+                return // Non rimuovere il drone, continua a esistere
+            }
             
             // Leggi il damage multiplier dal proiettile
             let damageMultiplier = (projectile?.userData?["damageMultiplier"] as? CGFloat) ?? 1.0
@@ -6679,7 +6783,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Se raggiunge il raggio del pianeta, nascondi l'atmosfera
         if atmosphereRadius <= planetRadius {
-            atmosphere.alpha = 0
+            atmosphere?.alpha = 0
             if useEnhancedVisuals {
                 enhancedAtmosphere?.alpha = 0
             }
@@ -6692,20 +6796,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func updateAtmosphereVisuals() {
         if useEnhancedVisuals {
-            // SISTEMA ENHANCED: Aggiorna colori dinamici e salute
-            let currentEnergy = atmosphereRadius - planetRadius
-            let maxEnergy = maxAtmosphereRadius - planetRadius
+            // SISTEMA ENHANCED: Aggiorna DIMENSIONI, colori dinamici e salute
+            
+            // 1. AGGIORNA IL RAGGIO FISICO (come nella versione originale)
+            enhancedAtmosphere?.updateRadius(newRadius: atmosphereRadius)
+            
+            // 2. Aggiorna anche il physics body per collision detection
+            // SAFETY CHECK: Usa max() per evitare radius <= 0
+            let safeRadius = max(atmosphereRadius, planetRadius)
+            enhancedAtmosphere?.physicsBody = SKPhysicsBody(circleOfRadius: safeRadius)
+            enhancedAtmosphere?.physicsBody?.isDynamic = false
+            enhancedAtmosphere?.physicsBody?.categoryBitMask = PhysicsCategory.atmosphere
+            enhancedAtmosphere?.physicsBody?.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
+            enhancedAtmosphere?.physicsBody?.collisionBitMask = 0
+            
+            // 3. Aggiorna colori e effetti visivi basati sull'energia
+            // SAFETY CHECK: Evita valori negativi o zero che causano divisione per zero
+            let currentEnergy = max(0, atmosphereRadius - planetRadius)
+            let maxEnergy = max(1, maxAtmosphereRadius - planetRadius)  // Min 1 per evitare div/0
             enhancedAtmosphere?.updateEnergy(current: currentEnergy, max: maxEnergy)
             
+            // 4. Aggiorna salute del pianeta
             let currentHealth = CGFloat(planetHealth)
-            let maxHealth = CGFloat(maxPlanetHealth)
+            let maxHealth = max(1, CGFloat(maxPlanetHealth))  // Min 1 per evitare div/0
             enhancedPlanet?.updateHealth(current: currentHealth, max: maxHealth)
             
-            let energyPercent = currentEnergy / maxEnergy
-            let healthPercent = currentHealth / maxHealth
-            debugLog("🎨 Enhanced visuals updated: energy \(Int(energyPercent * 100))%, health \(Int(healthPercent * 100))%")
+            let energyPercent = maxEnergy > 0 ? (currentEnergy / maxEnergy) : 0
+            let healthPercent = maxHealth > 0 ? (currentHealth / maxHealth) : 0
+            debugLog("🎨 Enhanced visuals updated: radius=\(Int(atmosphereRadius)), energy \(Int(energyPercent * 100))%, health \(Int(healthPercent * 100))%")
         } else {
             // SISTEMA ORIGINALE: Aggiorna dimensioni atmosfera
+            guard let atmosphere = atmosphere else { return }
+            
             let newPath = CGPath(ellipseIn: CGRect(
                 x: -atmosphereRadius,
                 y: -atmosphereRadius,
@@ -6726,20 +6848,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Visual Feedback
     private func flashAtmosphere() {
         // Safety check: verifica che atmosphere esista
-        guard atmosphere != nil else { return }
+        guard let atmosphere = atmosphere else { return }
         
         // Flash bianco brillante sulla collisione
         let originalColor = atmosphere.strokeColor
+        let originalLineWidth = atmosphere.lineWidth
         
         let flashAction = SKAction.sequence([
             SKAction.run { [weak self] in
-                self?.atmosphere.strokeColor = .white
-                self?.atmosphere.lineWidth = 4
+                self?.atmosphere?.strokeColor = .white
+                self?.atmosphere?.lineWidth = 4
             },
             SKAction.wait(forDuration: 0.1),
             SKAction.run { [weak self] in
-                self?.atmosphere.strokeColor = originalColor
-                self?.atmosphere.lineWidth = 2
+                self?.atmosphere?.strokeColor = originalColor
+                self?.atmosphere?.lineWidth = originalLineWidth
             }
         ])
         
@@ -6748,22 +6871,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func flashPlayerShield() {
         // Safety check: verifica che playerShield esista
-        guard playerShield != nil else { return }
+        guard let playerShield = playerShield else { return }
         
         // Flash dello scudo del player
         let originalAlpha = playerShield.alpha
         
         let flashAction = SKAction.sequence([
             SKAction.run { [weak self] in
-                self?.playerShield.strokeColor = .cyan
-                self?.playerShield.alpha = 1.0
-                self?.playerShield.lineWidth = 3
+                self?.playerShield?.strokeColor = .cyan
+                self?.playerShield?.alpha = 1.0
+                self?.playerShield?.lineWidth = 3
             },
             SKAction.wait(forDuration: 0.15),
             SKAction.run { [weak self] in
-                self?.playerShield.strokeColor = UIColor.white.withAlphaComponent(0.3)
-                self?.playerShield.alpha = originalAlpha
-                self?.playerShield.lineWidth = 1
+                self?.playerShield?.strokeColor = UIColor.white.withAlphaComponent(0.3)
+                self?.playerShield?.alpha = originalAlpha
+                self?.playerShield?.lineWidth = 1
             }
         ])
         
@@ -6772,7 +6895,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func bounceAtmospherePositive() {
         // Safety check: verifica che atmosphere esista
-        guard atmosphere != nil else { return }
+        guard let atmosphere = atmosphere else { return }
         
         // Effetto bounce vibrante positivo (verde/cyan brillante)
         let originalColor = atmosphere.strokeColor
@@ -6784,30 +6907,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             SKAction.group([
                 SKAction.scale(to: 1.15, duration: 0.08),
                 SKAction.run { [weak self] in
-                    self?.atmosphere.strokeColor = UIColor.green
-                    self?.atmosphere.lineWidth = 5
+                    self?.atmosphere?.strokeColor = UIColor.green
+                    self?.atmosphere?.lineWidth = 5
                 }
             ]),
             // Fase 2: contrazione + colore cyan
             SKAction.group([
                 SKAction.scale(to: 0.95, duration: 0.06),
                 SKAction.run { [weak self] in
-                    self?.atmosphere.strokeColor = UIColor.cyan
+                    self?.atmosphere?.strokeColor = UIColor.cyan
                 }
             ]),
             // Fase 3: espansione leggera + colore verde chiaro
             SKAction.group([
                 SKAction.scale(to: 1.08, duration: 0.05),
                 SKAction.run { [weak self] in
-                    self?.atmosphere.strokeColor = UIColor.systemGreen
+                    self?.atmosphere?.strokeColor = UIColor.systemGreen
                 }
             ]),
             // Fase 4: ritorno normale + fade al colore originale
             SKAction.group([
                 SKAction.scale(to: 1.0, duration: 0.06),
                 SKAction.run { [weak self] in
-                    self?.atmosphere.strokeColor = originalColor
-                    self?.atmosphere.lineWidth = originalLineWidth
+                    self?.atmosphere?.strokeColor = originalColor
+                    self?.atmosphere?.lineWidth = originalLineWidth
                 }
             ])
         ])
@@ -6817,11 +6940,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Aggiungi anche un effetto glow temporaneo
         let glowAction = SKAction.sequence([
             SKAction.run { [weak self] in
-                self?.atmosphere.glowWidth = 8
+                self?.atmosphere?.glowWidth = 8
             },
             SKAction.wait(forDuration: 0.25),
             SKAction.run { [weak self] in
-                self?.atmosphere.glowWidth = 0
+                self?.atmosphere?.glowWidth = 0
             }
         ])
         
@@ -7202,6 +7325,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         weightedTypes.append(("V", UIColor.orange, 1))  // Vulcan - fuoco rapido
         weightedTypes.append(("B", UIColor.green, 1))   // Bullet - munizioni potenziate
         
+        // DRONE: Alta probabilità in wave 1 per testing
+        if currentWave == 1 {
+            weightedTypes.append(("D", UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0), 5))  // Peso 5x per test!
+        } else if currentWave >= 2 {
+            weightedTypes.append(("D", UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0), 1))  // Peso normale dopo wave 1
+        }
+        
         // Wave 2+: aggiungi Atmosphere
         if currentWave >= 2 {
             weightedTypes.append(("A", UIColor.cyan, 1))    // Atmosphere - ricarica atmosfera
@@ -7294,15 +7424,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func activatePowerup(type: String, currentTime: TimeInterval) {
         // Se c'è già un power-up attivo (V, B, G, M), disattiva il precedente e attiva il nuovo
-        // A (Atmosphere) e W (Wave) possono essere raccolti anche con altri power-up attivi
-        if type != "A" && type != "W" && (vulcanActive || bigAmmoActive || gravityActive || missileActive) {
+        // A (Atmosphere), W (Wave) e D (Drone) possono coesistere con altri power-up
+        if type != "A" && type != "W" && type != "D" && (vulcanActive || bigAmmoActive || gravityActive || missileActive) {
             debugLog("⚠️ Replacing active power-up with \(type)")
             // Disattiva il power-up precedente (ma mantieni activePowerupEndTime per resettarlo)
             deactivatePowerups()
         }
         
-        // Attiva l'effetto e imposta timer a 10s (eccetto A e W)
-        if type != "A" && type != "W" {
+        // Attiva l'effetto e imposta timer a 10s (eccetto A, W, D)
+        // A = instantaneo, W = instantaneo, D = persistente
+        if type != "A" && type != "W" && type != "D" {
             activePowerupEndTime = currentTime + 10.0
         }
         
@@ -7371,7 +7502,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             
             // Rendi l'atmosfera visibile e aggiorna
-            atmosphere.alpha = 1.0
+            atmosphere?.alpha = 1.0
             updateAtmosphereVisuals()
             
             powerupLabel.fontColor = UIColor.cyan
@@ -7394,6 +7525,48 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             powerupLabel.text = "Missile 10.00s"
             
             debugLog("🚀 Missile power-up activated - homing missiles")
+        } else if type == "D" {
+            // DRONE: Persistente fino a distruzione
+            // Se c'è già un drone attivo e vivo, non fare nulla
+            if let existingDrone = activeDrone, existingDrone.parent != nil {
+                debugLog("⚠️ Drone già attivo - power-up ignorato")
+                return
+            }
+            
+            // Pulisci riferimento vecchio se presente
+            activeDrone = nil
+            
+            // Crea nuovo drone
+            let planetCenter = CGPoint(x: size.width / 2, y: size.height / 2)
+            let drone = DroneNode(planetPosition: planetCenter, planetRadius: planetRadius)
+            
+            // Posiziona drone in orbita elegante intorno all'atmosfera
+            let spawnAngle = CGFloat.random(in: 0...(2 * .pi))
+            // Spawna al raggio orbitale desiderato
+            let spawnRadius: CGFloat = 170  // Orbita target
+            drone.position = CGPoint(
+                x: planetCenter.x + cos(spawnAngle) * spawnRadius,
+                y: planetCenter.y + sin(spawnAngle) * spawnRadius
+            )
+            
+            // ZPosition alto per essere visibile sopra tutto
+            drone.zPosition = 100
+            
+            // Dai velocità tangenziale iniziale per orbita circolare fluida
+            let orbitalSpeed: CGFloat = 140.0  // Bilanciato per orbita elegante
+            drone.physicsBody?.velocity = CGVector(
+                dx: -sin(spawnAngle) * orbitalSpeed,
+                dy: cos(spawnAngle) * orbitalSpeed
+            )
+            
+            worldLayer.addChild(drone)
+            activeDrone = drone
+            
+            powerupLabel.fontColor = UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0)
+            powerupLabel.text = "DRONE \(drone.getHealthString())"
+            
+            debugLog("🤖 Drone deployed at (\(Int(drone.position.x)), \(Int(drone.position.y))) - Radius: \(Int(spawnRadius))px - HP: \(drone.getHealthString())")
+            debugLog("   Parent: \(drone.parent?.name ?? "nil"), ZPos: \(drone.zPosition), Alpha: \(drone.alpha)")
         }
     }
 
@@ -7422,7 +7595,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         projectileDamageMultiplier = 1.0
         currentFireRate = baseFireRate
         activePowerupEndTime = 0
-        powerupLabel.text = ""
+        
+        // Se il drone è attivo, mantieni la sua label, altrimenti cancella tutto
+        if let drone = activeDrone {
+            powerupLabel.fontColor = UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0)
+            powerupLabel.text = "DRONE \(drone.getHealthString())"
+        } else {
+            powerupLabel.text = ""
+        }
     }
     
     private func triggerWaveBlast() {
@@ -7866,7 +8046,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Planet Health System
     private func updatePlanetHealthLabel() {
-        planetHealthLabel.text = "\(planetHealth)/\(maxPlanetHealth)"
+        // RIMOSSO: Label ora sostituito da filtro colore sulla Terra
+        // Il filtro viene aggiornato automaticamente tramite updateAtmosphereVisuals()
+        // che chiama enhancedPlanet?.updateHealth()
     }
     
     private func flashPlanet() {

@@ -86,62 +86,101 @@ class EnhancedPlanetNode: SKNode {
     }
     
     private func createPlanetFromImage() -> SKSpriteNode {
-        // Carica la texture earth.jpg (il path non include "Immagini/")
+        // Carica la texture earth.jpg
         guard let earthTexture = SKTexture(imageNamed: "earth.jpg") as SKTexture? else {
             print("⚠️ earth.jpg non trovata, uso fallback procedurale")
             return createPlanetWithTextureFallback()
         }
         
-        // STRATEGIA: Per simulare rotazione sull'asse Z (3D), facciamo scorrere
-        // la texture orizzontalmente dentro una maschera circolare
+        // IMPORTANTE: L'immagine earth.jpg rappresenta TUTTA la superficie della Terra (360°)
+        // Per una vista sferica realistica, dobbiamo mostrare solo METÀ della texture (180°)
+        // e farla scorrere per simulare la rotazione
         
-        // 1. Crea un container con maschera circolare
+        let targetDiameter = radius * 2
+        
+        // 1. MASCHERA CIRCOLARE PERFETTA con antialias
         let cropNode = SKCropNode()
-        let mask = SKShapeNode(circleOfRadius: radius)
-        mask.fillColor = .white
-        mask.strokeColor = .clear
+        
+        let maskTexture = createCircularMaskTexture(diameter: targetDiameter)
+        let mask = SKSpriteNode(texture: maskTexture)
+        mask.size = CGSize(width: targetDiameter, height: targetDiameter)
         cropNode.maskNode = mask
         
-        // 2. Crea uno sprite LARGO (3x il diametro) con la texture ripetuta
-        let targetDiameter = radius * 2
-        let wideWidth = targetDiameter * 3  // 3 copie della texture affiancate
-        
-        // Crea 3 sprite affiancati per effetto seamless
-        let sprite1 = SKSpriteNode(texture: earthTexture)
-        sprite1.size = CGSize(width: targetDiameter, height: targetDiameter)
-        sprite1.position = CGPoint(x: -targetDiameter, y: 0)
-        
-        let sprite2 = SKSpriteNode(texture: earthTexture)
-        sprite2.size = CGSize(width: targetDiameter, height: targetDiameter)
-        sprite2.position = CGPoint(x: 0, y: 0)
-        
-        let sprite3 = SKSpriteNode(texture: earthTexture)
-        sprite3.size = CGSize(width: targetDiameter, height: targetDiameter)
-        sprite3.position = CGPoint(x: targetDiameter, y: 0)
-        
-        // Container per i 3 sprite
+        // 2. TEXTURE WIDTH = metà della larghezza originale
+        // Ogni sprite mostra METÀ della texture (180° di superficie)
+        let spriteWidth = targetDiameter  // Larghezza = diametro del pianeta
         let scrollingContainer = SKNode()
-        scrollingContainer.addChild(sprite1)
-        scrollingContainer.addChild(sprite2)
-        scrollingContainer.addChild(sprite3)
+        
+        // Crea 3 sprite affiancati per seamless loop
+        // Ogni sprite è LARGO quanto il diametro, quindi mostra metà della Terra
+        for i in -1...1 {
+            let sprite = SKSpriteNode(texture: earthTexture)
+            sprite.size = CGSize(width: spriteWidth, height: targetDiameter)
+            sprite.position = CGPoint(x: CGFloat(i) * spriteWidth, y: 0)
+            scrollingContainer.addChild(sprite)
+        }
         
         cropNode.addChild(scrollingContainer)
         
-        // 3. Animazione: muovi il container verso sinistra continuamente
-        let scrollDuration: TimeInterval = 120.0  // 2 minuti per un ciclo completo
-        let moveLeft = SKAction.moveBy(x: -targetDiameter, y: 0, duration: scrollDuration)
-        let resetPosition = SKAction.moveBy(x: targetDiameter, y: 0, duration: 0)
+        // 3. ANIMAZIONE ROTAZIONE - muove di 1 spriteWidth per completare mezzo giro
+        // Durata raddoppiata perché ora ogni sprite rappresenta 180° invece di 360°
+        let rotationDuration: TimeInterval = 100.0  // 100 secondi per giro completo (360°) - più veloce
+        let moveLeft = SKAction.moveBy(x: -spriteWidth, y: 0, duration: rotationDuration / 2)  // 50 sec per metà giro
+        let resetPosition = SKAction.moveBy(x: spriteWidth, y: 0, duration: 0)
         let scrollSequence = SKAction.sequence([moveLeft, resetPosition])
         scrollingContainer.run(SKAction.repeatForever(scrollSequence))
         
-        // 4. Wrap in SKSpriteNode per compatibilità con il return type
-        // (il cropNode non può essere direttamente un SKSpriteNode)
+        // 4. WRAPPER TRASPARENTE
         let wrapper = SKSpriteNode(color: .clear, size: CGSize(width: targetDiameter, height: targetDiameter))
         wrapper.addChild(cropNode)
         
-        print("🌍 Earth texture scrolling setup - simula rotazione 3D sull'asse Z")
+        print("🌍 Earth texture scrolling - vista sferica (180° visibili, 360° totale)")
         
         return wrapper
+    }
+    
+    // Crea una texture circolare perfetta per la maschera (senza bordi)
+    private func createCircularMaskTexture(diameter: CGFloat) -> SKTexture {
+        let size = CGSize(width: diameter, height: diameter)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        
+        let image = renderer.image { context in
+            let rect = CGRect(origin: .zero, size: size)
+            
+            // Usa anti-aliasing per bordi smooth
+            context.cgContext.setAllowsAntialiasing(true)
+            context.cgContext.setShouldAntialias(true)
+            
+            // Disegna cerchio perfetto bianco (per maschera)
+            UIColor.white.setFill()
+            let circlePath = UIBezierPath(ovalIn: rect)
+            circlePath.fill()
+            
+            // Aggiungi un leggero feather ai bordi per eliminare artefatti
+            let featherWidth: CGFloat = 2.0
+            let innerRect = rect.insetBy(dx: featherWidth, dy: featherWidth)
+            
+            // Gradiente radiale sottile per soft edge
+            if let gradient = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [UIColor.white.cgColor, UIColor.white.cgColor] as CFArray,
+                locations: [0.98, 1.0]
+            ) {
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                context.cgContext.drawRadialGradient(
+                    gradient,
+                    startCenter: center,
+                    startRadius: diameter / 2 - featherWidth,
+                    endCenter: center,
+                    endRadius: diameter / 2,
+                    options: []
+                )
+            }
+        }
+        
+        let texture = SKTexture(image: image)
+        texture.filteringMode = .linear  // Smooth interpolation
+        return texture
     }
     
     private func createPlanetWithTextureFallback() -> SKSpriteNode {
@@ -332,30 +371,28 @@ class EnhancedPlanetNode: SKNode {
     }
     
     private func updateHealthFilter(healthPercentage: CGFloat) {
-        guard let filterNode = healthFilterNode else { return }
+        // NUOVO SISTEMA: Filtro colore basato su vite discrete
+        // current / max = 3/3 = 100% → Normale (nessun filtro)
+        // current / max = 2/3 = 66%  → Arancione
+        // current / max = 1/3 = 33%  → Rosso/Rossastro
         
-        // Cambia il tint in base alla salute
-        if healthPercentage > 0.75 {
-            // Salute alta: nessun filtro
-            filterNode.filter = nil
-        } else if healthPercentage > 0.50 {
-            // Salute media-alta: leggero giallo
-            let colorize = CIFilter(name: "CIColorMonochrome")
-            colorize?.setValue(CIColor(red: 1.0, green: 0.9, blue: 0.7), forKey: "inputColor")
-            colorize?.setValue(0.2, forKey: "inputIntensity")
-            filterNode.filter = colorize
-        } else if healthPercentage > 0.25 {
-            // Salute media-bassa: arancione
-            let colorize = CIFilter(name: "CIColorMonochrome")
-            colorize?.setValue(CIColor(red: 1.0, green: 0.6, blue: 0.3), forKey: "inputColor")
-            colorize?.setValue(0.4, forKey: "inputIntensity")
-            filterNode.filter = colorize
+        if healthPercentage > 0.70 {
+            // 3 vite (100%): NORMALE - nessun filtro, Terra blu/verde naturale
+            if let baseSprite = baseLayer.children.first as? SKSpriteNode {
+                baseSprite.colorBlendFactor = 0
+            }
+        } else if healthPercentage > 0.40 {
+            // 2 vite (66%): ARANCIONE - filtro arancione caldo sulla texture
+            if let baseSprite = baseLayer.children.first as? SKSpriteNode {
+                baseSprite.color = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0)  // Arancione
+                baseSprite.colorBlendFactor = 0.35  // 35% di blend - texture visibile ma alterata
+            }
         } else {
-            // Salute critica: rosso + desaturazione
-            let colorize = CIFilter(name: "CIColorMonochrome")
-            colorize?.setValue(CIColor(red: 1.0, green: 0.2, blue: 0.2), forKey: "inputColor")
-            colorize?.setValue(0.6, forKey: "inputIntensity")
-            filterNode.filter = colorize
+            // 1 vita (33%): ROSSO/ROSSASTRO - filtro rosso intenso sulla texture
+            if let baseSprite = baseLayer.children.first as? SKSpriteNode {
+                baseSprite.color = UIColor(red: 0.9, green: 0.15, blue: 0.15, alpha: 1.0)  // Rosso
+                baseSprite.colorBlendFactor = 0.45  // 45% di blend - texture più alterata
+            }
         }
     }
     
@@ -499,6 +536,49 @@ class EnhancedAtmosphereNode: SKNode {
         
         updateLayersAppearance(energyPercentage: percentage)
         updateParticleEffects(energyPercentage: percentage)
+    }
+    
+    /// Aggiorna il raggio fisico dell'atmosfera in base alla salute
+    func updateRadius(newRadius: CGFloat) {
+        // Aggiorna il path dei tre layer mantenendo le proporzioni relative
+        let outerPath = CGPath(ellipseIn: CGRect(
+            x: -newRadius * 1.15,
+            y: -newRadius * 1.15,
+            width: newRadius * 2.3,
+            height: newRadius * 2.3
+        ), transform: nil)
+        outerLayer.path = outerPath
+        
+        let middlePath = CGPath(ellipseIn: CGRect(
+            x: -newRadius * 1.08,
+            y: -newRadius * 1.08,
+            width: newRadius * 2.16,
+            height: newRadius * 2.16
+        ), transform: nil)
+        middleLayer.path = middlePath
+        
+        let innerPath = CGPath(ellipseIn: CGRect(
+            x: -newRadius * 1.02,
+            y: -newRadius * 1.02,
+            width: newRadius * 2.04,
+            height: newRadius * 2.04
+        ), transform: nil)
+        innerLayer.path = innerPath
+        
+        // Aggiorna anche la posizione delle particelle
+        updateParticlePositions(radius: newRadius)
+    }
+    
+    /// Aggiorna la posizione delle particelle in orbita
+    private func updateParticlePositions(radius: CGFloat) {
+        let particleCount = particleEmitters.count
+        for (index, emitter) in particleEmitters.enumerated() {
+            let angle = CGFloat(index) * (.pi * 2 / CGFloat(particleCount))
+            emitter.position = CGPoint(
+                x: cos(angle) * radius * 1.05,
+                y: sin(angle) * radius * 1.05
+            )
+        }
     }
     
     private func updateLayersAppearance(energyPercentage: CGFloat) {
