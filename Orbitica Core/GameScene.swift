@@ -8077,7 +8077,7 @@ class BrakeButtonNode: SKNode {
         fatalError("init(coder:) has not been implemented")
     }
     
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+    func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first, touchId == nil else { return }
         let location = touch.location(in: self)
         
@@ -8090,7 +8090,7 @@ class BrakeButtonNode: SKNode {
         }
     }
     
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+    func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touchId, touches.contains(touch) else { return }
         let location = touch.location(in: self)
         
@@ -8104,7 +8104,7 @@ class BrakeButtonNode: SKNode {
         }
     }
     
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+    func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touchId, touches.contains(touch) else { return }
         
         if isPressed {
@@ -8116,7 +8116,7 @@ class BrakeButtonNode: SKNode {
         touchId = nil
     }
     
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+    func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         touchesEnded(touches, with: event)
     }
 }
