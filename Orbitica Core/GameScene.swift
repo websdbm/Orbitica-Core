@@ -206,8 +206,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var planet: SKShapeNode!
     private var atmosphere: SKShapeNode!
     private var planetOriginalColor: UIColor = .white  // Memorizza il colore originale del pianeta
-    private var atmosphereRadius: CGFloat = 96  // Aumentato del 20% (80 * 1.2)
-    private let maxAtmosphereRadius: CGFloat = 96  // Aumentato del 20% (80 * 1.2)
+    private var atmosphereRadius: CGFloat = 96  // Parte al 100% (96)
+    private let maxAtmosphereRadius: CGFloat = 144  // Limite massimo 150% (96 * 1.5)
     private let minAtmosphereRadius: CGFloat = 40
     
     // Orbital Ring (grapple system) - 3 anelli concentrici
@@ -5758,17 +5758,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let projectileBody = contact.bodyA.categoryBitMask == PhysicsCategory.projectile ? contact.bodyA : contact.bodyB
             
             if let projectile = projectileBody.node {
-                // Particelle all'impatto
-                createCollisionParticles(at: contact.contactPoint, color: .cyan)
-                
                 // Ricarica atmosfera leggermente
                 rechargeAtmosphere(amount: 1.05)
-                flashAtmosphere()
+                bounceAtmospherePositive()  // Effetto visivo positivo
                 
                 // Rimuovi proiettile
                 projectile.removeFromParent()
                 
-                debugLog("🛡️ Projectile stopped by atmosphere")
+                debugLog("🛡️ Projectile stopped by atmosphere - recharging!")
             }
         }
         
@@ -6541,6 +6538,61 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ])
         
         playerShield.run(flashAction)
+    }
+    
+    private func bounceAtmospherePositive() {
+        // Effetto bounce vibrante positivo (verde/cyan brillante)
+        let originalColor = atmosphere.strokeColor
+        let originalLineWidth = atmosphere.lineWidth
+        
+        // Vibrazione bounce rapida con colore positivo
+        let bounceAction = SKAction.sequence([
+            // Fase 1: espansione + colore verde brillante
+            SKAction.group([
+                SKAction.scale(to: 1.15, duration: 0.08),
+                SKAction.run { [weak self] in
+                    self?.atmosphere.strokeColor = UIColor.green
+                    self?.atmosphere.lineWidth = 5
+                }
+            ]),
+            // Fase 2: contrazione + colore cyan
+            SKAction.group([
+                SKAction.scale(to: 0.95, duration: 0.06),
+                SKAction.run { [weak self] in
+                    self?.atmosphere.strokeColor = UIColor.cyan
+                }
+            ]),
+            // Fase 3: espansione leggera + colore verde chiaro
+            SKAction.group([
+                SKAction.scale(to: 1.08, duration: 0.05),
+                SKAction.run { [weak self] in
+                    self?.atmosphere.strokeColor = UIColor.systemGreen
+                }
+            ]),
+            // Fase 4: ritorno normale + fade al colore originale
+            SKAction.group([
+                SKAction.scale(to: 1.0, duration: 0.06),
+                SKAction.run { [weak self] in
+                    self?.atmosphere.strokeColor = originalColor
+                    self?.atmosphere.lineWidth = originalLineWidth
+                }
+            ])
+        ])
+        
+        atmosphere.run(bounceAction)
+        
+        // Aggiungi anche un effetto glow temporaneo
+        let glowAction = SKAction.sequence([
+            SKAction.run { [weak self] in
+                self?.atmosphere.glowWidth = 8
+            },
+            SKAction.wait(forDuration: 0.25),
+            SKAction.run { [weak self] in
+                self?.atmosphere.glowWidth = 0
+            }
+        ])
+        
+        atmosphere.run(glowAction)
     }
     
     // MARK: - Collision Physics
