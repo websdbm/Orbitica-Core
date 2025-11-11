@@ -8036,6 +8036,53 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
+    
+    // MARK: - Helper Methods for Starfield
+    
+    private func createStarParticleTexture() -> SKTexture {
+        // Usa SKShapeNode per creare la texture - più affidabile in SpriteKit
+        let size: CGFloat = 64
+        let star = SKShapeNode(circleOfRadius: size / 4)
+        star.fillColor = .white
+        star.strokeColor = .clear
+        star.glowWidth = size / 8  // Glow per effetto stella
+        
+        // Crea texture dalla view se disponibile, altrimenti fallback
+        if let view = self.view {
+            let texture = view.texture(from: star)
+            texture?.filteringMode = .linear
+            return texture ?? createFallbackTexture()
+        } else {
+            return createFallbackTexture()
+        }
+    }
+    
+    private func createFallbackTexture() -> SKTexture {
+        let size: CGFloat = 64
+        UIGraphicsBeginImageContextWithOptions(CGSize(width: size, height: size), false, 0)
+        defer { UIGraphicsEndImageContext() }
+        
+        guard let context = UIGraphicsGetCurrentContext() else {
+            return SKTexture()
+        }
+        
+        // Cerchio bianco
+        let center = CGPoint(x: size / 2, y: size / 2)
+        let radius = size / 4
+        
+        context.setFillColor(UIColor.white.cgColor)
+        context.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, 
+                                       width: radius * 2, height: radius * 2))
+        
+        if let image = UIGraphicsGetImageFromCurrentImageContext() {
+            let texture = SKTexture(image: image)
+            texture.filteringMode = .linear
+            return texture
+        }
+        
+        return SKTexture()
+    }
+}
 
 // MARK: - Brake Button Node
 class BrakeButtonNode: SKNode {
@@ -8113,61 +8160,7 @@ class BrakeButtonNode: SKNode {
 // MARK: - Enhanced Background System (New)
 
 extension GameScene {
-    
-    /// Crea un emitter di stelle dinamico per starfield multi-layer
-    /// Versione semplificata senza texture custom
-    // Helper per creare texture particella stella
-    func createStarParticleTexture() -> SKTexture {
-        // Usa SKShapeNode per creare la texture - più affidabile in SpriteKit
-        let size: CGFloat = 64
-        let star = SKShapeNode(circleOfRadius: size / 4)
-        star.fillColor = .white
-        star.strokeColor = .clear
-        star.glowWidth = size / 8  // Glow per effetto stella
-        
-        // Crea texture dalla view se disponibile, altrimenti fallback
-        if let view = self.view {
-            let texture = view.texture(from: star)
-            texture?.filteringMode = .linear
-            print("   🎨 Texture created from view: size=\(texture?.size() ?? .zero)")
-            return texture ?? createFallbackTexture()
-        } else {
-            print("   ⚠️ View not available, using fallback texture")
-            return createFallbackTexture()
-        }
-    }
-    
-    // Fallback texture se la view non è disponibile
-    func createFallbackTexture() -> SKTexture {
-        let size: CGFloat = 64
-        UIGraphicsBeginImageContextWithOptions(CGSize(width: size, height: size), false, 0)
-        defer { UIGraphicsEndImageContext() }
-        
-        guard let context = UIGraphicsGetCurrentContext() else {
-            print("   ❌ Failed to create graphics context")
-            return SKTexture()
-        }
-        
-        // Cerchio bianco
-        let center = CGPoint(x: size / 2, y: size / 2)
-        let radius = size / 4
-        
-        context.setFillColor(UIColor.white.cgColor)
-        context.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, 
-                                       width: radius * 2, height: radius * 2))
-        
-        if let image = UIGraphicsGetImageFromCurrentImageContext() {
-            let texture = SKTexture(image: image)
-            texture.filteringMode = .linear
-            print("   🎨 Fallback texture created: size=\(texture.size())")
-            return texture
-        }
-        
-        print("   ❌ Failed to create fallback texture")
-        return SKTexture()
-    }
-    
-
+    // Note: createStarParticleTexture() and createFallbackTexture() moved to main class body
 }
 
 // MARK: - PROJECTILE REFLECTION FEATURE (DISABLED - WIP)
