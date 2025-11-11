@@ -214,11 +214,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let maxAtmosphereRadius: CGFloat = 144  // Limite massimo 150% (96 * 1.5)
     private let minAtmosphereRadius: CGFloat = 40
     
-    // Enhanced Visual System - TEMPORANEAMENTE DISABILITATO
-    // private var enhancedPlanet: EnhancedPlanetNode?
-    // private var enhancedAtmosphere: EnhancedAtmosphereNode?
-    // private var currentPlanetStyle: PlanetVisualStyle = .realistic
-    private var useEnhancedVisuals: Bool = false  // Disabilitato fino a quando PlanetVisuals.swift non è aggiunto al target
+    // Enhanced Visual System
+    private var enhancedPlanet: EnhancedPlanetNode?
+    private var enhancedAtmosphere: EnhancedAtmosphereNode?
+    private var currentPlanetStyle: PlanetVisualStyle = .realistic
+    private var useEnhancedVisuals: Bool = true  // ATTIVATO! 🌍✨
     
     // Orbital Ring (grapple system) - 3 anelli concentrici
     private var orbitalRing1: SKShapeNode?  // Anello interno
@@ -2334,10 +2334,40 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupPlanet() {
-        // SISTEMA ORIGINALE (Enhanced temporaneamente disabilitato)
-        let planetPath = createIrregularPlanetPath(radius: planetRadius)
-        planet = SKShapeNode(path: planetPath)
-        planet.fillColor = .white
+        if useEnhancedVisuals {
+            // NUOVO SISTEMA VISIVO - Terra Realistica con continenti e nuvole
+            enhancedPlanet = EnhancedPlanetNode(radius: planetRadius, style: currentPlanetStyle)
+            enhancedPlanet?.position = CGPoint(x: size.width / 2, y: size.height / 2)
+            enhancedPlanet?.zPosition = 1
+            enhancedPlanet?.name = "enhancedPlanet"
+            
+            // Physics body invisibile per collisioni
+            let planetBody = SKPhysicsBody(circleOfRadius: planetRadius)
+            planetBody.isDynamic = false
+            planetBody.categoryBitMask = PhysicsCategory.planet
+            planetBody.contactTestBitMask = PhysicsCategory.asteroid
+            planetBody.collisionBitMask = 0
+            enhancedPlanet?.physicsBody = planetBody
+            
+            worldLayer.addChild(enhancedPlanet!)
+            
+            // Label della salute del pianeta al centro
+            planetHealthLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+            planetHealthLabel.text = "\(planetHealth)/\(maxPlanetHealth)"
+            planetHealthLabel.fontSize = 20
+            planetHealthLabel.fontColor = .white
+            planetHealthLabel.horizontalAlignmentMode = .center
+            planetHealthLabel.verticalAlignmentMode = .center
+            planetHealthLabel.position = CGPoint.zero
+            planetHealthLabel.zPosition = 100
+            enhancedPlanet?.addChild(planetHealthLabel)
+            
+            debugLog("✅ Enhanced Planet created at: \(enhancedPlanet?.position ?? .zero)")
+        } else {
+            // SISTEMA ORIGINALE
+            let planetPath = createIrregularPlanetPath(radius: planetRadius)
+            planet = SKShapeNode(path: planetPath)
+            planet.fillColor = .white
             planetOriginalColor = .white
             planet.strokeColor = .clear
             planet.name = "planet"
@@ -2367,33 +2397,57 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             planet.addChild(planetHealthLabel)
             
             debugLog("✅ Planet created at: \(planet.position)")
+        }
     }
     
     private func setupAtmosphere() {
-        // SISTEMA ORIGINALE (Enhanced temporaneamente disabilitato)
-        atmosphere = SKShapeNode(circleOfRadius: atmosphereRadius)
-        atmosphere.fillColor = UIColor.cyan.withAlphaComponent(0.15)
-        atmosphere.strokeColor = UIColor.cyan.withAlphaComponent(0.6)
-        atmosphere.lineWidth = 2
-        atmosphere.name = "atmosphere"
-        atmosphere.zPosition = 2
-        atmosphere.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        
-        let atmosphereBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
-        atmosphereBody.isDynamic = false
-        atmosphereBody.categoryBitMask = PhysicsCategory.atmosphere
-        atmosphereBody.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
-        atmosphereBody.collisionBitMask = 0
-        atmosphere.physicsBody = atmosphereBody
-        
-        worldLayer.addChild(atmosphere)
-        
-        let pulseUp = SKAction.scale(to: 1.05, duration: 1.5)
-        let pulseDown = SKAction.scale(to: 1.0, duration: 1.5)
-        let pulse = SKAction.sequence([pulseUp, pulseDown])
-        atmosphere.run(SKAction.repeatForever(pulse))
-        
-        debugLog("✅ Atmosphere created with radius: \(atmosphereRadius)")
+        if useEnhancedVisuals {
+            // SISTEMA ENHANCED: Atmosfera stratificata a 3 layer con colori dinamici
+            enhancedAtmosphere = EnhancedAtmosphereNode(radius: atmosphereRadius)
+            enhancedAtmosphere.name = "atmosphere"
+            enhancedAtmosphere.zPosition = 2
+            enhancedAtmosphere.position = CGPoint(x: size.width / 2, y: size.height / 2)
+            
+            let atmosphereBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
+            atmosphereBody.isDynamic = false
+            atmosphereBody.categoryBitMask = PhysicsCategory.atmosphere
+            atmosphereBody.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
+            atmosphereBody.collisionBitMask = 0
+            enhancedAtmosphere.physicsBody = atmosphereBody
+            
+            worldLayer.addChild(enhancedAtmosphere)
+            
+            // Inizializza con energia corrente
+            let energyPercent = CGFloat(atmosphereEnergy) / CGFloat(maxAtmosphereEnergy)
+            enhancedAtmosphere.updateEnergy(energyPercent)
+            
+            debugLog("✅ Enhanced atmosphere created with 3 layers, radius: \(atmosphereRadius)")
+        } else {
+            // SISTEMA ORIGINALE: Atmosfera semplice cyan
+            atmosphere = SKShapeNode(circleOfRadius: atmosphereRadius)
+            atmosphere.fillColor = UIColor.cyan.withAlphaComponent(0.15)
+            atmosphere.strokeColor = UIColor.cyan.withAlphaComponent(0.6)
+            atmosphere.lineWidth = 2
+            atmosphere.name = "atmosphere"
+            atmosphere.zPosition = 2
+            atmosphere.position = CGPoint(x: size.width / 2, y: size.height / 2)
+            
+            let atmosphereBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
+            atmosphereBody.isDynamic = false
+            atmosphereBody.categoryBitMask = PhysicsCategory.atmosphere
+            atmosphereBody.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
+            atmosphereBody.collisionBitMask = 0
+            atmosphere.physicsBody = atmosphereBody
+            
+            worldLayer.addChild(atmosphere)
+            
+            let pulseUp = SKAction.scale(to: 1.05, duration: 1.5)
+            let pulseDown = SKAction.scale(to: 1.0, duration: 1.5)
+            let pulse = SKAction.sequence([pulseUp, pulseDown])
+            atmosphere.run(SKAction.repeatForever(pulse))
+            
+            debugLog("✅ Atmosphere created with radius: \(atmosphereRadius)")
+        }
     }
     
     private func setupOrbitalRing() {
@@ -5811,6 +5865,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             damageAtmosphere(amount: damageAmount)
             flashAtmosphere()
             
+            // Effetto visivo enhanced per impatto
+            if useEnhancedVisuals {
+                // Calcola angolo di impatto
+                let atmosphereCenter = CGPoint(x: size.width / 2, y: size.height / 2)
+                let contactPoint = contact.contactPoint
+                let impactVector = CGPoint(x: contactPoint.x - atmosphereCenter.x, y: contactPoint.y - atmosphereCenter.y)
+                let impactAngle = atan2(impactVector.y, impactVector.x)
+                
+                enhancedAtmosphere?.playImpactEffect(at: impactAngle)
+            }
+            
             // NUOVO: L'asteroide subisce danno come se fosse colpito da un proiettile
             // MA NON VENGONO ASSEGNATI PUNTI (givePoints: false)
             if let asteroid = asteroid {
@@ -6500,6 +6565,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         atmosphereRadius = min(atmosphereRadius + amount, maxAtmosphereRadius)
         
         updateAtmosphereVisuals()
+        
+        // Effetto visivo per sistema enhanced
+        if useEnhancedVisuals {
+            enhancedAtmosphere?.playRechargeEffect()
+        }
+        
         debugLog("🔋 Atmosphere recharged: \(atmosphereRadius)")
     }
     
@@ -6510,6 +6581,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Se raggiunge il raggio del pianeta, nascondi l'atmosfera
         if atmosphereRadius <= planetRadius {
             atmosphere.alpha = 0
+            if useEnhancedVisuals {
+                enhancedAtmosphere?.alpha = 0
+            }
             debugLog("💀 Atmosphere DESTROYED - planet vulnerable!")
         }
         
@@ -6518,21 +6592,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func updateAtmosphereVisuals() {
-        // Sistema originale (Enhanced temporaneamente disabilitato)
-        let newPath = CGPath(ellipseIn: CGRect(
-            x: -atmosphereRadius,
-            y: -atmosphereRadius,
-            width: atmosphereRadius * 2,
-            height: atmosphereRadius * 2
-        ), transform: nil)
-        
-        atmosphere.path = newPath
-        
-        atmosphere.physicsBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
-        atmosphere.physicsBody?.isDynamic = false
-        atmosphere.physicsBody?.categoryBitMask = PhysicsCategory.atmosphere
-        atmosphere.physicsBody?.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
-        atmosphere.physicsBody?.collisionBitMask = 0
+        if useEnhancedVisuals {
+            // SISTEMA ENHANCED: Aggiorna colori dinamici e salute
+            let energyPercent = CGFloat(atmosphereEnergy) / CGFloat(maxAtmosphereEnergy)
+            enhancedAtmosphere?.updateEnergy(energyPercent)
+            
+            let healthPercent = CGFloat(planetHealth) / CGFloat(maxPlanetHealth)
+            enhancedPlanet?.updateHealth(healthPercent)
+            
+            debugLog("🎨 Enhanced visuals updated: energy \(Int(energyPercent * 100))%, health \(Int(healthPercent * 100))%")
+        } else {
+            // SISTEMA ORIGINALE: Aggiorna dimensioni atmosfera
+            let newPath = CGPath(ellipseIn: CGRect(
+                x: -atmosphereRadius,
+                y: -atmosphereRadius,
+                width: atmosphereRadius * 2,
+                height: atmosphereRadius * 2
+            ), transform: nil)
+            
+            atmosphere.path = newPath
+            
+            atmosphere.physicsBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
+            atmosphere.physicsBody?.isDynamic = false
+            atmosphere.physicsBody?.categoryBitMask = PhysicsCategory.atmosphere
+            atmosphere.physicsBody?.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
+            atmosphere.physicsBody?.collisionBitMask = 0
+        }
     }
     
     // MARK: - Visual Feedback
