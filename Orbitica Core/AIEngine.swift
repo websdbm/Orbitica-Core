@@ -184,35 +184,3 @@ class AIAgentController {
         behaviors.removeAll { Swift.type(of: $0) == type }
     }
 }
-
-// MARK: - Utility Extensions
-
-extension CGPoint {
-    func distance(to other: CGPoint) -> CGFloat {
-        let dx = other.x - x
-        let dy = other.y - y
-        return sqrt(dx * dx + dy * dy)
-    }
-    
-    func angle(to other: CGPoint) -> CGFloat {
-        let dx = other.x - x
-        let dy = other.y - y
-        return atan2(dy, dx)
-    }
-}
-
-extension CGVector {
-    var length: CGFloat {
-        return sqrt(dx * dx + dy * dy)
-    }
-    
-    var normalized: CGVector {
-        let len = length
-        guard len > 0 else { return .zero }
-        return CGVector(dx: dx / len, dy: dy / len)
-    }
-    
-    func dot(_ other: CGVector) -> CGFloat {
-        return dx * other.dx + dy * other.dy
-    }
-}
