@@ -4382,7 +4382,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     asteroid.run(SKAction.repeatForever(rotateAction), withKey: "slingshotRotation")
                 }
             }
-    }
     */
     
     private func updateOrbitalGrapple() {
