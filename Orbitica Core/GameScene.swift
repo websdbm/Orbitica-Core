@@ -218,7 +218,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var enhancedPlanet: EnhancedPlanetNode?
     private var enhancedAtmosphere: EnhancedAtmosphereNode?
     private var currentPlanetStyle: PlanetVisualStyle = .realistic
-    private var useEnhancedVisuals: Bool = true  // Toggle per testare
+    private var useEnhancedVisuals: Bool = false  // Disabilitato fino a quando PlanetVisuals.swift non è aggiunto al target
     
     // Orbital Ring (grapple system) - 3 anelli concentrici
     private var orbitalRing1: SKShapeNode?  // Anello interno
