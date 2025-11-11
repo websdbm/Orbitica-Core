@@ -6541,11 +6541,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         atmosphere.path = newPath
         
         atmosphere.physicsBody = SKPhysicsBody(circleOfRadius: atmosphereRadius)
-            atmosphere.physicsBody?.isDynamic = false
-            atmosphere.physicsBody?.categoryBitMask = PhysicsCategory.atmosphere
-            atmosphere.physicsBody?.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
-            atmosphere.physicsBody?.collisionBitMask = 0
-        }
+        atmosphere.physicsBody?.isDynamic = false
+        atmosphere.physicsBody?.categoryBitMask = PhysicsCategory.atmosphere
+        atmosphere.physicsBody?.contactTestBitMask = PhysicsCategory.player | PhysicsCategory.projectile | PhysicsCategory.asteroid
+        atmosphere.physicsBody?.collisionBitMask = 0
     }
     
     // MARK: - Visual Feedback
