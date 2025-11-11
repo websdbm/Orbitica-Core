@@ -16,7 +16,7 @@ class AIPresets {
     // MARK: - Player AI (Auto-play)
     
     /// AI per la nave del giocatore in modalità auto-play/demo
-    static func createPlayerAI(difficulty: AIDifficulty) -> AIController {
+    static func createPlayerAI(difficulty: AIDifficulty) -> AIAgentController {
         let params = difficulty.parameters
         
         let behaviors: [AIBehavior] = [
@@ -32,7 +32,7 @@ class AIPresets {
             )
         ]
         
-        return AIController(
+        return AIAgentController(
             behaviors: behaviors,
             reactionSpeed: params.reactionSpeed,
             fireRateLimit: params.fireRateLimit
@@ -42,12 +42,12 @@ class AIPresets {
     // MARK: - Enemy AIs
     
     /// Nave kamikaze che si schianta contro il pianeta
-    static func createKamikazeAI(aggressiveness: CGFloat = 1.0) -> AIController {
+    static func createKamikazeAI(aggressiveness: CGFloat = 1.0) -> AIAgentController {
         let behaviors: [AIBehavior] = [
             AttackPlanetBehavior(approachSpeed: aggressiveness)
         ]
         
-        return AIController(
+        return AIAgentController(
             behaviors: behaviors,
             reactionSpeed: 0.9,
             fireRateLimit: 1.0  // Non spara
@@ -55,13 +55,13 @@ class AIPresets {
     }
     
     /// Nave bombardiere che attacca il pianeta da distanza
-    static func createBomberAI(range: CGFloat = 250) -> AIController {
+    static func createBomberAI(range: CGFloat = 250) -> AIAgentController {
         let behaviors: [AIBehavior] = [
             AvoidPlanetBehavior(safetyMargin: 80),
             BombardPlanetBehavior(optimalRange: range, aimTolerance: 0.3)
         ]
         
-        return AIController(
+        return AIAgentController(
             behaviors: behaviors,
             reactionSpeed: 0.7,
             fireRateLimit: 0.3
@@ -69,7 +69,7 @@ class AIPresets {
     }
     
     /// Nave caccia che insegue il giocatore
-    static func createHunterAI(aggressiveness: CGFloat = 1.0) -> AIController {
+    static func createHunterAI(aggressiveness: CGFloat = 1.0) -> AIAgentController {
         let behaviors: [AIBehavior] = [
             AvoidPlanetBehavior(safetyMargin: 90),
             HuntPlayerBehavior(
@@ -80,7 +80,7 @@ class AIPresets {
             OrbitPlanetBehavior(orbitRadius: 200, orbitSpeed: 0.6)
         ]
         
-        return AIController(
+        return AIAgentController(
             behaviors: behaviors,
             reactionSpeed: 0.85,
             fireRateLimit: 0.2
@@ -88,7 +88,7 @@ class AIPresets {
     }
     
     /// Nave nemica versatile (mix di comportamenti)
-    static func createHybridEnemyAI() -> AIController {
+    static func createHybridEnemyAI() -> AIAgentController {
         let behaviors: [AIBehavior] = [
             AvoidPlanetBehavior(safetyMargin: 85),
             HuntPlayerBehavior(aggressiveness: 0.7, firingRange: 350, aimTolerance: 0.45),
@@ -96,7 +96,7 @@ class AIPresets {
             OrbitPlanetBehavior(orbitRadius: 190, orbitSpeed: 0.7)
         ]
         
-        return AIController(
+        return AIAgentController(
             behaviors: behaviors,
             reactionSpeed: 0.75,
             fireRateLimit: 0.25
@@ -106,7 +106,7 @@ class AIPresets {
     // MARK: - Ally AIs
     
     /// Nave alleata difensore (aiuta il giocatore)
-    static func createDefenderAllyAI() -> AIController {
+    static func createDefenderAllyAI() -> AIAgentController {
         let behaviors: [AIBehavior] = [
             AvoidPlanetBehavior(safetyMargin: 95),
             DefendPlanetBehavior(patrolRadius: 200, aimTolerance: 0.35),
@@ -114,7 +114,7 @@ class AIPresets {
             OrbitPlanetBehavior(orbitRadius: 200, orbitSpeed: 0.75)
         ]
         
-        return AIController(
+        return AIAgentController(
             behaviors: behaviors,
             reactionSpeed: 0.8,
             fireRateLimit: 0.18
@@ -122,7 +122,7 @@ class AIPresets {
     }
     
     /// Nave alleata supporto (raccoglie power-up per il giocatore)
-    static func createSupportAllyAI() -> AIController {
+    static func createSupportAllyAI() -> AIAgentController {
         let behaviors: [AIBehavior] = [
             AvoidPlanetBehavior(safetyMargin: 100),
             CollectPowerupBehavior(searchRadius: 400),  // Priorità power-up
@@ -130,7 +130,7 @@ class AIPresets {
             OrbitPlanetBehavior(orbitRadius: 220, orbitSpeed: 0.7)
         ]
         
-        return AIController(
+        return AIAgentController(
             behaviors: behaviors,
             reactionSpeed: 0.7,
             fireRateLimit: 0.25
@@ -245,7 +245,7 @@ struct AIParameters {
      CollectPowerupBehavior(searchRadius: 200)
  ]
  
- let customAI = AIController(
+ let customAI = AIAgentController(
      behaviors: customBehaviors,
      reactionSpeed: 0.8,
      fireRateLimit: 0.2

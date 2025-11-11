@@ -127,10 +127,10 @@ enum AIEntityType {
     case asteroid        // Asteroide controllato
 }
 
-// MARK: - AI Controller
+// MARK: - AI Agent Controller
 
-/// Controller principale che coordina comportamenti AI
-class AIController {
+/// Controller principale che coordina comportamenti AI per agenti generici
+class AIAgentController {
     private var behaviors: [AIBehavior]
     private let reactionSpeed: CGFloat
     private let fireRateLimit: TimeInterval
