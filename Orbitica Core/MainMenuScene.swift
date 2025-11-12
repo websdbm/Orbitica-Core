@@ -7,11 +7,34 @@
 
 import SpriteKit
 import AVFoundation
+import UIKit
 
 class MainMenuScene: SKScene {
     
-    // FLAG DEBUG: Imposta a false per nascondere il pulsante debug
-    private let debugButtonEnabled: Bool = true
+    // DEVICE ID AUTORIZZATO per accesso ai pulsanti debug/regia
+    // Lascia vuoto per stampare il device ID corrente in console
+    private let authorizedDeviceID: String = "6B1084A9-E637-4A9F-8DB0-D0B6D462B3E0"
+    
+    // FLAG DEBUG: Calcolato dinamicamente in base al device ID
+    private var debugButtonEnabled: Bool {
+        let currentDeviceID = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
+        
+        // Se non è impostato un device ID autorizzato, stampa quello corrente
+        if authorizedDeviceID.isEmpty {
+            print("========================================")
+            print("📱 DEVICE ID (da inserire nel codice):")
+            print(currentDeviceID)
+            print("========================================")
+            return true  // Mostra comunque i pulsanti per configurazione iniziale
+        }
+        
+        // Verifica se il device corrente è autorizzato
+        let isAuthorized = (currentDeviceID == authorizedDeviceID)
+        if !isAuthorized {
+            print("⛔ Device non autorizzato - Debug buttons nascosti")
+        }
+        return isAuthorized
+    }
     
     private var titleLabel: SKLabelNode!
     private var subtitleLabel: SKLabelNode!

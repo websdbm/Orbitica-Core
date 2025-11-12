@@ -406,6 +406,29 @@ class EnhancedPlanetNode: SKNode {
         setupVisuals(for: style)
         updateHealth(current: currentHealth, max: maxHealth)
     }
+    
+    // MARK: - Flash Effect
+    
+    func flash() {
+        // Flash rosso sulla texture del pianeta
+        guard let baseSprite = baseLayer.children.first as? SKSpriteNode else { return }
+        
+        // Salva lo stato attuale del color blend
+        let originalColor = baseSprite.color
+        let originalBlendFactor = baseSprite.colorBlendFactor
+        
+        // Applica flash rosso
+        baseSprite.color = .red
+        baseSprite.colorBlendFactor = 0.7  // Flash intenso
+        
+        // Ripristina dopo 0.1 secondi
+        let wait = SKAction.wait(forDuration: 0.1)
+        let restore = SKAction.run {
+            baseSprite.color = originalColor
+            baseSprite.colorBlendFactor = originalBlendFactor
+        }
+        baseSprite.run(SKAction.sequence([wait, restore]))
+    }
 }
 
 // MARK: - Enhanced Atmosphere System

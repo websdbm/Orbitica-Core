@@ -34,25 +34,10 @@ class RegiaScene: SKScene {
     private let musicTracks = ["wave1.m4a", "wave2.m4a", "wave3.m4a", "temp4c.m4a"]
     private let musicNames = ["Space Journey ♪", "Cosmic Battle ♪", "Deep Void ♪", "Boss Encounter ♪"]
     
-    // Background environment names (must match GameScene SpaceEnvironment order)
-    private let environmentNames = [
-        "Cosmic Nebula ★",      // 0 - Nebula rotante 3-layer
-        "Animated Cosmos ★",    // 1 - Sistema solare animato
-        "Deep Space ★",         // 2 - Starfield dinamico
-        "Nebula Galaxy ★",      // 3 - Galassie con particelle
-        "Deep Space",           // 4 - Stelle twinkle
-        "Nebula",               // 5 - Nebulose colorate
-        "Void Space",           // 6 - Gradiente nero-blu
-        "Red Giant",            // 7 - Stella rossa
-        "Asteroid Belt",        // 8 - Campo asteroidi
-        "Binary Stars",         // 9 - Sistema binario
-        "Ion Storm",            // 10 - Tempesta ionica
-        "Pulsar Field",         // 11 - Stella pulsar
-        "Planetary System",     // 12 - Pianeti in orbita
-        "Comet Trail",          // 13 - Comete luminose
-        "Dark Matter Cloud",    // 14 - Materia oscura
-        "Supernova Remnant"     // 15 - Esplosione stellare
-    ]
+    // Background environment names - ORA SINCRONIZZATI con BackgroundManager
+    private var environmentNames: [String] {
+        return SpaceEnvironment.allCases.map { $0.name }
+    }
     
     // MARK: - Setup
     
@@ -542,82 +527,27 @@ class RegiaScene: SKScene {
         print("🎨 applyBackgroundStyle called with index: \(styleIndex)")
         print("🎨 backgroundLayer exists: \(backgroundLayer != nil)")
         
-        // Rimuovi stelle precedenti
+        // Rimuovi stelle e background precedenti
         currentStars.forEach { $0.removeFromParent() }
         currentStars.removeAll()
+        backgroundLayer?.removeAllChildren()
         
-        // Colori preview che richiamano gli ambienti (devono corrispondere a environmentNames)
-        let backgrounds: [UIColor] = [
-            UIColor(red: 0.1, green: 0.05, blue: 0.2, alpha: 1.0),   // 0: Cosmic Nebula (viola nebuloso)
-            UIColor(red: 0.05, green: 0.05, blue: 0.1, alpha: 1.0),  // 1: Animated Cosmos (blu sistema solare)
-            .black,                                                   // 2: Deep Space Enhanced (nero profondo)
-            UIColor(red: 0.15, green: 0.0, blue: 0.25, alpha: 1.0),  // 3: Nebula Galaxy (viola galattico)
-            UIColor(red: 0.0, green: 0.01, blue: 0.05, alpha: 1.0),  // 4: Deep Space (nero con tracce blu)
-            UIColor(red: 0.08, green: 0.0, blue: 0.12, alpha: 1.0),  // 5: Nebula (viola-rosa nebula)
-            UIColor(red: 0.0, green: 0.02, blue: 0.08, alpha: 1.0),  // 6: Void Space (blu-nero void)
-            UIColor(red: 0.12, green: 0.0, blue: 0.0, alpha: 1.0),   // 7: Red Giant (rosso stella)
-            UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1.0), // 8: Asteroid Belt (marrone asteroidale)
-            UIColor(red: 0.08, green: 0.08, blue: 0.05, alpha: 1.0), // 9: Binary Stars (giallo binario)
-            UIColor(red: 0.0, green: 0.08, blue: 0.12, alpha: 1.0),  // 10: Ion Storm (blu elettrico)
-            UIColor(red: 0.05, green: 0.1, blue: 0.08, alpha: 1.0),  // 11: Pulsar Field (verde pulsar)
-            UIColor(red: 0.05, green: 0.05, blue: 0.08, alpha: 1.0), // 12: Planetary System (blu pianeti)
-            UIColor(red: 0.08, green: 0.12, blue: 0.15, alpha: 1.0), // 13: Comet Trail (azzurro ghiaccio)
-            UIColor(red: 0.02, green: 0.02, blue: 0.05, alpha: 1.0), // 14: Dark Matter (grigio oscuro)
-            UIColor(red: 0.15, green: 0.08, blue: 0.0, alpha: 1.0)   // 15: Supernova (arancione esplosione)
-        ]
+        // Usa BackgroundManager per setup unificato
+        let environments = SpaceEnvironment.allCases
+        let index = min(styleIndex, environments.count - 1)
+        let selectedEnvironment = environments[index]
         
-        let index = min(styleIndex, backgrounds.count - 1)
-        backgroundColor = backgrounds[index]
+        // Setup background usando BackgroundManager (stesso codice di GameScene)
+        // Nota: RegiaScene/DebugScene non hanno worldLayer, usiamo scene stessa
+        let dummyWorldLayer = backgroundLayer ?? SKNode()
+        BackgroundManager.setupBackground(
+            selectedEnvironment,
+            in: self,
+            worldLayer: dummyWorldLayer,
+            playFieldMultiplier: 1.0
+        )
         
-        // Genera stelle (100 piccole, 30 medie, 10 grandi)
-        for _ in 0..<100 {
-            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.5...1.5))
-            star.fillColor = .white
-            star.strokeColor = .clear
-            star.position = CGPoint(
-                x: CGFloat.random(in: 0...size.width),
-                y: CGFloat.random(in: 0...size.height)
-            )
-            star.alpha = CGFloat.random(in: 0.3...0.8)
-            star.zPosition = -90
-            backgroundLayer?.addChild(star)
-            currentStars.append(star)
-            
-            // Twinkle animation
-            let fade1 = SKAction.fadeAlpha(to: 0.2, duration: Double.random(in: 1.0...3.0))
-            let fade2 = SKAction.fadeAlpha(to: 0.8, duration: Double.random(in: 1.0...3.0))
-            star.run(SKAction.repeatForever(SKAction.sequence([fade1, fade2])))
-        }
-        
-        for _ in 0..<30 {
-            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 1.5...2.5))
-            star.fillColor = UIColor(white: 1.0, alpha: CGFloat.random(in: 0.5...0.9))
-            star.strokeColor = .clear
-            star.position = CGPoint(
-                x: CGFloat.random(in: 0...size.width),
-                y: CGFloat.random(in: 0...size.height)
-            )
-            star.zPosition = -85
-            backgroundLayer?.addChild(star)
-            currentStars.append(star)
-        }
-        
-        for _ in 0..<10 {
-            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 2.5...4.0))
-            star.fillColor = .white
-            star.strokeColor = .clear
-            star.glowWidth = 3
-            star.position = CGPoint(
-                x: CGFloat.random(in: 0...size.width),
-                y: CGFloat.random(in: 0...size.height)
-            )
-            star.zPosition = -80
-            backgroundLayer?.addChild(star)
-            currentStars.append(star)
-        }
-        
-        let envName = environmentNames[min(styleIndex, environmentNames.count - 1)]
-        print("🌌 Background preview '\(envName)' applied with \(currentStars.count) stars")
+        print("✅ Background applicato: \(selectedEnvironment.name)")
     }
     
     private func playMusicTrack(_ trackName: String) {

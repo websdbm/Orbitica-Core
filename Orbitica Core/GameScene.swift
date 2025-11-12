@@ -131,48 +131,8 @@ struct WaveConfig {
 }
 
 // MARK: - Space Environments
-enum SpaceEnvironment: CaseIterable {
-    // NUOVI AMBIENTI ENHANCED (Priorità per release)
-    case cosmicNebula       // Nebulosa Cosmica con nebula02 ⭐ NUOVO
-    case animatedCosmos     // Sistemi solari animati + galassie rotanti ⭐ NUOVO
-    case deepSpaceEnhanced  // Deep Space con starfield dinamico multi-layer
-    case nebulaGalaxy       // Galassie/Nebulose animate con particelle dust ⭐ NUOVO
-    
-    // AMBIENTI ORIGINALI (da mantenere per ora)
-    case deepSpace      // Nero profondo con stelle twinkle e colorate
-    case nebula         // Nebulose colorate (blu/viola/rosa) con sfumature
-    case voidSpace      // Gradiente nero-blu con stelle luminose
-    case redGiant       // Stella rossa gigante con atmosfera calda
-    case asteroidBelt   // Campo di asteroidi distanti
-    case binaryStars    // Sistema binario con due stelle
-    case ionStorm       // Tempesta di ioni elettrica
-    case pulsarField    // Stella pulsar con onde radio pulsanti
-    case planetarySystem // Sistema planetario con pianeti in orbita
-    case cometTrail     // Comete con scie luminose
-    case darkMatterCloud // Nuvole di materia oscura con particelle
-    case supernovaRemnant // Espansione gas da esplosione stellare
-    
-    var name: String {
-        switch self {
-        case .cosmicNebula: return "Cosmic Nebula ★"  // NUOVO - Primo (nebula02)
-        case .animatedCosmos: return "Animated Cosmos ★"  // NUOVO
-        case .deepSpaceEnhanced: return "Deep Space ★"  // Stella per indicare versione enhanced
-        case .nebulaGalaxy: return "Nebula Galaxy ★"  // NUOVO (nebula01)
-        case .deepSpace: return "Deep Space"
-        case .nebula: return "Nebula"
-        case .voidSpace: return "Void Space"
-        case .redGiant: return "Red Giant"
-        case .asteroidBelt: return "Asteroid Belt"
-        case .binaryStars: return "Binary Stars"
-        case .ionStorm: return "Ion Storm"
-        case .pulsarField: return "Pulsar Field"
-        case .planetarySystem: return "Planetary System"
-        case .cometTrail: return "Comet Trail"
-        case .darkMatterCloud: return "Dark Matter Cloud"
-        case .supernovaRemnant: return "Supernova Remnant"
-        }
-    }
-}
+// ⚠️ MIGRATO: SpaceEnvironment è ora definito in BackgroundManager.swift
+// Tutte le scene (GameScene, RegiaScene, DebugScene) usano la stessa definizione centralizzata
 
 // MARK: - Game Scene
 class GameScene: SKScene, SKPhysicsContactDelegate {
@@ -218,6 +178,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var atmosphereRadius: CGFloat = 96  // Parte al 100% (96)
     private let maxAtmosphereRadius: CGFloat = 144  // Limite massimo 150% (96 * 1.5)
     private let minAtmosphereRadius: CGFloat = 40
+    
+    // Computed property per ottenere la posizione del pianeta (enhanced o originale)
+    private var planetPosition: CGPoint {
+        if useEnhancedVisuals {
+            return enhancedPlanet?.position ?? CGPoint(x: size.width / 2, y: size.height / 2)
+        } else {
+            return planet?.position ?? CGPoint(x: size.width / 2, y: size.height / 2)
+        }
+    }
+
     
     // Enhanced Visual System
     private var enhancedPlanet: EnhancedPlanetNode?
@@ -366,6 +336,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // DRONE: Power-up persistente
     private var activeDrone: DroneNode?  // Drone attivo (se esiste)
+    private var lastDroneUpdateTime: TimeInterval = 0  // Per calcolo deltaTime corretto
     
     // Pause system
     private var isGamePaused: Bool = false
@@ -540,6 +511,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             "cosmicNebulaLayer1",       // Cosmic Nebula 3-layer (fondo)
             "cosmicNebulaLayer2",       // Cosmic Nebula 3-layer (medio)
             "cosmicNebulaLayer3",       // Cosmic Nebula 3-layer (fronte)
+            "cosmiNebulaOverlay",       // Cosmic Nebula dark overlay
             "mainNebula",               // Nebula Galaxy sprite
             "mainSolarSystem",          // Animated Cosmos
             "parallaxStarfield",        // Deep Space Enhanced
@@ -580,38 +552,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupParallaxBackground() {
-        // Sequenza fissa basata sulla wave corrente (ciclo attraverso tutti i 12 ambienti)
-        let environments: [SpaceEnvironment] = [
-            .cosmicNebula,       // Wave 1 - Nebulosa Cosmica (nebula02) ⭐ PRIMO TEST
-            .nebulaGalaxy,       // Wave 2 - Galassie/Nebulose (nebula01) ⭐
-            .animatedCosmos,     // Wave 3 - Sistema Solare Animato ⭐
-            .voidSpace,          // Wave 4
-            .redGiant,           // Wave 4
-            .asteroidBelt,       // Wave 5
-            .binaryStars,        // Wave 6
-            .ionStorm,           // Wave 7
-            .pulsarField,        // Wave 8
-            .planetarySystem,    // Wave 9
-            .cometTrail,         // Wave 10
-            .darkMatterCloud,    // Wave 11
-            .supernovaRemnant    // Wave 12
-        ]
-        
-        // Usa modulo per ciclare attraverso gli ambienti - FIX: gestisci wave 0
+        // USA BackgroundManager per determinare l'ambiente dalla wave
         let safeWave = max(1, currentWave)  // Minimo wave 1
-        let environmentIndex = (safeWave - 1) % environments.count
-        currentEnvironment = environments[environmentIndex]
+        currentEnvironment = BackgroundManager.environmentForWave(safeWave)
         
         applyEnvironment(currentEnvironment)
         
-        debugLog("✅ Parallax background created - Wave \(currentWave) - Environment: \(currentEnvironment.name)")
+        debugLog("✅ Background setup - Wave \(currentWave) - Environment: \(currentEnvironment.name)")
     }
     
     private func applyEnvironment(_ environment: SpaceEnvironment) {
-        // PULIZIA COMPLETA degli effetti dell'ambiente precedente
-        cleanupPreviousEnvironment()
+        // USA BackgroundManager come unica fonte di verità
+        BackgroundManager.setupBackground(environment, 
+                                         in: self, 
+                                         worldLayer: worldLayer, 
+                                         playFieldMultiplier: playFieldMultiplier)
         
-        // Rimuovi layer esistenti (legacy) - con guard per evitare crash
+        // Cleanup legacy layers
         starsLayer1?.removeFromParent()
         starsLayer1 = nil
         starsLayer2?.removeFromParent()
@@ -620,10 +577,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         starsLayer3 = nil
         nebulaLayer?.removeFromParent()
         nebulaLayer = nil
-        
-        // Rimuovi anche starfield dinamico se presente
         childNode(withName: "dynamicStarfield")?.removeFromParent()
+    }
+    
+    // MARK: - Setup Parallax (LEGACY - mantenuto per compatibilità con ambienti non migrati)
+    
+    private func setupParallaxBackground_LEGACY() {
+        // Questa funzione è ora deprecata - usa BackgroundManager.setupBackground()
+        // Mantenuta solo per ambienti classici non ancora migrati
         
+        /* DEPRECATO - CODICE VECCHIO COMMENTATO
         switch environment {
         case .cosmicNebula:
             setupCosmicNebulaEnvironment()
@@ -660,6 +623,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         currentEnvironment = environment
+        */
     }
     
     // Applica background style scelto in RegiaScene (0-15)
@@ -843,26 +807,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let chosenQuadrant = quadrants.randomElement()!
         systemNode.position = CGPoint(x: chosenQuadrant.x, y: chosenQuadrant.y)
         
-        // SCALA ENORME - IL DOPPIO (5x invece di 2.5x)
-        systemNode.setScale(5.0)
+        // SCALA MASTODONTICA - zoom ancora più largo (8x)
+        systemNode.setScale(8.0)
         
         // OPACITÀ 100% - colori scuri faranno da silhouette
         systemNode.alpha = 1.0
         
-        // STELLA CENTRALE - Silhouette visibile ma elegante
-        let sunSize: CGFloat = 35
+        // STELLA CENTRALE - Silhouette MOLTO più scura (quasi nera)
+        let sunSize: CGFloat = 40  // Leggermente più grande
         let sun = SKShapeNode(circleOfRadius: sunSize)
-        sun.fillColor = UIColor(red: 0.22, green: 0.18, blue: 0.12, alpha: 1.0)  // Marrone più chiaro
-        sun.strokeColor = UIColor(red: 0.28, green: 0.22, blue: 0.15, alpha: 0.6)
+        sun.fillColor = UIColor(red: 0.08, green: 0.07, blue: 0.06, alpha: 1.0)  // Quasi nero
+        sun.strokeColor = UIColor(red: 0.12, green: 0.10, blue: 0.08, alpha: 0.4)
         sun.lineWidth = 2
-        sun.glowWidth = sunSize * 0.3
+        sun.glowWidth = sunSize * 0.2  // Glow ridotto
         systemNode.addChild(sun)
         
-        // Alone solare (corona) - più visibile
-        let corona = SKShapeNode(circleOfRadius: sunSize * 1.3)
-        corona.fillColor = UIColor(red: 0.18, green: 0.15, blue: 0.12, alpha: 0.3)
+        // Alone solare (corona) - più scuro e sottile
+        let corona = SKShapeNode(circleOfRadius: sunSize * 1.25)
+        corona.fillColor = UIColor(red: 0.06, green: 0.05, blue: 0.04, alpha: 0.2)
         corona.strokeColor = .clear
-        corona.glowWidth = 8
+        corona.glowWidth = 4
         systemNode.addChild(corona)
         
         // Pulsazione sole (PIÙ LENTA - raddoppiata)
@@ -1119,6 +1083,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         print("      Layer 2 (mid):    α=80%, rotation=\(Int(duration2))s")
         print("      Layer 3 (front):  α=100%, rotation=\(Int(duration3))s (fastest)")
         print("      Scale: \(String(format: "%.2f", sharedScale))x")
+        
+        // OVERLAY SCURO per ridurre luminosità nebulosa
+        let darkOverlay = SKSpriteNode(color: .black, size: CGSize(width: playAreaWidth, height: playAreaHeight))
+        darkOverlay.name = "cosmiNebulaOverlay"
+        darkOverlay.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        darkOverlay.alpha = 0.35  // 35% nero semi-trasparente
+        darkOverlay.zPosition = -895  // Sopra la nebulosa, sotto le stelle del gioco
+        worldLayer.addChild(darkOverlay)
+        print("      🌑 Dark overlay added (α=35%) to reduce brightness")
         
         // 3. PARTICELLE DUST LEGGERE (2 emitter) - specifiche per Cosmic Nebula
         createCosmicNebulaDustEmitters()
@@ -2379,21 +2352,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             worldLayer.addChild(newPlanet)
             enhancedPlanet = newPlanet
             
-            // IMPORTANTE: Crea anche planet (SKShapeNode invisibile) per compatibilità con il resto del codice
-            planet = SKShapeNode(circleOfRadius: planetRadius)
-            planet.fillColor = .clear
-            planet.strokeColor = .clear
-            planet.alpha = 0.0  // Completamente invisibile
-            planet.position = newPlanet.position
-            planet.zPosition = newPlanet.zPosition
-            planet.name = "planetReference"
-            // NON aggiungere physics body qui - già presente su enhancedPlanet
-            worldLayer.addChild(planet)
+            // NON creare SKShapeNode di riferimento - non serve più
+            // Il planet viene usato solo nel sistema originale
             
             // RIMOSSO: Label della salute al centro - ora usiamo filtro colore sulla Terra
             // Il filtro viene applicato automaticamente tramite updateHealth() in EnhancedPlanetNode
             
-            debugLog("✅ Enhanced Planet created at: \(newPlanet.position) + invisible reference planet")
+            debugLog("✅ Enhanced Planet created at: \(newPlanet.position)")
         } else {
             // SISTEMA ORIGINALE
             let planetPath = createIrregularPlanetPath(radius: planetRadius)
@@ -3277,15 +3242,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Debug AI state
         if frameCount % 60 == 0 {  // Log ogni 60 frame (circa 1 secondo)
-            print("🔍 AI State: useAI=\(useAIController), aiController=\(aiController != nil), player=\(player != nil), planet=\(planet != nil)")
+            print("🔍 AI State: useAI=\(useAIController), aiController=\(aiController != nil), player=\(player != nil)")
         }
         
         // Aggiorna AI Controller se attivo
-        if useAIController, let ai = aiController, let player = player, let planet = planet {
+        if useAIController, let ai = aiController, let player = player {
             // Crea GameState per l'AI
             let asteroidInfos = asteroids.map { asteroid -> AsteroidInfo in
-                let dx = asteroid.position.x - planet.position.x
-                let dy = asteroid.position.y - planet.position.y
+                let dx = asteroid.position.x - planetPosition.x
+                let dy = asteroid.position.y - planetPosition.y
                 let distance = sqrt(dx * dx + dy * dy)
                 
                 return AsteroidInfo(
@@ -3316,7 +3281,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 playerPosition: player.position,
                 playerVelocity: player.physicsBody?.velocity ?? .zero,
                 playerAngle: player.zRotation,
-                planetPosition: planet.position,
+                planetPosition: planetPosition,
                 planetRadius: planetRadius,
                 planetHealth: planetHealth,
                 maxPlanetHealth: maxPlanetHealth,
@@ -3347,8 +3312,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // FRENO INTELLIGENTE: attiva se vai troppo veloce VERSO il pianeta
             let toPlanet = CGVector(
-                dx: planet.position.x - player.position.x,
-                dy: planet.position.y - player.position.y
+                dx: planetPosition.x - player.position.x,
+                dy: planetPosition.y - player.position.y
             )
             let toPlanetLength = sqrt(toPlanet.dx * toPlanet.dx + toPlanet.dy * toPlanet.dy)
             let velocityTowardPlanet = (player.physicsBody!.velocity.dx * toPlanet.dx + player.physicsBody!.velocity.dy * toPlanet.dy) / max(toPlanetLength, 1)
@@ -3837,7 +3802,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             guard let physicsBody = missile.physicsBody else { continue }
             
             // EVITA LA TERRA: se troppo vicino al pianeta, applica forza repulsiva
-            let planetCenter = planet.position
+            let planetCenter = planetPosition
             let distanceFromPlanet = hypot(missile.position.x - planetCenter.x, missile.position.y - planetCenter.y)
             let dangerZone: CGFloat = atmosphereRadius + 30  // Zona di sicurezza oltre atmosfera
             
@@ -3898,7 +3863,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func updateDrone(_ currentTime: TimeInterval) {
-        guard let drone = activeDrone else { return }
+        guard let drone = activeDrone else {
+            // Debug: verifica se il drone esiste ma non è assegnato
+            if frameCount % 180 == 0 {
+                debugLog("⚠️ updateDrone: activeDrone is nil (frame \(frameCount))")
+            }
+            return
+        }
         
         // Verifica che il drone sia ancora nella scena
         guard drone.parent != nil else {
@@ -3907,40 +3878,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
         
-        // Calcola deltaTime
-        let deltaTime = currentTime - lastUpdateTime
+        // Calcola deltaTime corretto (16.67ms @ 60fps)
+        let deltaTime = lastDroneUpdateTime == 0 ? 0.016 : min(currentTime - lastDroneUpdateTime, 0.1)
+        lastDroneUpdateTime = currentTime
         
-        // Raccogli tutti gli asteroidi attivi e orbital rings
-        let asteroidsNodes = worldLayer.children.filter { $0.name == "asteroid" }
+        // Usa direttamente l'array asteroids (non hanno .name impostato)
         let orbitalRingsNodes = worldLayer.children.filter { $0.name == "orbitalRing" }
         
         // Debug ogni 3 secondi
         if frameCount % 180 == 0 {
             let distance = sqrt(pow(drone.position.x - size.width/2, 2) + pow(drone.position.y - size.height/2, 2))
-            debugLog("🤖 Drone update - Pos: (\(Int(drone.position.x)), \(Int(drone.position.y))), Distance: \(Int(distance))px, HP: \(drone.getHealthString())")
+            let vel = drone.physicsBody?.velocity ?? .zero
+            debugLog("🤖 Drone - Pos: (\(Int(drone.position.x)), \(Int(drone.position.y))), Vel: (\(Int(vel.dx)), \(Int(vel.dy))), Dist: \(Int(distance))px, Asteroids: \(asteroids.count)")
         }
         
-        // Aggiorna comportamento drone con AI
-        drone.update(deltaTime: deltaTime, asteroids: asteroidsNodes, orbitalRings: orbitalRingsNodes)
+        // Aggiorna comportamento drone con AI - passa array asteroids diretto
+        drone.update(deltaTime: deltaTime, asteroids: asteroids, orbitalRings: orbitalRingsNodes, screenSize: size)
         
-        // SISTEMA DI SICUREZZA: Se il drone si allontana MOLTO, riportalo indietro
-        let planetCenter = CGPoint(x: size.width / 2, y: size.height / 2)
-        let droneDistance = sqrt(pow(drone.position.x - planetCenter.x, 2) + pow(drone.position.y - planetCenter.y, 2))
-        
-        if droneDistance > 320 {
-            // Troppo lontano! Riposiziona in orbita
-            let angle = atan2(drone.position.y - planetCenter.y, drone.position.x - planetCenter.x)
-            drone.position = CGPoint(
-                x: planetCenter.x + cos(angle) * 170,
-                y: planetCenter.y + sin(angle) * 170
-            )
-            // Resetta velocità con componente tangenziale per orbita fluida
-            drone.physicsBody?.velocity = CGVector(
-                dx: -sin(angle) * 140,
-                dy: cos(angle) * 140
-            )
-            debugLog("⚠️ Drone troppo lontano (\(Int(droneDistance))px) - riposizionato a 170px")
-        }
+        // RIMOSSO: Safety riposizionamento - causava salti!
+        // Il drone deve muoversi liberamente con AI
         
         // Aggiorna label salute (ogni secondo circa)
         if frameCount % 60 == 0 {
@@ -3950,13 +3906,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Gravity System
     private func applyGravity() {
-        // Safety check: Non eseguire se non inizializzato o se planet/player sono nil
+        // Safety check: Non eseguire se non inizializzato o se player è nil
         guard isInitialized, 
-              let planet = planet,
               let player = player else { return }
         
         // OTTIMIZZAZIONE: Calcola gravità solo per oggetti vicini al pianeta o al player
-        let planetPos = planet.position
+        let planetPos = planetPosition
         let maxGravityDistance: CGFloat = 1500  // Oltre questa distanza, niente gravità
         
         // Se Gravity power-up è attivo, applica gravità VERSO IL PLAYER (5x più forte)
@@ -4046,12 +4001,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func applyGravityToNode(node: SKNode, body: SKPhysicsBody, multiplier: CGFloat) {
-        // SAFETY CHECK: Assicurati che planet esista
-        guard let planet = planet else { return }
+        // SAFETY CHECK: Assicurati che la posizione del pianeta sia disponibile
+        // (funziona sia con enhanced visuals che con sistema originale)
         
         // Calcola distanza dal pianeta
-        let dx = planet.position.x - node.position.x
-        let dy = planet.position.y - node.position.y
+        let dx = planetPosition.x - node.position.x
+        let dy = planetPosition.y - node.position.y
         let distanceSquared = dx * dx + dy * dy
         let distance = sqrt(distanceSquared)
         
@@ -4541,14 +4496,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     */
     
     private func updateOrbitalGrapple() {
-        // Safety check: verifica che player e planet esistano
+        // Safety check: verifica che player esista
         guard isInitialized,
               let player = player,
-              let planet = planet,
               let playerBody = player.physicsBody else { return }
         
         // Calcola distanza dal centro del pianeta
-        let planetCenter = planet.position
+        let planetCenter = planetPosition
         let dx = player.position.x - planetCenter.x
         let dy = player.position.y - planetCenter.y
         let distanceFromCenter = sqrt(dx * dx + dy * dy)
@@ -5367,7 +5321,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         asteroid.physicsBody?.categoryBitMask = PhysicsCategory.asteroid
-        asteroid.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.planet | PhysicsCategory.projectile
+        asteroid.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.planet | PhysicsCategory.projectile | PhysicsCategory.asteroid
         asteroid.physicsBody?.collisionBitMask = 0
         
         // Velocità iniziale basata sul tipo
@@ -5461,7 +5415,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         asteroid.physicsBody?.linearDamping = 0
         asteroid.physicsBody?.angularDamping = 0
         asteroid.physicsBody?.categoryBitMask = PhysicsCategory.asteroid
-        asteroid.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.planet | PhysicsCategory.projectile
+        asteroid.physicsBody?.contactTestBitMask = PhysicsCategory.atmosphere | PhysicsCategory.planet | PhysicsCategory.projectile | PhysicsCategory.asteroid
         asteroid.physicsBody?.collisionBitMask = 0
         
         // Velocità iniziale casuale (se non ha posizione specificata) - RIDOTTA
@@ -5882,15 +5836,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func updateCameraZoom() {
-        // Safety check: verifica che player e planet siano inizializzati
-        guard let player = player, let planet = planet else { return }
+        // Safety check: verifica che player sia inizializzato
+        guard let player = player else { return }
         
         // Safety check: verifica che gameCamera sia inizializzata
         guard gameCamera != nil else { return }
         
         // Calcola distanze assolute dal pianeta
-        let dx = abs(player.position.x - planet.position.x)
-        let dy = abs(player.position.y - planet.position.y)
+        let dx = abs(player.position.x - planetPosition.x)
+        let dy = abs(player.position.y - planetPosition.y)
         
         // Soglie fisse basate sulle dimensioni dello schermo
         // Primo zoom quando il player raggiunge circa 40% della larghezza/altezza schermo
@@ -6005,11 +5959,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Asteroid + Atmosphere
         else if collision == (PhysicsCategory.asteroid | PhysicsCategory.atmosphere) {
-            handleAsteroidAtmosphereBounce(contact: contact)
-            
-            // Identifica l'asteroide
+            // Identifica l'asteroide PRIMA del rimbalzo per calcolare la posizione corretta dell'esplosione
             let asteroidBody = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA : contact.bodyB
             let asteroid = asteroidBody.node as? SKShapeNode
+            
+            // Calcola il punto di impatto PRECISO sulla superficie dell'atmosfera
+            // invece di usare contact.contactPoint che può essere impreciso
+            var explosionPoint = contact.contactPoint
+            if let asteroidNode = asteroid {
+                let dx = asteroidNode.position.x - planetPosition.x
+                let dy = asteroidNode.position.y - planetPosition.y
+                let distance = sqrt(dx * dx + dy * dy)
+                
+                if distance > 0 {
+                    // Normalizza la direzione
+                    let normalX = dx / distance
+                    let normalY = dy / distance
+                    
+                    // Punto esatto sulla superficie dell'atmosfera
+                    explosionPoint = CGPoint(
+                        x: planetPosition.x + normalX * atmosphereRadius,
+                        y: planetPosition.y + normalY * atmosphereRadius
+                    )
+                }
+            }
+            
+            handleAsteroidAtmosphereBounce(contact: contact)
             
             // Calcola danno basato sul tipo di asteroide
             var damageAmount: CGFloat = 1.96  // Danno base ridotto ulteriormente (2.3 * 0.85 = 1.955 ≈ 1.96)
@@ -6024,10 +5999,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             
             // Effetto visivo enhanced per impatto
             if useEnhancedVisuals {
-                // Calcola angolo di impatto
-                let atmosphereCenter = CGPoint(x: size.width / 2, y: size.height / 2)
-                let contactPoint = contact.contactPoint
-                let impactVector = CGPoint(x: contactPoint.x - atmosphereCenter.x, y: contactPoint.y - atmosphereCenter.y)
+                // Calcola angolo di impatto usando il punto preciso
+                let impactVector = CGPoint(x: explosionPoint.x - planetPosition.x, y: explosionPoint.y - planetPosition.y)
                 let impactAngle = atan2(impactVector.y, impactVector.x)
                 
                 enhancedAtmosphere?.playImpactEffect(at: impactAngle)
@@ -6039,8 +6012,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 fragmentAsteroid(asteroid, damageMultiplier: 1.0, givePoints: false)
             }
             
-            // Effetto particellare al punto di contatto con colore random
-            createCollisionParticles(at: contact.contactPoint, color: randomExplosionColor())
+            // Effetto particellare al punto di impatto PRECISO con colore random
+            createCollisionParticles(at: explosionPoint, color: randomExplosionColor())
             
             debugLog("☄️ Asteroid hit atmosphere - bounce + \(damageAmount) atmosphere damage + fragment")
         }
@@ -6088,6 +6061,75 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 fragmentAsteroid(asteroid, damageMultiplier: 1.0)  // Danno da 1 colpo
                 debugLog("💥 Asteroid hit planet - bounce + fragment damage")
             }
+        }
+        
+        // Asteroid + Asteroid (rimbalzo dolce senza danno)
+        else if collision == (PhysicsCategory.asteroid | PhysicsCategory.asteroid) {
+            let asteroidA = contact.bodyA.node as? SKShapeNode
+            let asteroidB = contact.bodyB.node as? SKShapeNode
+            
+            guard let astA = asteroidA, let astB = asteroidB,
+                  let bodyA = astA.physicsBody, let bodyB = astB.physicsBody else { return }
+            
+            // Calcola vettore di collisione
+            let dx = astB.position.x - astA.position.x
+            let dy = astB.position.y - astA.position.y
+            let distance = sqrt(dx * dx + dy * dy)
+            
+            guard distance > 0 else { return }
+            
+            // Vettore normale della collisione
+            let nx = dx / distance
+            let ny = dy / distance
+            
+            // Velocità relativa
+            let dvx = bodyB.velocity.dx - bodyA.velocity.dx
+            let dvy = bodyB.velocity.dy - bodyA.velocity.dy
+            
+            // Velocità relativa lungo la normale
+            let velocityAlongNormal = dvx * nx + dvy * ny
+            
+            // Non processare se gli asteroidi si stanno già allontanando
+            guard velocityAlongNormal < 0 else { return }
+            
+            // Rimbalzo elastico dolce con damping
+            let restitution: CGFloat = 0.3  // Coefficiente di rimbalzo basso (30%)
+            let impulse = -(1 + restitution) * velocityAlongNormal / (1/bodyA.mass + 1/bodyB.mass)
+            
+            // Applica impulso limitato per evitare accelerazioni eccessive
+            let maxImpulse: CGFloat = 50.0
+            let clampedImpulse = min(abs(impulse), maxImpulse) * (impulse > 0 ? 1 : -1)
+            
+            let impulseX = clampedImpulse * nx
+            let impulseY = clampedImpulse * ny
+            
+            // Applica impulso ai due asteroidi
+            bodyA.velocity = CGVector(
+                dx: bodyA.velocity.dx - impulseX / bodyA.mass,
+                dy: bodyA.velocity.dy - impulseY / bodyA.mass
+            )
+            
+            bodyB.velocity = CGVector(
+                dx: bodyB.velocity.dx + impulseX / bodyB.mass,
+                dy: bodyB.velocity.dy + impulseY / bodyB.mass
+            )
+            
+            // Limita velocità massima per evitare rimbalzi eccessivi
+            let maxVelocity: CGFloat = 150.0
+            
+            let speedA = sqrt(bodyA.velocity.dx * bodyA.velocity.dx + bodyA.velocity.dy * bodyA.velocity.dy)
+            if speedA > maxVelocity {
+                let scale = maxVelocity / speedA
+                bodyA.velocity = CGVector(dx: bodyA.velocity.dx * scale, dy: bodyA.velocity.dy * scale)
+            }
+            
+            let speedB = sqrt(bodyB.velocity.dx * bodyB.velocity.dx + bodyB.velocity.dy * bodyB.velocity.dy)
+            if speedB > maxVelocity {
+                let scale = maxVelocity / speedB
+                bodyB.velocity = CGVector(dx: bodyB.velocity.dx * scale, dy: bodyB.velocity.dy * scale)
+            }
+            
+            debugLog("☄️ Asteroid-asteroid gentle bounce - velocities limited")
         }
         
         // Player + Asteroid
@@ -6173,8 +6215,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let powerupBody = contact.bodyA.categoryBitMask == PhysicsCategory.powerup ? contact.bodyA : contact.bodyB
             if let powerupNode = powerupBody.node, let powerupPhysics = powerupNode.physicsBody {
                 // Rimbalzo sull'atmosfera (come per il pianeta)
-                let dx = powerupNode.position.x - planet.position.x
-                let dy = powerupNode.position.y - planet.position.y
+                let dx = powerupNode.position.x - planetPosition.x
+                let dy = powerupNode.position.y - planetPosition.y
                 let distance = sqrt(dx * dx + dy * dy)
                 
                 guard distance > 0 else { return }
@@ -6216,8 +6258,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Rimbalzo forte per i power-up
             let powerup = contact.bodyA.categoryBitMask == PhysicsCategory.powerup ? contact.bodyA.node : contact.bodyB.node
             if let powerupNode = powerup, let powerupBody = powerupNode.physicsBody {
-                let dx = powerupNode.position.x - planet.position.x
-                let dy = powerupNode.position.y - planet.position.y
+                let dx = powerupNode.position.x - planetPosition.x
+                let dy = powerupNode.position.y - planetPosition.y
                 let distance = sqrt(dx * dx + dy * dy)
                 
                 guard distance > 0 else { return }
@@ -6330,9 +6372,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func handleAtmosphereBounce(contact: SKPhysicsContact, isPlayer: Bool) {
-        // Safety check: verifica che planet esista
-        guard let planet = planet else { return }
-        
         // Determina quale body è quello che rimbalza
         let bouncingBody = isPlayer ? 
             (contact.bodyA.categoryBitMask == PhysicsCategory.player ? contact.bodyA : contact.bodyB) :
@@ -6341,8 +6380,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let node = bouncingBody.node else { return }
         
         // Calcola direzione dal centro del pianeta al nodo
-        let dx = node.position.x - planet.position.x
-        let dy = node.position.y - planet.position.y
+        let dx = node.position.x - planetPosition.x
+        let dy = node.position.y - planetPosition.y
         let distance = sqrt(dx * dx + dy * dy)
         
         guard distance > 0 else { return }
@@ -6379,17 +6418,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func handleAsteroidAtmosphereBounce(contact: SKPhysicsContact) {
-        // Safety check: verifica che planet esista
-        guard let planet = planet else { return }
-        
         // Determina quale body è l'asteroide
         let asteroidBody = contact.bodyA.categoryBitMask == PhysicsCategory.asteroid ? contact.bodyA : contact.bodyB
         
         guard let asteroid = asteroidBody.node else { return }
         
         // Calcola direzione dal centro del pianeta all'asteroide
-        let dx = asteroid.position.x - planet.position.x
-        let dy = asteroid.position.y - planet.position.y
+        let dx = asteroid.position.x - planetPosition.x
+        let dy = asteroid.position.y - planetPosition.y
         let distance = sqrt(dx * dx + dy * dy)
         
         guard distance > 0 else { return }
@@ -6426,12 +6462,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func handlePlanetBounce(contact: SKPhysicsContact, asteroid: SKShapeNode) {
-        // Safety check: verifica che planet esista
-        guard let planet = planet else { return }
-        
         // Calcola direzione dal centro del pianeta all'asteroide
-        let dx = asteroid.position.x - planet.position.x
-        let dy = asteroid.position.y - planet.position.y
+        let dx = asteroid.position.x - planetPosition.x
+        let dy = asteroid.position.y - planetPosition.y
         let distance = sqrt(dx * dx + dy * dy)
         
         guard distance > 0, let asteroidBody = asteroid.physicsBody else { return }
@@ -7350,8 +7383,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // DISTRIBUZIONE PROGRESSIVA power-up per wave
         // Wave 1: V (Vulcan), B (Bullet)
         // Wave 2: V, B, A (Atmosphere)
-        // Wave 3: V, B, A, G (Gravity)
-        // Wave 4+: V, B, A, G, W (Wave), M (Missile)
+        // Wave 3: V, B, A, G (Gravity), D (Drone)
+        // Wave 4+: V, B, A, G, D, W (Wave), M (Missile)
         // TUTTI CON PESO 1 = PROBABILITÀ PARIFICATE
         
         var weightedTypes: [(String, UIColor, Int)] = []
@@ -7360,21 +7393,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         weightedTypes.append(("V", UIColor.orange, 1))  // Vulcan - fuoco rapido
         weightedTypes.append(("B", UIColor.green, 1))   // Bullet - munizioni potenziate
         
-        // DRONE: Alta probabilità in wave 1 per testing
-        if currentWave == 1 {
-            weightedTypes.append(("D", UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0), 5))  // Peso 5x per test!
-        } else if currentWave >= 2 {
-            weightedTypes.append(("D", UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0), 1))  // Peso normale dopo wave 1
-        }
-        
         // Wave 2+: aggiungi Atmosphere
         if currentWave >= 2 {
             weightedTypes.append(("A", UIColor.cyan, 1))    // Atmosphere - ricarica atmosfera
         }
         
-        // Wave 3+: aggiungi Gravity
+        // Wave 3+: aggiungi Gravity e Drone
         if currentWave >= 3 {
             weightedTypes.append(("G", UIColor.gray, 1))  // Gravity - attira asteroidi
+            weightedTypes.append(("D", UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0), 1))  // Drone - alleato difensivo
         }
         
         // Wave 4+: aggiungi Wave e Missile
@@ -8081,24 +8108,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     // MARK: - Planet Health System
     private func updatePlanetHealthLabel() {
-        // RIMOSSO: Label ora sostituito da filtro colore sulla Terra
-        // Il filtro viene aggiornato automaticamente tramite updateAtmosphereVisuals()
-        // che chiama enhancedPlanet?.updateHealth()
+        if useEnhancedVisuals {
+            // Sistema enhanced: aggiorna filtro colore sulla Terra
+            let currentHealth = CGFloat(planetHealth)
+            let maxHealth = max(1, CGFloat(maxPlanetHealth))
+            enhancedPlanet?.updateHealth(current: currentHealth, max: maxHealth)
+        } else {
+            // Sistema originale: label già aggiornato in setupPlanet
+            planetHealthLabel?.text = "\(planetHealth)/\(maxPlanetHealth)"
+        }
     }
     
     private func flashPlanet() {
-        // Safety check: verifica che planet esista
-        guard planet != nil else { return }
-        
-        // Effetto flash rosso sul pianeta quando viene colpito
-        planet.fillColor = .red
-        
-        let wait = SKAction.wait(forDuration: 0.1)
-        let restore = SKAction.run { [weak self] in
-            guard let self = self else { return }
-            self.planet.fillColor = self.planetOriginalColor  // Usa il colore originale memorizzato
+        if useEnhancedVisuals {
+            // Usa il nuovo sistema di flash per pianeta enhanced
+            enhancedPlanet?.flash()
+        } else {
+            // Sistema originale: flash rosso sul SKShapeNode
+            guard planet != nil else { return }
+            planet.fillColor = .red
+            
+            let wait = SKAction.wait(forDuration: 0.1)
+            let restore = SKAction.run { [weak self] in
+                guard let self = self else { return }
+                self.planet.fillColor = self.planetOriginalColor  // Usa il colore originale memorizzato
+            }
+            planet.run(SKAction.sequence([wait, restore]))
         }
-        planet.run(SKAction.sequence([wait, restore]))
     }
     
     private func gameOver() {
@@ -8112,8 +8148,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if isRegiaMode && ReplayManager.shared.isCurrentlyRecording {
             print("🎬 Regia Mode: fermando registrazione al game over")
             // Esplosione finale prima di fermare
-            createPlanetExplosion(at: planet.position)
-            planet.alpha = 0
+            createPlanetExplosion(at: planetPosition)
+            if useEnhancedVisuals {
+                enhancedPlanet?.alpha = 0
+            } else {
+                planet?.alpha = 0
+            }
             playExplosionSound()
             
             // Attendi 2 secondi poi ferma registrazione
@@ -8129,8 +8169,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Esplosione finale del pianeta (3x più grande)
-        createPlanetExplosion(at: planet.position)
-        planet.alpha = 0
+        createPlanetExplosion(at: planetPosition)
+        if useEnhancedVisuals {
+            enhancedPlanet?.alpha = 0
+        } else {
+            planet?.alpha = 0
+        }
         
         // Suono esplosione
         playExplosionSound()

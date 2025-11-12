@@ -15,11 +15,19 @@ class DroneNode: SKShapeNode {
     private var planetPosition: CGPoint = .zero
     private var planetRadius: CGFloat = 40
     
-    // AI Controller per movimento intelligente
+    // AI Controller per movimento intelligente (come il player!)
     private var aiController: AIController?
     
-    // Parametri orbita desiderata
-    private let desiredOrbitRadius: CGFloat = 170.0  // Orbita più stretta del player
+    // Parametri movimento - simula player con inerzia
+    private let thrustForce: CGFloat = 180.0  // 82% della forza del player (220)
+    private let maxSpeed: CGFloat = 350.0  // Più lento del player (~450)
+    
+    // NO parametri orbita fissa - movimento libero ed elegante!
+    private var joystickDirection: CGVector = .zero
+    private var isBraking: Bool = false
+    
+    // Debug counter per log
+    private var updateCount: Int = 0
     
     init(planetPosition: CGPoint, planetRadius: CGFloat) {
         self.planetPosition = planetPosition
@@ -39,37 +47,49 @@ class DroneNode: SKShapeNode {
     // MARK: - Setup
     
     private func setupVisuals() {
-        // FORMA ESAGONALE
-        let radius: CGFloat = 12
-        let hexagonPath = CGMutablePath()
+        // Carica texture drone.png usando SKTexture (come earth.jpg)
+        let droneTexture = SKTexture(imageNamed: "drone.png")
         
-        for i in 0..<6 {
-            let angle = CGFloat(i) * .pi / 3.0  // 60 gradi per lato
-            let x = radius * cos(angle)
-            let y = radius * sin(angle)
+        // Verifica che la texture sia valida
+        if droneTexture.size().width > 0 {
+            let droneSprite = SKSpriteNode(texture: droneTexture)
+            droneSprite.size = CGSize(width: 60, height: 60)  // Raddoppiato da 30 a 60
+            droneSprite.name = "droneSprite"
+            droneSprite.zPosition = 0
+            addChild(droneSprite)
             
-            if i == 0 {
-                hexagonPath.move(to: CGPoint(x: x, y: y))
-            } else {
-                hexagonPath.addLine(to: CGPoint(x: x, y: y))
+            print("✅ DroneNode created with drone.png texture (\(droneTexture.size().width)x\(droneTexture.size().height))")
+        } else {
+            print("⚠️ drone.png texture invalid, using fallback hexagon shape")
+            // Fallback: forma esagonale se SVG non trovato
+            let radius: CGFloat = 12
+            let hexagonPath = CGMutablePath()
+            
+            for i in 0..<6 {
+                let angle = CGFloat(i) * .pi / 3.0
+                let x = radius * cos(angle)
+                let y = radius * sin(angle)
+                
+                if i == 0 {
+                    hexagonPath.move(to: CGPoint(x: x, y: y))
+                } else {
+                    hexagonPath.addLine(to: CGPoint(x: x, y: y))
+                }
             }
+            hexagonPath.closeSubpath()
+            
+            self.path = hexagonPath
+            
+            let neonGreen = UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0)
+            self.fillColor = neonGreen
+            self.strokeColor = UIColor(red: 0.5, green: 1.0, blue: 0.6, alpha: 1.0)
+            self.lineWidth = 3
+            self.glowWidth = 8
         }
-        hexagonPath.closeSubpath()
-        
-        self.path = hexagonPath
-        
-        // Colore verde fluorescente brillante
-        let neonGreen = UIColor(red: 0.2, green: 1.0, blue: 0.3, alpha: 1.0)
-        self.fillColor = neonGreen
-        self.strokeColor = UIColor(red: 0.5, green: 1.0, blue: 0.6, alpha: 1.0)
-        self.lineWidth = 3
-        self.glowWidth = 8
         
         self.name = "drone"
         self.zPosition = 100  // Alto per visibilità garantita
         self.alpha = 1.0  // Completamente visibile
-        
-        print("🔧 DroneNode created - fillColor: \(neonGreen), strokeColor: \(self.strokeColor), path points: 6")
         
         // Effetto glow pulsante
         let pulseUp = SKAction.fadeAlpha(to: 1.0, duration: 0.5)
@@ -79,109 +99,173 @@ class DroneNode: SKShapeNode {
     }
     
     private func setupPhysics() {
-        // Physics body circolare per esagono (approssimazione)
+        // Physics body identico al player - subisce inerzia!
         let body = SKPhysicsBody(circleOfRadius: 12)
         body.isDynamic = true
-        body.mass = 0.4  // Più leggero per movimenti fluidi
-        body.linearDamping = 0.2  // Damping maggiore per decelerazioni più morbide
-        body.angularDamping = 0.0  // Permetti rotazione libera
-        body.restitution = 0.8  // Rimbalzo elastico sull'atmosfera
-        body.friction = 0.0  // Nessuna friction per movimento fluido
+        body.mass = 0.5  // Stessa massa del player per inerzia realistica
+        body.linearDamping = 0.3  // Stesso damping del player
+        body.angularDamping = 0.5
+        body.allowsRotation = false  // Come player
+        body.restitution = 0.6  // Rimbalzo moderato
+        body.friction = 0.0
         
-        // Categoria physics speciale per il drone
-        // Lo impostiamo come "projectile" per rilevare collisioni con asteroidi
-        body.categoryBitMask = PhysicsCategory.projectile
-        body.contactTestBitMask = PhysicsCategory.asteroid | PhysicsCategory.atmosphere  // Rileva asteroidi E atmosfera
-        body.collisionBitMask = PhysicsCategory.atmosphere  // Collide SOLO con atmosfera (rimbalza)
+        // Categoria physics come player (ma NON spara)
+        body.categoryBitMask = PhysicsCategory.projectile  // Speroneggia asteroidi
+        body.contactTestBitMask = PhysicsCategory.asteroid | PhysicsCategory.atmosphere
+        body.collisionBitMask = 0  // NO collisioni auto - rimbalzo manuale
+        
+        self.physicsBody = body
+        
+        print("🤖 Drone physics: mass=\(body.mass), damping=\(body.linearDamping), same as player")
         
         self.physicsBody = body
     }
     
     private func setupRotation() {
-        // Rotazione veloce (1 giro ogni 0.8 secondi)
-        let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 0.8)
-        run(SKAction.repeatForever(rotate))
+        // Rotazione molto lenta del drone.png (1 giro ogni 6 secondi - metà velocità)
+        if let droneSprite = childNode(withName: "droneSprite") {
+            let rotate = SKAction.rotate(byAngle: .pi * 2, duration: 6.0)
+            droneSprite.run(SKAction.repeatForever(rotate))
+            print("🔄 Drone sprite slow rotation active (6s per revolution)")
+        }
     }
     
     // MARK: - Update Loop
     
-    func update(deltaTime: TimeInterval, asteroids: [SKNode], orbitalRings: [SKNode]) {
-        // Inizializza AI controller se necessario
-        if aiController == nil {
-            aiController = AIController()
-            aiController?.difficulty = .hard  // Hard per reattività massima
-            print("🤖 Drone AI Controller initialized with HARD difficulty")
+    func update(deltaTime: TimeInterval, asteroids: [SKNode], orbitalRings: [SKNode], screenSize: CGSize) {
+        // Debug entry point
+        updateCount += 1
+        if updateCount % 180 == 0 {
+            print("🤖 Drone update called: frame \(updateCount), asteroids=\(asteroids.count)")
         }
         
-        // Usa AI per decidere movimento
-        guard let ai = aiController, let body = physicsBody else { return }
+        // Inizializza AI controller HARD (reattività massima + manovre eleganti)
+        if aiController == nil {
+            aiController = AIController()
+            aiController?.difficulty = .hard
+            print("🤖 Drone AI initialized: HARD difficulty, elegant maneuvers, ramming enabled")
+        }
         
-        // Costruisci GameState per l'AI
+        guard let ai = aiController, let body = physicsBody else {
+            print("⚠️ Drone update: AI or physics body missing!")
+            return
+        }
+        
+        // SCREEN WRAPPING - come il player
+        wrapAroundScreen(screenSize: screenSize)
+        
+        // Costruisci GameState per l'AI (stesso formato del player)
         let asteroidInfos = asteroids.compactMap { node -> AsteroidInfo? in
             guard let asteroidBody = node.physicsBody else { return nil }
-            let distToPlanet = sqrt(
-                pow(node.position.x - planetPosition.x, 2) +
-                pow(node.position.y - planetPosition.y, 2)
-            )
+            let dx = node.position.x - planetPosition.x
+            let dy = node.position.y - planetPosition.y
+            let distToPlanet = sqrt(dx * dx + dy * dy)
+            
             return AsteroidInfo(
                 position: node.position,
                 velocity: asteroidBody.velocity,
-                size: 20,  // Stima
-                health: 3,  // Stima
+                size: node.frame.width / 2,
+                health: node.userData?["health"] as? Int ?? 1,
                 distanceFromPlanet: distToPlanet
             )
         }
         
-        let gameState = GameState(
-            playerPosition: position,
-            playerVelocity: body.velocity,
-            playerAngle: zRotation,
-            planetPosition: planetPosition,
-            planetRadius: planetRadius,
-            planetHealth: 100,
-            maxPlanetHealth: 100,
-            atmosphereRadius: 96,
-            maxAtmosphereRadius: 144,
-            atmosphereActive: false,
-            asteroids: asteroidInfos,
-            powerups: [],  // Drone ignora power-up
-            currentWave: 1,
-            score: 0,
-            isGrappledToOrbit: false,
-            orbitalRingRadius: nil
+        // Se NON ci sono asteroidi, orbita elegantemente intorno al pianeta
+        if asteroidInfos.isEmpty {
+            orbitAroundPlanet(deltaTime: deltaTime)
+            return
+        }
+        
+        // STRATEGIA: Orbita SEMPRE + insegui asteroidi vicini
+        // 1. Calcola movimento orbitale base
+        let dx = planetPosition.x - position.x
+        let dy = planetPosition.y - position.y
+        let distanceFromPlanet = sqrt(dx * dx + dy * dy)
+        let targetOrbitRadius: CGFloat = 200
+        
+        var orbitalMovement = CGVector.zero
+        
+        // Mantieni distanza orbitale (soft constraint)
+        if distanceFromPlanet > targetOrbitRadius + 100 {
+            // Troppo lontano - muovi verso pianeta
+            orbitalMovement = CGVector(dx: dx / distanceFromPlanet * 0.3, dy: dy / distanceFromPlanet * 0.3)
+        } else if distanceFromPlanet < targetOrbitRadius - 100 {
+            // Troppo vicino - allontanati
+            orbitalMovement = CGVector(dx: -dx / distanceFromPlanet * 0.3, dy: -dy / distanceFromPlanet * 0.3)
+        } else {
+            // Movimento tangenziale (orbita)
+            orbitalMovement = CGVector(dx: -dy / distanceFromPlanet * 0.2, dy: dx / distanceFromPlanet * 0.2)
+        }
+        
+        // 2. Trova asteroide più vicino PERICOLOSO (entro 400px)
+        let nearbyAsteroids = asteroidInfos.filter { asteroid in
+            let dist = hypot(asteroid.position.x - position.x, asteroid.position.y - position.y)
+            return dist < 400
+        }
+        
+        var attackMovement = CGVector.zero
+        
+        if let nearestThreat = nearbyAsteroids.min(by: { a, b in
+            let distA = hypot(a.position.x - position.x, a.position.y - position.y)
+            let distB = hypot(b.position.x - position.x, b.position.y - position.y)
+            return distA < distB
+        }) {
+            // Insegui l'asteroide più vicino
+            let toAsteroid = CGVector(
+                dx: nearestThreat.position.x - position.x,
+                dy: nearestThreat.position.y - position.y
+            )
+            let dist = hypot(toAsteroid.dx, toAsteroid.dy)
+            
+            // Thrust proporzionale alla vicinanza (più vicino = più forte)
+            let attackStrength = max(0.0, 1.0 - dist / 400.0)  // 1.0 a 0px, 0.0 a 400px
+            attackMovement = CGVector(
+                dx: toAsteroid.dx / dist * attackStrength * 0.6,
+                dy: toAsteroid.dy / dist * attackStrength * 0.6
+            )
+        }
+        
+        // 3. COMBINA orbita + attacco (orbita ha priorità 40%, attacco 60%)
+        joystickDirection = CGVector(
+            dx: orbitalMovement.dx * 0.4 + attackMovement.dx * 0.6,
+            dy: orbitalMovement.dy * 0.4 + attackMovement.dy * 0.6
         )
+        isBraking = false
         
-        // Ottieni direzione movimento dall'AI
-        let movement = ai.desiredMovement(for: gameState)
+        // Debug AI decision ogni 3 secondi
+        if updateCount % 180 == 0 {
+            let nearestAsteroid = asteroidInfos.min(by: { a, b in
+                let distA = hypot(a.position.x - position.x, a.position.y - position.y)
+                let distB = hypot(b.position.x - position.x, b.position.y - position.y)
+                return distA < distB
+            })
+            if let nearest = nearestAsteroid {
+                let dist = hypot(nearest.position.x - position.x, nearest.position.y - position.y)
+                print("🎯 Drone AI: joy=(\(String(format: "%.2f", joystickDirection.dx)), \(String(format: "%.2f", joystickDirection.dy))), nearest asteroid: \(Int(dist))px")
+            }
+        }
         
-        // Scala movimento per orbita più stretta (70% del normale)
-        let droneMovementScale: CGFloat = 0.7
-        let scaledMovement = CGVector(
-            dx: movement.dx * droneMovementScale,
-            dy: movement.dy * droneMovementScale
-        )
+        // Applica movimento ESATTAMENTE come il player (con inerzia)
+        applyPlayerLikeMovement(deltaTime: deltaTime)
         
-        applyAIMovement(scaledMovement, deltaTime: deltaTime)
-        
-        // Limita distanza massima dal pianeta (safety)
-        maintainOrbitBounds()
+        // NO rotation towards velocity - sprite rotates slowly on its own
     }
     
-    private func applyAIMovement(_ movement: CGVector, deltaTime: TimeInterval) {
+    private func applyPlayerLikeMovement(deltaTime: TimeInterval) {
         guard let body = physicsBody else { return }
         
-        // Calcola forza da applicare (come fa il player)
-        let thrustForce: CGFloat = 220.0 * 0.7  // 70% della forza del player per orbita stretta
-        let force = CGVector(
-            dx: movement.dx * thrustForce,
-            dy: movement.dy * thrustForce
-        )
+        // Applica thrust se c'è input (come player)
+        if joystickDirection.dx != 0 || joystickDirection.dy != 0 {
+            let force = CGVector(
+                dx: joystickDirection.dx * thrustForce,
+                dy: joystickDirection.dy * thrustForce
+            )
+            body.applyForce(force)
+        }
         
-        body.applyForce(force)
-        
-        // Limita velocità massima (più bassa del player)
-        let currentSpeed = sqrt(body.velocity.dx * body.velocity.dx + body.velocity.dy * body.velocity.dy)
-        let maxSpeed: CGFloat = 200.0  // Più lento del player (che va a ~450)
+        // Limita velocità massima (come player)
+        let currentSpeed = sqrt(body.velocity.dx * body.velocity.dx + 
+                               body.velocity.dy * body.velocity.dy)
         
         if currentSpeed > maxSpeed {
             let scale = maxSpeed / currentSpeed
@@ -192,42 +276,67 @@ class DroneNode: SKShapeNode {
         }
     }
     
-    private func maintainOrbitBounds() {
-        guard let body = physicsBody else { return }
+    // MARK: - Screen Wrapping (come player - rispetta playFieldMultiplier 3x)
+    
+    private func wrapAroundScreen(screenSize: CGSize) {
+        let playFieldMultiplier: CGFloat = 3.0
+        let playFieldWidth = screenSize.width * playFieldMultiplier
+        let playFieldHeight = screenSize.height * playFieldMultiplier
+        let minX = screenSize.width / 2 - playFieldWidth / 2
+        let maxX = screenSize.width / 2 + playFieldWidth / 2
+        let minY = screenSize.height / 2 - playFieldHeight / 2
+        let maxY = screenSize.height / 2 + playFieldHeight / 2
         
-        let distance = sqrt(
-            pow(position.x - planetPosition.x, 2) +
-            pow(position.y - planetPosition.y, 2)
-        )
-        
-        // Se troppo lontano, forza di richiamo
-        let maxOrbitDistance: CGFloat = 250.0
-        if distance > maxOrbitDistance {
-            let toPlanet = CGVector(
-                dx: planetPosition.x - position.x,
-                dy: planetPosition.y - position.y
-            )
-            let pullStrength: CGFloat = 800.0
-            body.applyForce(CGVector(
-                dx: (toPlanet.dx / distance) * pullStrength,
-                dy: (toPlanet.dy / distance) * pullStrength
-            ))
+        // Wrapping orizzontale (solo ai bordi del PLAYFIELD, non dello schermo)
+        if position.x < minX {
+            position.x = maxX
+        } else if position.x > maxX {
+            position.x = minX
         }
         
-        // Se troppo vicino all'atmosfera, allontanati
-        let minSafeDistance: CGFloat = 160.0
-        if distance < minSafeDistance {
-            let toPlanet = CGVector(
-                dx: planetPosition.x - position.x,
-                dy: planetPosition.y - position.y
-            )
-            let escapeStrength: CGFloat = 500.0
-            body.applyForce(CGVector(
-                dx: -(toPlanet.dx / distance) * escapeStrength,
-                dy: -(toPlanet.dy / distance) * escapeStrength
-            ))
+        // Wrapping verticale
+        if position.y < minY {
+            position.y = maxY
+        } else if position.y > maxY {
+            position.y = minY
         }
     }
+    
+    // MARK: - Idle Behavior (quando non ci sono asteroidi)
+    
+    private func orbitAroundPlanet(deltaTime: TimeInterval) {
+        guard let body = physicsBody else { return }
+        
+        // Calcola vettore verso il pianeta
+        let dx = planetPosition.x - position.x
+        let dy = planetPosition.y - position.y
+        let distance = sqrt(dx * dx + dy * dy)
+        
+        // Distanza orbitale target: 200px dal pianeta (safe zone)
+        let targetOrbitRadius: CGFloat = 200
+        
+        // Se troppo lontano, muovi VERSO il pianeta
+        if distance > targetOrbitRadius + 50 {
+            joystickDirection = CGVector(dx: dx / distance * 0.6, dy: dy / distance * 0.6)
+        }
+        // Se troppo vicino, muovi VIA dal pianeta
+        else if distance < targetOrbitRadius - 50 {
+            joystickDirection = CGVector(dx: -dx / distance * 0.6, dy: -dy / distance * 0.6)
+        }
+        // Altrimenti orbita tangenzialmente (movimento circolare elegante)
+        else {
+            // Vettore tangente = perpendicolare al raggio
+            joystickDirection = CGVector(dx: -dy / distance * 0.4, dy: dx / distance * 0.4)
+        }
+        
+        // Applica movimento con inerzia
+        applyPlayerLikeMovement(deltaTime: deltaTime)
+    }
+    
+    // REMOVED: Old orbital movement methods - now uses elegant AI maneuvers
+    // - applyAIMovement (sostituito da applyPlayerLikeMovement)
+    // - maintainOrbitBounds (non più necessario - movimento libero)
+    // - checkProximityToOrbitalRing (può usare orbital rings tramite AI)
     
     // MARK: - Damage System
     

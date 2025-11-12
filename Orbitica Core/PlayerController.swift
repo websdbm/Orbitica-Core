@@ -87,7 +87,7 @@ class AIController: PlayerController {
     
     // Stato interno - Firing
     private var lastFireTime: TimeInterval = 0
-    private let fireRateLimit: TimeInterval = 0.15  // Spara max ogni 0.15s (più veloce)
+    private let fireRateLimit: TimeInterval = 0.08  // Spara max ogni 0.08s (quasi doppio rispetto a 0.15s)
     
     // Stato interno - Orbital Grapple (linee di forza)
     private var attachedTime: TimeInterval = 0
