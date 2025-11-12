@@ -662,6 +662,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         currentEnvironment = environment
     }
     
+    // Applica background style scelto in RegiaScene (0-15)
+    private func applyRegiaBackgroundStyle(_ styleIndex: Int) {
+        // Mappa l'indice a SpaceEnvironment (deve corrispondere a RegiaScene.environmentNames)
+        let environments = SpaceEnvironment.allCases
+        let index = min(styleIndex, environments.count - 1)
+        let selectedEnvironment = environments[index]
+        
+        print("🎨 Applying Regia environment: \(selectedEnvironment.name)")
+        
+        // Usa la logica standard di applyEnvironment che gestisce tutti gli ambienti
+        applyEnvironment(selectedEnvironment)
+        
+        debugLog("🌌 Regia environment '\(selectedEnvironment.name)' applied")
+    }
+    
     // MARK: - Enhanced Environment Setup
     
     private func setupDeepSpaceEnhancedEnvironment() {
@@ -3895,8 +3910,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Calcola deltaTime
         let deltaTime = currentTime - lastUpdateTime
         
-        // Raccogli tutti gli asteroidi attivi
+        // Raccogli tutti gli asteroidi attivi e orbital rings
         let asteroidsNodes = worldLayer.children.filter { $0.name == "asteroid" }
+        let orbitalRingsNodes = worldLayer.children.filter { $0.name == "orbitalRing" }
         
         // Debug ogni 3 secondi
         if frameCount % 180 == 0 {
@@ -3904,8 +3920,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             debugLog("🤖 Drone update - Pos: (\(Int(drone.position.x)), \(Int(drone.position.y))), Distance: \(Int(distance))px, HP: \(drone.getHealthString())")
         }
         
-        // Aggiorna comportamento drone
-        drone.update(deltaTime: deltaTime, asteroids: asteroidsNodes)
+        // Aggiorna comportamento drone con AI
+        drone.update(deltaTime: deltaTime, asteroids: asteroidsNodes, orbitalRings: orbitalRingsNodes)
         
         // SISTEMA DI SICUREZZA: Se il drone si allontana MOLTO, riportalo indietro
         let planetCenter = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -5101,24 +5117,43 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             debugLog("🌍 Asteroid gravity increased to \(asteroidGravityMultiplier) for wave \(wave)")
         }
         
-        // Cambia ambiente spaziale in sequenza progressiva (convenzionale → wow)
-        // Sequenza: deepSpace → nebula → voidSpace → redGiant → asteroidBelt → binaryStars → ionStorm
-        let environments: [SpaceEnvironment] = [.deepSpace, .nebula, .voidSpace, .redGiant, .asteroidBelt, .binaryStars, .ionStorm]
-        let environmentIndex = (wave - 1) % environments.count
-        let newEnvironment = environments[environmentIndex]
-        if newEnvironment != currentEnvironment {
-            applyEnvironment(newEnvironment)
-            debugLog("🌌 Environment changed to: \(newEnvironment.name)")
+        // BACKGROUND: Applica stile da Regia se disponibile, altrimenti sequenza standard
+        print("🔍 BG Check: regiaStyle=\(regiaBackgroundStyle?.description ?? "nil"), wave=\(wave), startingWave=\(startingWave)")
+        if let regiaStyle = regiaBackgroundStyle, wave == startingWave {
+            // Primo wave: usa stile impostato in Regia
+            print("✅ Applying Regia background style: \(regiaStyle)")
+            applyRegiaBackgroundStyle(regiaStyle)
+            debugLog("🎨 Applied Regia background style \(regiaStyle + 1)")
+        } else {
+            // Wave successivi o nessun Regia: sequenza standard
+            print("ℹ️ Using standard environment sequence")
+            let environments: [SpaceEnvironment] = [.deepSpace, .nebula, .voidSpace, .redGiant, .asteroidBelt, .binaryStars, .ionStorm]
+            let environmentIndex = (wave - 1) % environments.count
+            let newEnvironment = environments[environmentIndex]
+            if newEnvironment != currentEnvironment {
+                applyEnvironment(newEnvironment)
+                debugLog("🌌 Environment changed to: \(newEnvironment.name)")
+            }
         }
         
         // Aggiorna gli anelli orbitali in base alla wave corrente
         updateOrbitalRingsForWave()
         
-        // Avvia la musica per questa wave con crossfade
-        // Randomizza tra tutte le tracce disponibili
-        let musicFiles = ["wave1", "wave2", "wave3", "temp4a", "temp4b", "temp4c", "temp4d"]
-        let musicFile = musicFiles.randomElement() ?? "wave1"
-        crossfadeTo(musicFile)
+        // MUSICA: Usa traccia da Regia se disponibile, altrimenti random
+        print("🔍 Music Check: regiaMusic=\(regiaMusicTrack ?? "nil"), wave=\(wave), startingWave=\(startingWave)")
+        if let regiaMusic = regiaMusicTrack, wave == startingWave {
+            // Primo wave: usa musica impostata in Regia
+            let musicFile = regiaMusic.replacingOccurrences(of: ".m4a", with: "")
+            print("✅ Applying Regia music: \(musicFile)")
+            crossfadeTo(musicFile)
+            debugLog("🎵 Applied Regia music: \(regiaMusic)")
+        } else {
+            // Wave successivi o nessun Regia: random
+            print("ℹ️ Using random music")
+            let musicFiles = ["wave1", "wave2", "wave3", "temp4a", "temp4b", "temp4c", "temp4d"]
+            let musicFile = musicFiles.randomElement() ?? "wave1"
+            crossfadeTo(musicFile)
+        }
         
         // Configura la wave
         currentWaveConfig = configureWave(wave)

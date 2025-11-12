@@ -32,7 +32,27 @@ class RegiaScene: SKScene {
     private var musicPlayer: AVAudioPlayer?
     
     private let musicTracks = ["wave1.m4a", "wave2.m4a", "wave3.m4a", "temp4c.m4a"]
-    private let musicNames = ["Wave 1", "Wave 2", "Wave 3", "Boss Theme"]
+    private let musicNames = ["Space Journey ♪", "Cosmic Battle ♪", "Deep Void ♪", "Boss Encounter ♪"]
+    
+    // Background environment names (must match GameScene SpaceEnvironment order)
+    private let environmentNames = [
+        "Cosmic Nebula ★",      // 0 - Nebula rotante 3-layer
+        "Animated Cosmos ★",    // 1 - Sistema solare animato
+        "Deep Space ★",         // 2 - Starfield dinamico
+        "Nebula Galaxy ★",      // 3 - Galassie con particelle
+        "Deep Space",           // 4 - Stelle twinkle
+        "Nebula",               // 5 - Nebulose colorate
+        "Void Space",           // 6 - Gradiente nero-blu
+        "Red Giant",            // 7 - Stella rossa
+        "Asteroid Belt",        // 8 - Campo asteroidi
+        "Binary Stars",         // 9 - Sistema binario
+        "Ion Storm",            // 10 - Tempesta ionica
+        "Pulsar Field",         // 11 - Stella pulsar
+        "Planetary System",     // 12 - Pianeti in orbita
+        "Comet Trail",          // 13 - Comete luminose
+        "Dark Matter Cloud",    // 14 - Materia oscura
+        "Supernova Remnant"     // 15 - Esplosione stellare
+    ]
     
     // MARK: - Setup
     
@@ -123,7 +143,7 @@ class RegiaScene: SKScene {
             label: "BG:",
             xPos: rightX,
             yPos: yRight,
-            currentValue: "Style \(selectedBackground + 1)",
+            currentValue: environmentNames[selectedBackground],
             onPrev: { [weak self] in
                 guard let self = self else { return }
                 self.selectedBackground = max(0, self.selectedBackground - 1)
@@ -132,7 +152,7 @@ class RegiaScene: SKScene {
             },
             onNext: { [weak self] in
                 guard let self = self else { return }
-                self.selectedBackground = min(15, self.selectedBackground + 1)
+                self.selectedBackground = min(self.environmentNames.count - 1, self.selectedBackground + 1)
                 self.updateSelectors()
                 self.applyBackgroundStyle(self.selectedBackground)  // Anteprima live
             }
@@ -259,7 +279,7 @@ class RegiaScene: SKScene {
         prevButton.fillColor = UIColor.white.withAlphaComponent(0.2)
         prevButton.strokeColor = .cyan
         prevButton.lineWidth = 2
-        prevButton.position = CGPoint(x: xPos - 60, y: yPos)
+        prevButton.position = CGPoint(x: xPos - 100, y: yPos)
         prevButton.name = "prev_\(label)"
         addChild(prevButton)
         
@@ -274,7 +294,7 @@ class RegiaScene: SKScene {
         // Value display
         let valueLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         valueLabel.text = currentValue
-        valueLabel.fontSize = 16
+        valueLabel.fontSize = 14
         valueLabel.fontColor = .yellow
         valueLabel.horizontalAlignmentMode = .center
         valueLabel.position = CGPoint(x: xPos, y: yPos - 5)
@@ -286,7 +306,7 @@ class RegiaScene: SKScene {
         nextButton.fillColor = UIColor.white.withAlphaComponent(0.2)
         nextButton.strokeColor = .cyan
         nextButton.lineWidth = 2
-        nextButton.position = CGPoint(x: xPos + 60, y: yPos)
+        nextButton.position = CGPoint(x: xPos + 100, y: yPos)
         nextButton.name = "next_\(label)"
         addChild(nextButton)
         
@@ -386,7 +406,7 @@ class RegiaScene: SKScene {
             diffLabel.text = difficultyName(selectedDifficulty)
         }
         if let bgLabel = childNode(withName: "value_BG:") as? SKLabelNode {
-            bgLabel.text = "Style \(selectedBackground + 1)"
+            bgLabel.text = environmentNames[selectedBackground]
         }
         if let musicLabel = childNode(withName: "value_MUSIC:") as? SKLabelNode {
             musicLabel.text = musicNames[selectedMusic]
@@ -456,9 +476,11 @@ class RegiaScene: SKScene {
             } else if label == "BG:" {
                 selectedBackground = isNext ? min(15, selectedBackground + 1) : max(0, selectedBackground - 1)
                 updateSelectors()
+                applyBackgroundStyle(selectedBackground)  // 🎨 Preview live
             } else if label == "MUSIC:" {
                 selectedMusic = isNext ? min(musicTracks.count - 1, selectedMusic + 1) : max(0, selectedMusic - 1)
                 updateSelectors()
+                playMusicTrack(musicTracks[selectedMusic])  // 🎵 Preview live
             }
         }
     }
@@ -487,6 +509,13 @@ class RegiaScene: SKScene {
         gameScene.regiaBackgroundStyle = selectedBackground  // Stile BG (0-15)
         gameScene.regiaMusicTrack = musicTracks[selectedMusic]  // Traccia musicale
         
+        print("🎬 Starting demo with config:")
+        print("   Wave: \(selectedWave)")
+        print("   Difficulty: \(difficultyName(selectedDifficulty))")
+        print("   Background: \(selectedBackground) (style \(selectedBackground + 1))")
+        print("   Music: \(musicTracks[selectedMusic])")
+        print("   AutoPlay: \(autoPlay)")
+        print("   Recording: \(recordingEnabled)")
         print("✅ GameScene configured with useAIController: \(autoPlay), isRegiaMode: true")
         
         view?.presentScene(gameScene, transition: SKTransition.fade(withDuration: 1.0))
@@ -517,24 +546,24 @@ class RegiaScene: SKScene {
         currentStars.forEach { $0.removeFromParent() }
         currentStars.removeAll()
         
-        // Array di colori background (0-15 stili)
+        // Colori preview che richiamano gli ambienti (devono corrispondere a environmentNames)
         let backgrounds: [UIColor] = [
-            .black,                                                    // 0: Nero puro
-            UIColor(red: 0.05, green: 0.0, blue: 0.15, alpha: 1.0),  // 1: Viola scuro
-            UIColor(red: 0.0, green: 0.02, blue: 0.08, alpha: 1.0),  // 2: Blu navy
-            UIColor(red: 0.02, green: 0.0, blue: 0.05, alpha: 1.0),  // 3: Viola blackberry
-            UIColor(red: 0.05, green: 0.0, blue: 0.0, alpha: 1.0),   // 4: Rosso scuro
-            UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1.0), // 5: Marrone
-            UIColor(red: 0.0, green: 0.05, blue: 0.05, alpha: 1.0),  // 6: Teal scuro
-            UIColor(red: 0.05, green: 0.05, blue: 0.0, alpha: 1.0),  // 7: Verde oliva
-            UIColor(red: 0.03, green: 0.03, blue: 0.03, alpha: 1.0), // 8: Grigio carbone
-            UIColor(red: 0.0, green: 0.03, blue: 0.06, alpha: 1.0),  // 9: Blu petrolio
-            UIColor(red: 0.06, green: 0.0, blue: 0.03, alpha: 1.0),  // 10: Magenta scuro
-            UIColor(red: 0.0, green: 0.04, blue: 0.0, alpha: 1.0),   // 11: Verde foresta
-            UIColor(red: 0.04, green: 0.0, blue: 0.04, alpha: 1.0),  // 12: Viola prugna
-            UIColor(red: 0.05, green: 0.03, blue: 0.0, alpha: 1.0),  // 13: Arancione bruciato
-            UIColor(red: 0.0, green: 0.05, blue: 0.08, alpha: 1.0),  // 14: Blu oceano
-            UIColor(red: 0.02, green: 0.02, blue: 0.04, alpha: 1.0)  // 15: Blu mezzanotte
+            UIColor(red: 0.1, green: 0.05, blue: 0.2, alpha: 1.0),   // 0: Cosmic Nebula (viola nebuloso)
+            UIColor(red: 0.05, green: 0.05, blue: 0.1, alpha: 1.0),  // 1: Animated Cosmos (blu sistema solare)
+            .black,                                                   // 2: Deep Space Enhanced (nero profondo)
+            UIColor(red: 0.15, green: 0.0, blue: 0.25, alpha: 1.0),  // 3: Nebula Galaxy (viola galattico)
+            UIColor(red: 0.0, green: 0.01, blue: 0.05, alpha: 1.0),  // 4: Deep Space (nero con tracce blu)
+            UIColor(red: 0.08, green: 0.0, blue: 0.12, alpha: 1.0),  // 5: Nebula (viola-rosa nebula)
+            UIColor(red: 0.0, green: 0.02, blue: 0.08, alpha: 1.0),  // 6: Void Space (blu-nero void)
+            UIColor(red: 0.12, green: 0.0, blue: 0.0, alpha: 1.0),   // 7: Red Giant (rosso stella)
+            UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1.0), // 8: Asteroid Belt (marrone asteroidale)
+            UIColor(red: 0.08, green: 0.08, blue: 0.05, alpha: 1.0), // 9: Binary Stars (giallo binario)
+            UIColor(red: 0.0, green: 0.08, blue: 0.12, alpha: 1.0),  // 10: Ion Storm (blu elettrico)
+            UIColor(red: 0.05, green: 0.1, blue: 0.08, alpha: 1.0),  // 11: Pulsar Field (verde pulsar)
+            UIColor(red: 0.05, green: 0.05, blue: 0.08, alpha: 1.0), // 12: Planetary System (blu pianeti)
+            UIColor(red: 0.08, green: 0.12, blue: 0.15, alpha: 1.0), // 13: Comet Trail (azzurro ghiaccio)
+            UIColor(red: 0.02, green: 0.02, blue: 0.05, alpha: 1.0), // 14: Dark Matter (grigio oscuro)
+            UIColor(red: 0.15, green: 0.08, blue: 0.0, alpha: 1.0)   // 15: Supernova (arancione esplosione)
         ]
         
         let index = min(styleIndex, backgrounds.count - 1)
@@ -587,7 +616,8 @@ class RegiaScene: SKScene {
             currentStars.append(star)
         }
         
-        print("🌌 Background style \(styleIndex + 1) applied with \(currentStars.count) stars")
+        let envName = environmentNames[min(styleIndex, environmentNames.count - 1)]
+        print("🌌 Background preview '\(envName)' applied with \(currentStars.count) stars")
     }
     
     private func playMusicTrack(_ trackName: String) {

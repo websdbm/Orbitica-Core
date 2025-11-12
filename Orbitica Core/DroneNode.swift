@@ -15,13 +15,11 @@ class DroneNode: SKShapeNode {
     private var planetPosition: CGPoint = .zero
     private var planetRadius: CGFloat = 40
     
-    // Target tracking
-    private var targetAsteroid: SKNode?
+    // AI Controller per movimento intelligente
+    private var aiController: AIController?
     
-    // Parametri movimento
-    private let orbitSpeed: CGFloat = 140.0  // Velocità orbitale
-    private let detectionRadius: CGFloat = 250.0  // Raggio rilevamento asteroidi più ampio
-    private let desiredOrbitRadius: CGFloat = 170.0  // Orbita più ampia ed elegante
+    // Parametri orbita desiderata
+    private let desiredOrbitRadius: CGFloat = 170.0  // Orbita più stretta del player
     
     init(planetPosition: CGPoint, planetRadius: CGFloat) {
         self.planetPosition = planetPosition
@@ -107,44 +105,83 @@ class DroneNode: SKShapeNode {
     
     // MARK: - Update Loop
     
-    func update(deltaTime: TimeInterval, asteroids: [SKNode]) {
-        // 1. Applica gravità verso il pianeta (orbita naturale)
-        applyGravity()
-        
-        // 2. Trova e insegui asteroide più vicino/pericoloso
-        if let target = findTargetAsteroid(from: asteroids) {
-            targetAsteroid = target
-            moveTowardsTarget(target)
-        } else {
-            targetAsteroid = nil
-            maintainOrbit()
+    func update(deltaTime: TimeInterval, asteroids: [SKNode], orbitalRings: [SKNode]) {
+        // Inizializza AI controller se necessario
+        if aiController == nil {
+            aiController = AIController()
+            aiController?.difficulty = .hard  // Hard per reattività massima
+            print("🤖 Drone AI Controller initialized with HARD difficulty")
         }
+        
+        // Usa AI per decidere movimento
+        guard let ai = aiController, let body = physicsBody else { return }
+        
+        // Costruisci GameState per l'AI
+        let asteroidInfos = asteroids.compactMap { node -> AsteroidInfo? in
+            guard let asteroidBody = node.physicsBody else { return nil }
+            let distToPlanet = sqrt(
+                pow(node.position.x - planetPosition.x, 2) +
+                pow(node.position.y - planetPosition.y, 2)
+            )
+            return AsteroidInfo(
+                position: node.position,
+                velocity: asteroidBody.velocity,
+                size: 20,  // Stima
+                health: 3,  // Stima
+                distanceFromPlanet: distToPlanet
+            )
+        }
+        
+        let gameState = GameState(
+            playerPosition: position,
+            playerVelocity: body.velocity,
+            playerAngle: zRotation,
+            planetPosition: planetPosition,
+            planetRadius: planetRadius,
+            planetHealth: 100,
+            maxPlanetHealth: 100,
+            atmosphereRadius: 96,
+            maxAtmosphereRadius: 144,
+            atmosphereActive: false,
+            asteroids: asteroidInfos,
+            powerups: [],  // Drone ignora power-up
+            currentWave: 1,
+            score: 0,
+            isGrappledToOrbit: false,
+            orbitalRingRadius: nil
+        )
+        
+        // Ottieni direzione movimento dall'AI
+        let movement = ai.desiredMovement(for: gameState)
+        
+        // Scala movimento per orbita più stretta (70% del normale)
+        let droneMovementScale: CGFloat = 0.7
+        let scaledMovement = CGVector(
+            dx: movement.dx * droneMovementScale,
+            dy: movement.dy * droneMovementScale
+        )
+        
+        applyAIMovement(scaledMovement, deltaTime: deltaTime)
+        
+        // Limita distanza massima dal pianeta (safety)
+        maintainOrbitBounds()
     }
     
-    private func applyGravity() {
+    private func applyAIMovement(_ movement: CGVector, deltaTime: TimeInterval) {
         guard let body = physicsBody else { return }
         
-        // Vettore verso il pianeta
-        let toPlanet = CGVector(
-            dx: planetPosition.x - position.x,
-            dy: planetPosition.y - position.y
-        )
-        let distance = sqrt(toPlanet.dx * toPlanet.dx + toPlanet.dy * toPlanet.dy)
-        
-        // Gravità bilanciata per orbita elegante
-        let gravityStrength: CGFloat = 35000.0  // Ridotto per orbita più ampia
-        let forceMagnitude = gravityStrength / max(distance * distance, 100)
-        
-        let forceVector = CGVector(
-            dx: (toPlanet.dx / distance) * forceMagnitude,
-            dy: (toPlanet.dy / distance) * forceMagnitude
+        // Calcola forza da applicare (come fa il player)
+        let thrustForce: CGFloat = 220.0 * 0.7  // 70% della forza del player per orbita stretta
+        let force = CGVector(
+            dx: movement.dx * thrustForce,
+            dy: movement.dy * thrustForce
         )
         
-        body.applyForce(forceVector)
+        body.applyForce(force)
         
-        // Limita velocità massima
+        // Limita velocità massima (più bassa del player)
         let currentSpeed = sqrt(body.velocity.dx * body.velocity.dx + body.velocity.dy * body.velocity.dy)
-        let maxSpeed: CGFloat = 250.0  // Aumentato per movimento più fluido
+        let maxSpeed: CGFloat = 200.0  // Più lento del player (che va a ~450)
         
         if currentSpeed > maxSpeed {
             let scale = maxSpeed / currentSpeed
@@ -153,121 +190,42 @@ class DroneNode: SKShapeNode {
                 dy: body.velocity.dy * scale
             )
         }
+    }
+    
+    private func maintainOrbitBounds() {
+        guard let body = physicsBody else { return }
         
-        // Correzione gentile se troppo lontano
-        if distance > desiredOrbitRadius + 80 {
-            // Forza di richiamo moderata
-            let pullBackStrength: CGFloat = 600.0
+        let distance = sqrt(
+            pow(position.x - planetPosition.x, 2) +
+            pow(position.y - planetPosition.y, 2)
+        )
+        
+        // Se troppo lontano, forza di richiamo
+        let maxOrbitDistance: CGFloat = 250.0
+        if distance > maxOrbitDistance {
+            let toPlanet = CGVector(
+                dx: planetPosition.x - position.x,
+                dy: planetPosition.y - position.y
+            )
+            let pullStrength: CGFloat = 800.0
             body.applyForce(CGVector(
-                dx: (toPlanet.dx / distance) * pullBackStrength,
-                dy: (toPlanet.dy / distance) * pullBackStrength
+                dx: (toPlanet.dx / distance) * pullStrength,
+                dy: (toPlanet.dy / distance) * pullStrength
             ))
         }
-    }
-    
-    private func findTargetAsteroid(from asteroids: [SKNode]) -> SKNode? {
-        // Trova asteroide più vicino entro detection radius
-        var closest: (node: SKNode, distance: CGFloat)?
         
-        for asteroid in asteroids {
-            let dx = asteroid.position.x - position.x
-            let dy = asteroid.position.y - position.y
-            let distance = sqrt(dx * dx + dy * dy)
-            
-            if distance < detectionRadius {
-                if closest == nil || distance < closest!.distance {
-                    closest = (asteroid, distance)
-                }
-            }
-        }
-        
-        return closest?.node
-    }
-    
-    private func moveTowardsTarget(_ target: SKNode) {
-        guard let body = physicsBody else { return }
-        
-        // Verifica distanza dal pianeta del target
-        let targetToPlanet = sqrt(
-            pow(target.position.x - planetPosition.x, 2) +
-            pow(target.position.y - planetPosition.y, 2)
-        )
-        
-        // NON inseguire asteroidi troppo vicini all'atmosfera (< 155px)
-        if targetToPlanet < 155 {
-            // Target pericoloso, rimani in orbita
-            maintainOrbit()
-            return
-        }
-        
-        // Calcola direzione verso target
-        let toTarget = CGVector(
-            dx: target.position.x - position.x,
-            dy: target.position.y - position.y
-        )
-        let distance = sqrt(toTarget.dx * toTarget.dx + toTarget.dy * toTarget.dy)
-        
-        // Thrust bilanciato per inseguimento aggressivo ma controllato
-        let thrustStrength: CGFloat = 450.0  // Aumentato per inseguimento più deciso
-        let thrust = CGVector(
-            dx: (toTarget.dx / distance) * thrustStrength,
-            dy: (toTarget.dy / distance) * thrustStrength
-        )
-        
-        body.applyForce(thrust)
-    }
-    
-    private func maintainOrbit() {
-        guard let body = physicsBody else { return }
-        
-        // Mantieni orbita elegante e circolare
-        let toPlanet = CGVector(
-            dx: planetPosition.x - position.x,
-            dy: planetPosition.y - position.y
-        )
-        let currentDistance = sqrt(toPlanet.dx * toPlanet.dx + toPlanet.dy * toPlanet.dy)
-        
-        // DISTANZA DI SICUREZZA DALL'ATMOSFERA
-        // Atmosfera max = ~144px, quindi mantieni almeno 160px
+        // Se troppo vicino all'atmosfera, allontanati
         let minSafeDistance: CGFloat = 160.0
-        if currentDistance < minSafeDistance {
-            // Troppo vicino all'atmosfera! Allontanati
-            let escapeStrength: CGFloat = 400.0
-            let escapeForce = CGVector(
-                dx: -(toPlanet.dx / currentDistance) * escapeStrength,
-                dy: -(toPlanet.dy / currentDistance) * escapeStrength
+        if distance < minSafeDistance {
+            let toPlanet = CGVector(
+                dx: planetPosition.x - position.x,
+                dy: planetPosition.y - position.y
             )
-            body.applyForce(escapeForce)
-            return  // Non fare altre correzioni
-        }
-        
-        // Direzione tangenziale (perpendicolare al raggio) per movimento circolare
-        let tangent = CGVector(dx: -toPlanet.dy, dy: toPlanet.dx)
-        let tangentMagnitude = sqrt(tangent.dx * tangent.dx + tangent.dy * tangent.dy)
-        
-        // Velocità attuale
-        let currentSpeed = sqrt(body.velocity.dx * body.velocity.dx + body.velocity.dy * body.velocity.dy)
-        
-        // Correzione radiale GENTILE per orbita fluida
-        let radiusError = currentDistance - desiredOrbitRadius
-        if abs(radiusError) > 30 {  // Tolleranza più ampia
-            // Forza radiale proporzionale e gentile
-            let correctionStrength: CGFloat = radiusError > 0 ? -150.0 : 150.0
-            let radialForce = CGVector(
-                dx: (toPlanet.dx / currentDistance) * correctionStrength,
-                dy: (toPlanet.dy / currentDistance) * correctionStrength
-            )
-            body.applyForce(radialForce)
-        }
-        
-        // Mantieni velocità orbitale con boost tangenziale
-        if currentSpeed < orbitSpeed * 0.75 {
-            let boostStrength: CGFloat = 350.0
-            let boost = CGVector(
-                dx: (tangent.dx / tangentMagnitude) * boostStrength,
-                dy: (tangent.dy / tangentMagnitude) * boostStrength
-            )
-            body.applyForce(boost)
+            let escapeStrength: CGFloat = 500.0
+            body.applyForce(CGVector(
+                dx: -(toPlanet.dx / distance) * escapeStrength,
+                dy: -(toPlanet.dy / distance) * escapeStrength
+            ))
         }
     }
     
